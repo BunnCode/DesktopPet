@@ -13,6 +13,8 @@ public enum PetStateId
     Sit,
     Held,
     Happy,
+    Hang,
+    Shimmy,
 }
 
 /// <summary>
@@ -50,10 +52,13 @@ internal abstract class TimedState : PetState
     {
         Act(context, dt);
         _remaining -= dt;
-        return _remaining <= 0 ? BehaviorPicker.Pick(context.Config, context.Random) : null;
+        return _remaining <= 0 ? Next(context) : null;
     }
 
     protected virtual void Act(PetContext context, double dt)
     {
     }
+
+    /// <summary>What to do when the duration runs out. Grounded behaviors pick by weight.</summary>
+    protected virtual PetStateId Next(PetContext context) => BehaviorPicker.Pick(context.Config, context.Random);
 }

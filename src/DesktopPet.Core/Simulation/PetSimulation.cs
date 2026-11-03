@@ -48,7 +48,7 @@ public sealed class PetSimulation
             _ctx.Body.Feet = new Vec2(100, 100);
         }
 
-        _fsm = new StateMachine(_ctx, PetStateId.Fall);
+        _fsm = new StateMachine(_ctx, _ctx.Body.Mode == BodyMode.Hanging ? PetStateId.Hang : PetStateId.Fall);
         Current = BuildFrame();
         Previous = Current;
     }
@@ -64,6 +64,12 @@ public sealed class PetSimulation
     public PetStateId State => _fsm.Current.Id;
 
     public Vec2 Velocity => _ctx.Body.Velocity;
+
+    /// <summary>Surfaces derived from the latest snapshot (for the debug overlay).</summary>
+    public IReadOnlyList<Platform> Platforms => _platforms;
+
+    /// <summary>Key of the surface the pet stands on or hangs from, or null when airborne or held.</summary>
+    public string? GroundKey => _ctx.Body.Mode is BodyMode.Grounded or BodyMode.Hanging ? _ctx.Body.GroundKey : null;
 
     /// <summary>True while the pet is being dragged; the host should feed <see cref="PointerMove"/> every frame.</summary>
     public bool IsHeld => _ctx.Body.Mode == BodyMode.Held;
@@ -93,6 +99,9 @@ public sealed class PetSimulation
                 case PhysicsEvent.LostGround:
                     _fsm.ChangeTo(PetStateId.Fall, _ctx);
                     break;
+                case PhysicsEvent.Grabbed:
+                    _fsm.ChangeTo(PetStateId.Hang, _ctx);
+                    break;
                 case PhysicsEvent.HitWall when _ctx.Body.Velocity.X != 0:
                     _ctx.FacingLeft = _ctx.Body.Velocity.X < 0; // face the way it's bouncing
                     break;
@@ -101,7 +110,7 @@ public sealed class PetSimulation
             if (!IsHeld && ApplySafetyNet(dt))
             {
                 teleported = true;
-                _fsm.ChangeTo(PetStateId.Fall, _ctx);
+                _fsm.ChangeTo(_ctx.Body.Mode == BodyMode.Hanging ? PetStateId.Hang : PetStateId.Fall, _ctx);
             }
 
             _ctx.Scale = (WorldQuery.MonitorAt(_snapshot.Monitors, _ctx.Body.Feet)
@@ -167,6 +176,17 @@ public sealed class PetSimulation
             _ctx.Body.Feet = position + _grabOffset;
             _throw.Add(time, position);
             var velocity = ClampSpeed(_throw.Velocity(time), _ctx.Config.MaxThrowSpeedDip * _ctx.Scale);
+
+            // Let go with its hands at a title bar: it grabs on (unless flung hard).
+            var reach = _ctx.Config.HangReachDip * _ctx.Scale;
+            if (velocity.Length <= _ctx.Config.HangCatchMaxSpeedDip * _ctx.Scale
+                && PhysicsSystem.FindBarInReach(_platforms, _ctx.Body.Feet, _ctx.SizePx, reach) is { } bar)
+            {
+                _ctx.Body.Hang(_ctx.Body.Feet.X, bar, _ctx.SizePx);
+                _fsm.ChangeTo(PetStateId.Hang, _ctx);
+                return;
+            }
+
             _ctx.Body.Release(velocity);
             if (velocity.X != 0)
             {
@@ -229,8 +249,9 @@ public sealed class PetSimulation
         }
 
         _snapshot = snapshot;
-        _platforms = PlatformBuilder.Build(snapshot);
+        _platforms = PlatformBuilder.Build(snapshot, _ctx.Config.CaptionHeightDip, includeHangBars: _ctx.Config.EnableHanging);
         _ctx.Monitors = snapshot.Monitors;
+        _ctx.Platforms = _platforms;
     }
 
     private bool ApplySafetyNet(double dt)
@@ -252,13 +273,31 @@ public sealed class PetSimulation
         return true;
     }
 
+    /// <summary>
+    /// Appears at the top-centre of the monitor and falls, or, if a maximized window's title bar is right there,
+    /// starts out hanging from it.
+    /// </summary>
     private void SpawnAtTop(MonitorInfo monitor)
     {
         var area = monitor.WorkArea;
         _ctx.Scale = monitor.Scale;
         _ctx.Body.Feet = new Vec2(area.Left + (area.Width / 2.0), area.Top + _ctx.SizePx);
-        _ctx.Body.Release(Vec2.Zero);
         _lostSeconds = 0;
+
+        var bar = _platforms
+            .Where(p => p.Kind == PlatformKind.HangBar && p.SpansX(_ctx.Body.Feet.X) && p.Y >= area.Top && p.Y < area.Top + _ctx.SizePx)
+            .OrderBy(p => p.Y)
+            .Cast<Platform?>()
+            .FirstOrDefault();
+
+        if (bar is { } b)
+        {
+            _ctx.Body.Hang(_ctx.Body.Feet.X, b, _ctx.SizePx);
+        }
+        else
+        {
+            _ctx.Body.Release(Vec2.Zero);
+        }
     }
 
     private PetFrame BuildFrame()

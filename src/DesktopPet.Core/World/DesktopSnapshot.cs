@@ -2,9 +2,16 @@ namespace DesktopPet.Core.World;
 
 /// <summary>
 /// Everything Core knows about the desktop at one moment. Produced by the platform layer (or a test fake);
-/// Core never queries the OS itself. Other top-level windows join this in M5.
+/// Core never queries the OS itself.
 /// </summary>
-public sealed record DesktopSnapshot(IReadOnlyList<MonitorInfo> Monitors)
+/// <param name="Monitors">Displays.</param>
+/// <param name="Windows">Visible top-level windows in z-order, <b>topmost first</b>.</param>
+public sealed record DesktopSnapshot(IReadOnlyList<MonitorInfo> Monitors, IReadOnlyList<WindowInfo> Windows)
 {
-    public static DesktopSnapshot Empty { get; } = new([]);
+    public DesktopSnapshot(IReadOnlyList<MonitorInfo> monitors)
+        : this(monitors, [])
+    {
+    }
+
+    public static DesktopSnapshot Empty { get; } = new([], []);
 }

@@ -32,7 +32,7 @@ public class PhysicsSystemTests
     private static PetBody GroundedAt(double x, double y = 1000, double skid = 0)
     {
         var body = new PetBody();
-        body.Land(x, y, "floor", skid);
+        body.Land(x, Floor with { Y = y }, skid);
         return body;
     }
 

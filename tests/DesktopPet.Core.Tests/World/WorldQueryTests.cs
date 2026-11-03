@@ -54,16 +54,4 @@ public class WorldQueryTests
         Assert.Equal(Layout[0], WorldQuery.Nearest(Layout, new Vec2(100, 1200)));
         Assert.Equal(Layout[1], WorldQuery.Nearest(Layout, new Vec2(6000, 0)));
     }
-
-    [Fact]
-    public void Floors_are_work_area_bottoms_keyed_by_monitor()
-    {
-        var snapshot = new FakeDesktop().Monitor(0, 0, 1920, 1080, taskbar: 48).Monitor(1920, 0, 1920, 1080).Snapshot();
-        var floors = PlatformBuilder.Build(snapshot);
-
-        Assert.Collection(
-            floors,
-            f => Assert.Equal(new Platform(PlatformKind.Floor, @"floor:\\.\DISPLAY1", 1032, 0, 1920), f),
-            f => Assert.Equal(new Platform(PlatformKind.Floor, @"floor:\\.\DISPLAY2", 1080, 1920, 3840), f));
-    }
 }

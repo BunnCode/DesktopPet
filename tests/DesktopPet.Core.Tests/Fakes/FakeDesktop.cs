@@ -11,6 +11,14 @@ namespace DesktopPet.Core.Tests.Fakes;
 internal sealed class FakeDesktop
 {
     private readonly List<MonitorInfo> _monitors = [];
+    private readonly List<WindowInfo> _windows = [];
+
+    /// <summary>Adds a window <b>behind</b> all windows added so far (first added = topmost).</summary>
+    public FakeDesktop Window(long id, int x, int y, int width, int height, bool maximized = false)
+    {
+        _windows.Add(new WindowInfo(id, RectI.FromSize(x, y, width, height), maximized));
+        return this;
+    }
 
     /// <param name="x">Left edge.</param>
     /// <param name="y">Top edge.</param>
@@ -39,5 +47,5 @@ internal sealed class FakeDesktop
         return this;
     }
 
-    public DesktopSnapshot Snapshot() => new(_monitors.ToArray());
+    public DesktopSnapshot Snapshot() => new(_monitors.ToArray(), _windows.ToArray());
 }

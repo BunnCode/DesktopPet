@@ -65,6 +65,35 @@ public sealed record PetConfig
 
     /// <summary>Chance that a new walk heads the other way.</summary>
     public double WalkTurnChance { get; init; } = 0.5;
+
+    // ---- Hanging from title bars ----
+
+    /// <summary>
+    /// Whether the pet can hang from the title bars of maximized / top-pinned windows. Off for now: with it off,
+    /// no hang bars are built, so nothing can grab, catch or spawn onto one.
+    /// </summary>
+    public bool EnableHanging { get; init; }
+
+    /// <summary>Assumed title-bar height for hang bars, DIP.</summary>
+    public double CaptionHeightDip { get; init; } = World.PlatformBuilder.DefaultCaptionHeightDip;
+
+    /// <summary>Released by the mouse with the top of the pet this close to a hang bar (DIP), it grabs on.</summary>
+    public double HangReachDip { get; init; } = 24;
+
+    /// <summary>...unless it was thrown faster than this (DIP/s).</summary>
+    public double HangCatchMaxSpeedDip { get; init; } = 1500;
+
+    public DurationRange HangSeconds { get; init; } = new(3, 8);
+    public DurationRange ShimmySeconds { get; init; } = new(2, 5);
+
+    /// <summary>Hand-over-hand speed along a hang bar, DIP/s.</summary>
+    public double ShimmySpeedDip { get; init; } = 35;
+
+    /// <summary>When a hang ends: chance to shimmy along the bar...</summary>
+    public double HangShimmyChance { get; init; } = 0.35;
+
+    /// <summary>...and chance to let go and drop. The rest of the time it keeps hanging.</summary>
+    public double HangDropChance { get; init; } = 0.3;
 }
 
 /// <summary>Relative likelihood of each voluntary behavior when the current one ends.</summary>

@@ -16,12 +16,21 @@ internal sealed class TrayIcon : IDisposable
     private readonly Icon _icon;
     private readonly nint _hIcon;
 
-    public TrayIcon(uint[] argbPixels, int size, Action onExit)
+    /// <param name="argbPixels">Icon image, 0xAARRGGBB.</param>
+    /// <param name="size">Icon width and height.</param>
+    /// <param name="onExit">Exit chosen.</param>
+    /// <param name="onDebugOverlay">Debug overlay toggled; receives the new state.</param>
+    public TrayIcon(uint[] argbPixels, int size, Action onExit, Action<bool> onDebugOverlay)
     {
         (_icon, _hIcon) = CreateIcon(argbPixels, size);
 
+        var debugOverlay = new ToolStripMenuItem("Debug overlay") { CheckOnClick = true };
+        debugOverlay.CheckedChanged += (_, _) => onDebugOverlay(debugOverlay.Checked);
+
         var menu = new ContextMenuStrip();
         menu.Items.Add(new ToolStripMenuItem("DesktopPet") { Enabled = false });
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(debugOverlay);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", image: null, (_, _) => onExit());
 

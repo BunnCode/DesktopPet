@@ -46,7 +46,23 @@ internal static class PlaceholderArt
     /// <param name="Mouth">Small open mouth.</param>
     /// <param name="Look">Horizontal eye offset; positive looks right (the art's facing direction).</param>
     /// <param name="Smile">Small smile under the eyes.</param>
-    private readonly record struct Pose(double Top, double HalfWidth, Eyes Eyes, FeetPose Feet, bool Mouth = false, int Look = 0, bool Smile = false);
+    /// <param name="Arms">Arms raised to grip something at the top edge of the sprite.</param>
+    private readonly record struct Pose(
+        double Top, double HalfWidth, Eyes Eyes, FeetPose Feet, bool Mouth = false, int Look = 0, bool Smile = false, Arms Arms = Arms.None);
+
+    private enum Arms
+    {
+        None,
+
+        /// <summary>Both hands gripping at row 0.</summary>
+        Up,
+
+        /// <summary>Front (right) hand reaching ahead and slightly lower: mid hand-over-hand.</summary>
+        ReachFront,
+
+        /// <summary>Back (left) hand catching up.</summary>
+        ReachBack,
+    }
 
     public static uint[] Frame(string animationId, int frameIndex) => Draw(PoseFor(animationId, frameIndex));
 
@@ -58,6 +74,19 @@ internal static class PlaceholderArt
         {
             // Stretched tall and narrow, eyes wide, feet fluttering.
             return new Pose(4, 12, Eyes.Wide, frame % 2 == 0 ? FeetPose.DangleLeft : FeetPose.DangleRight, Mouth: true);
+        }
+
+        if (animationId == Animations.Hang.Id)
+        {
+            // Dangling from both hands, a slow sway of the feet.
+            return new Pose(6, 12, Eyes.Open, frame == 0 ? FeetPose.DangleLeft : FeetPose.DangleRight, Arms: Arms.Up);
+        }
+
+        if (animationId == Animations.Shimmy.Id)
+        {
+            return new Pose(
+                6, 12, Eyes.Open, frame == 0 ? FeetPose.DangleLeft : FeetPose.DangleRight, Look: 1,
+                Arms: frame == 0 ? Arms.ReachFront : Arms.ReachBack);
         }
 
         if (animationId == Animations.Held.Id)
@@ -157,8 +186,35 @@ internal static class PlaceholderArt
         }
 
         DrawFeet(px, pose.Feet);
+        DrawArms(px, pose.Arms, (int)top);
         DrawFace(px, pose, (int)cy);
         return px;
+    }
+
+    /// <summary>Arms from the shoulders up to hands at the very top rows (where the sprite's top meets the bar).</summary>
+    private static void DrawArms(uint[] px, Arms arms, int bodyTop)
+    {
+        if (arms == Arms.None)
+        {
+            return;
+        }
+
+        // (arm column, hand top row) for the back (left) and front (right) hands.
+        var (backHand, frontHand) = arms switch
+        {
+            Arms.ReachFront => (0, 1),
+            Arms.ReachBack => (1, 0),
+            _ => (0, 0),
+        };
+        var frontX = arms == Arms.ReachFront ? 22 : 20;
+        DrawArm(px, 9, backHand, bodyTop);
+        DrawArm(px, frontX, frontHand, bodyTop);
+    }
+
+    private static void DrawArm(uint[] px, int x, int handTop, int bodyTop)
+    {
+        FillRect(px, x, handTop + 1, 2, bodyTop + 3 - (handTop + 1), Outline); // arm
+        FillRect(px, x - 1, handTop, 4, 2, Feet);                              // hand gripping
     }
 
     private static void DrawFeet(uint[] px, FeetPose feet)

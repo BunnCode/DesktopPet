@@ -77,6 +77,16 @@ public partial class PetWindow : Window
         }
     }
 
+    /// <summary>Re-asserts topmost now (e.g. after other topmost windows such as the debug overlay appeared).</summary>
+    public void BringToFront()
+    {
+        if (_hwnd != 0)
+        {
+            PetWindowInterop.BringToTopmost(_hwnd);
+            _sinceTopmost.Restart();
+        }
+    }
+
     /// <summary>Creates the native window and applies pet styles before it is ever shown.</summary>
     public void CreateHandle()
     {

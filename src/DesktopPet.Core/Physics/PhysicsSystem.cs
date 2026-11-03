@@ -10,6 +10,9 @@ public enum PhysicsEvent
     Landed,
     LostGround,
     HitWall,
+
+    /// <summary>Caught a hang bar while moving up through it.</summary>
+    Grabbed,
 }
 
 /// <summary>What the physics step needs to know about the world and the pet's current size.</summary>
@@ -36,46 +39,131 @@ public static class PhysicsSystem
         {
             BodyMode.Grounded => StepGrounded(body, world, dt, config),
             BodyMode.Airborne => StepAirborne(body, world, dt, config),
+            BodyMode.Hanging => StepHanging(body, world, config),
             _ => PhysicsEvent.None, // Held: the mouse owns it
         };
     }
 
-    private static PhysicsEvent StepGrounded(PetBody body, in PhysicsWorld world, double dt, PetConfig config)
+    /// <summary>Keeps a hanging body on its bar as the window moves; lets go when the bar goes away or ends.</summary>
+    private static PhysicsEvent StepHanging(PetBody body, in PhysicsWorld world, PetConfig config)
     {
-        var skidded = Skid(body, world, dt, config);
-
-        Platform? ground = null;
-        foreach (var p in world.Platforms)
+        if (FindGround(world.Platforms, body.GroundKey, body.Feet.X) is not { } bar)
         {
-            if (p.Key == body.GroundKey)
+            body.Release(Vec2.Zero);
+            return PhysicsEvent.LostGround;
+        }
+
+        if (bar.AnchorX != body.GroundAnchorX && bar.AnchorWidth == body.GroundAnchorWidth)
+        {
+            body.Feet = body.Feet with { X = body.Feet.X + (bar.AnchorX - body.GroundAnchorX) };
+        }
+
+        if (!bar.SpansX(body.Feet.X))
+        {
+            body.Release(Vec2.Zero);
+            return PhysicsEvent.LostGround;
+        }
+
+        body.Hang(body.Feet.X, bar, config.SizeDip * world.Scale);
+        return PhysicsEvent.None;
+    }
+
+    /// <summary>
+    /// The hang bar a pet with feet at <paramref name="feet"/> can reach with its hands: the top of its sprite within
+    /// <paramref name="reach"/> pixels of a bar spanning its x.
+    /// </summary>
+    public static Platform? FindBarInReach(IReadOnlyList<Platform> platforms, Vec2 feet, double bodyHeight, double reach)
+    {
+        ArgumentNullException.ThrowIfNull(platforms);
+        var head = feet.Y - bodyHeight;
+        Platform? best = null;
+        foreach (var p in platforms)
+        {
+            if (p.Kind == PlatformKind.HangBar && p.SpansX(feet.X) && System.Math.Abs(p.Y - head) <= reach
+                && (best is null || System.Math.Abs(p.Y - head) < System.Math.Abs(best.Value.Y - head)))
             {
-                ground = p;
-                break;
+                best = p;
             }
         }
 
-        if (ground is not { } g || g.Y > body.Feet.Y + SnapDownTolerance)
+        return best;
+    }
+
+    private static PhysicsEvent StepGrounded(PetBody body, in PhysicsWorld world, double dt, PetConfig config)
+    {
+        if (FindGround(world.Platforms, body.GroundKey, body.Feet.X) is not { } g)
+        {
+            // Surface vanished: window closed, minimized, maximized, moved to another desktop, monitor unplugged...
+            body.Release(new Vec2(body.Velocity.X, 0));
+            return PhysicsEvent.LostGround;
+        }
+
+        // Ride: if the surface's owner moved sideways (same width, so moved rather than resized), move with it.
+        if (g.AnchorX != body.GroundAnchorX && g.AnchorWidth == body.GroundAnchorWidth)
+        {
+            body.Feet = body.Feet with { X = body.Feet.X + (g.AnchorX - body.GroundAnchorX) };
+        }
+
+        // Floors that drop away (taskbar shrank) are fallen to; windows are followed down too (being dragged).
+        if (g.Kind == PlatformKind.Floor && g.Y > body.Feet.Y + SnapDownTolerance)
         {
             body.Release(new Vec2(body.Velocity.X, 0));
             return PhysicsEvent.LostGround;
         }
+
+        body.TrackGround(g);
+        var skidded = Skid(body, world, dt, config);
 
         if (!g.SpansX(body.Feet.X))
         {
-            // Walked or slid off the end. Hand over to a neighbouring surface at the same height (e.g. the next monitor's floor).
-            if (FindAdjacent(world.Platforms, body.Feet.X, g.Y) is { } next)
+            // Walked/slid/rode off this segment. Another visible segment of the same surface, or a neighbouring
+            // surface at the same height (e.g. the next monitor's floor), takes over; otherwise fall.
+            if (FindGround(world.Platforms, body.GroundKey, body.Feet.X) is { } same && same.SpansX(body.Feet.X))
             {
-                body.Land(body.Feet.X, next.Y, next.Key, body.Velocity.X);
+                g = same;
+            }
+            else if (FindAdjacent(world.Platforms, body.Feet.X, g.Y) is { } next)
+            {
+                body.Land(body.Feet.X, next, body.Velocity.X);
                 return skidded;
             }
-
-            body.Release(new Vec2(body.Velocity.X, 0));
-            return PhysicsEvent.LostGround;
+            else
+            {
+                body.Release(new Vec2(body.Velocity.X, 0));
+                return PhysicsEvent.LostGround;
+            }
         }
 
-        // Surface moved up (or by less than the tolerance): stay on it.
         body.Feet = body.Feet with { Y = g.Y };
+        body.TrackGround(g);
         return skidded;
+    }
+
+    /// <summary>The ground platform by key, preferring the segment under <paramref name="x"/> when a surface is split.</summary>
+    private static Platform? FindGround(IReadOnlyList<Platform> platforms, string? key, double x)
+    {
+        if (key is null)
+        {
+            return null;
+        }
+
+        Platform? any = null;
+        foreach (var p in platforms)
+        {
+            if (p.Key != key)
+            {
+                continue;
+            }
+
+            if (p.SpansX(x))
+            {
+                return p;
+            }
+
+            any ??= p;
+        }
+
+        return any;
     }
 
     /// <summary>Slides a landed body with leftover horizontal speed, decelerating by friction and stopping at walls.</summary>
@@ -138,8 +226,16 @@ public static class PhysicsSystem
 
         if (velocity.Y >= 0 && FindLanding(world.Platforms, from, to) is { } landing)
         {
-            body.Land(landing.X, landing.Platform.Y, landing.Platform.Key, velocity.X);
+            body.Land(landing.X, landing.Platform, velocity.X);
             return PhysicsEvent.Landed;
+        }
+
+        // Thrown upward: hands catch a hang bar as the head passes up through it.
+        var height = config.SizeDip * scale;
+        if (velocity.Y < 0 && FindCatch(world.Platforms, from, to, height) is { } caught)
+        {
+            body.Hang(caught.X, caught.Bar, height);
+            return PhysicsEvent.Grabbed;
         }
 
         body.Feet = to;
@@ -150,11 +246,35 @@ public static class PhysicsSystem
     private static double HalfWidth(in PhysicsWorld world, PetConfig config) =>
         config.SizeDip * world.Scale * config.BodyHalfWidthFraction;
 
+    /// <summary>Swept test for the head moving up through a hang bar: the lowest bar crossed, at the x where it's crossed.</summary>
+    private static (Platform Bar, double X)? FindCatch(IReadOnlyList<Platform> platforms, Vec2 from, Vec2 to, double height)
+    {
+        (Platform Bar, double X)? best = null;
+        double headFrom = from.Y - height, headTo = to.Y - height, dy = headTo - headFrom;
+
+        foreach (var p in platforms)
+        {
+            if (p.Kind != PlatformKind.HangBar || headFrom < p.Y || headTo > p.Y)
+            {
+                continue;
+            }
+
+            var t = dy < 0 ? (p.Y - headFrom) / dy : 0;
+            var x = from.X + ((to.X - from.X) * t);
+            if (p.SpansX(x) && (best is null || p.Y > best.Value.Bar.Y))
+            {
+                best = (p, x);
+            }
+        }
+
+        return best;
+    }
+
     private static Platform? FindAdjacent(IReadOnlyList<Platform> platforms, double x, double y)
     {
         foreach (var p in platforms)
         {
-            if (p.SpansX(x) && System.Math.Abs(p.Y - y) <= SnapDownTolerance)
+            if (p.IsGround && p.SpansX(x) && System.Math.Abs(p.Y - y) <= SnapDownTolerance)
             {
                 return p;
             }
@@ -171,7 +291,7 @@ public static class PhysicsSystem
 
         foreach (var p in platforms)
         {
-            if (from.Y > p.Y || to.Y < p.Y)
+            if (!p.IsGround || from.Y > p.Y || to.Y < p.Y)
             {
                 continue;
             }

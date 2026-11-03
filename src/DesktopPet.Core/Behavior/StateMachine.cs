@@ -9,6 +9,7 @@ internal sealed class StateMachine
         PetState[] states =
         [
             new FallState(), new LandState(), new IdleState(), new WalkState(), new SitState(), new HeldState(), new HappyState(),
+            new HangState(), new ShimmyState(),
         ];
         _states = states.ToDictionary(s => s.Id);
         Current = _states[initial];

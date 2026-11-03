@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using DesktopPet.App.SpriteSheet;
+using DesktopPet.App.UI;
 using DesktopPet.Core.Animation;
 using DesktopPet.Core.Math;
 using DesktopPet.Core.Simulation;
@@ -18,6 +19,8 @@ internal sealed class PetHost : IDisposable
     private readonly GameLoop _loop;
     private DesktopSnapshot _snapshot;
     private bool _pointerActive;
+    private DebugOverlay? _overlay;
+    private int _frameCount;
 
     public PetHost()
     {
@@ -46,9 +49,35 @@ internal sealed class PetHost : IDisposable
         _loop.Start();
     }
 
+    /// <summary>Shows/hides the click-through overlay that draws platforms and pet state.</summary>
+    public bool DebugOverlayEnabled
+    {
+        get => _overlay is not null;
+        set
+        {
+            if (value == DebugOverlayEnabled)
+            {
+                return;
+            }
+
+            if (value)
+            {
+                _overlay = new DebugOverlay();
+                UpdateOverlay();
+                _window.BringToFront(); // keep the pet above the overlay
+            }
+            else
+            {
+                _overlay!.Dispose();
+                _overlay = null;
+            }
+        }
+    }
+
     public void Dispose()
     {
         _loop.Dispose();
+        _overlay?.Dispose();
         _window.Close();
     }
 
@@ -101,5 +130,21 @@ internal sealed class PetHost : IDisposable
             PetFrame.SpriteRect(feet, current.Size),
             _atlas.Get(current.AnimationId, current.FrameIndex),
             current.FacingLeft);
+
+        // The overlay re-renders full-screen layered windows in software; ~15 Hz is plenty for debugging.
+        if (_overlay is not null && ++_frameCount % 4 == 0)
+        {
+            UpdateOverlay();
+        }
+    }
+
+    private void UpdateOverlay()
+    {
+        var current = _simulation.Current;
+        _overlay?.Update(
+            _snapshot.Monitors,
+            new DebugView(
+                _simulation.Platforms, current.Bounds, current.State.ToString(), _simulation.Mode, _simulation.GroundKey,
+                _snapshot.Windows.Count));
     }
 }

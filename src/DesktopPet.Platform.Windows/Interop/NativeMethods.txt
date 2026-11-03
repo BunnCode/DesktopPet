@@ -17,5 +17,17 @@ SetWindowPos
 HWND_TOPMOST
 WINDOW_EX_STYLE
 
+// Other windows (platforms)
+EnumWindows
+IsWindowVisible
+IsIconic
+IsZoomed
+GetWindowTextLength
+GetClassName
+GetWindowThreadProcessId
+GetWindowRect
+DwmGetWindowAttribute
+DWMWINDOWATTRIBUTE
+
 // Icons
 DestroyIcon

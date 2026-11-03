@@ -27,5 +27,11 @@ public static class Animations
     /// <summary>Clicked: happy wiggle.</summary>
     public static readonly AnimationDef Happy = new("happy", frameCount: 4, fps: 8, loop: true);
 
-    public static IReadOnlyList<AnimationDef> All { get; } = [Idle, Walk, Sit, Fall, Land, Held, Happy];
+    /// <summary>Hanging by both hands from a title bar, gently swaying.</summary>
+    public static readonly AnimationDef Hang = new("hang", frameCount: 2, fps: 1.5, loop: true);
+
+    /// <summary>Moving hand over hand along a title bar.</summary>
+    public static readonly AnimationDef Shimmy = new("shimmy", frameCount: 2, fps: 5, loop: true);
+
+    public static IReadOnlyList<AnimationDef> All { get; } = [Idle, Walk, Sit, Fall, Land, Held, Happy, Hang, Shimmy];
 }

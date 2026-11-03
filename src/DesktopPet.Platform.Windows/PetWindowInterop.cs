@@ -21,6 +21,19 @@ public static class PetWindowInterop
         _ = PInvoke.SetWindowLong(h, WINDOW_LONG_PTR_INDEX.GWL_EXSTYLE, (int)exStyle);
     }
 
+    /// <summary>
+    /// For the debug overlay: like <see cref="ApplyPetStyles"/>, plus WS_EX_TRANSPARENT so every click goes straight through.
+    /// </summary>
+    public static void ApplyOverlayStyles(nint hwnd)
+    {
+        var h = new HWND(hwnd);
+        var exStyle = (WINDOW_EX_STYLE)PInvoke.GetWindowLong(h, WINDOW_LONG_PTR_INDEX.GWL_EXSTYLE);
+        exStyle |= WINDOW_EX_STYLE.WS_EX_TOOLWINDOW | WINDOW_EX_STYLE.WS_EX_NOACTIVATE
+            | WINDOW_EX_STYLE.WS_EX_TRANSPARENT | WINDOW_EX_STYLE.WS_EX_LAYERED;
+        exStyle &= ~WINDOW_EX_STYLE.WS_EX_APPWINDOW;
+        _ = PInvoke.SetWindowLong(h, WINDOW_LONG_PTR_INDEX.GWL_EXSTYLE, (int)exStyle);
+    }
+
     /// <summary>Moves/resizes without touching z-order or activation. Bypasses WPF's DIP-based Left/Top.</summary>
     public static void SetBounds(nint hwnd, RectI bounds) =>
         PInvoke.SetWindowPos(

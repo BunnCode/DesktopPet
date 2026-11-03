@@ -28,7 +28,12 @@ public partial class App : Application
         }
 
         _pet = new PetHost();
-        _tray = new TrayIcon(PlaceholderArt.TrayIconPixels(), PlaceholderArt.FrameSize, onExit: Shutdown);
+        var pet = _pet;
+        _tray = new TrayIcon(
+            PlaceholderArt.TrayIconPixels(),
+            PlaceholderArt.FrameSize,
+            onExit: Shutdown,
+            onDebugOverlay: enabled => pet.DebugOverlayEnabled = enabled);
         _pet.Start();
     }
 

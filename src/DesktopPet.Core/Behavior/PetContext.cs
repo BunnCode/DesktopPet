@@ -22,6 +22,8 @@ internal sealed class PetContext
 
     public IReadOnlyList<MonitorInfo> Monitors { get; set; } = [];
 
+    public IReadOnlyList<Platform> Platforms { get; set; } = [];
+
     /// <summary>DPI scale of the monitor the pet is on.</summary>
     public double Scale { get; set; } = 1.0;
 

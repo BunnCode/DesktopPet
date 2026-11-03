@@ -39,6 +39,83 @@ internal sealed class HeldState : PetState
     public override PetStateId? Update(PetContext context, double dt) => null;
 }
 
+/// <summary>Hanging from a title bar. When it's had enough: keep hanging, shimmy along, or let go.</summary>
+internal sealed class HangState : TimedState
+{
+    public override PetStateId Id => PetStateId.Hang;
+    protected override AnimationDef Animation => Animations.Hang;
+    protected override DurationRange Duration(PetConfig config) => config.HangSeconds;
+
+    protected override PetStateId Next(PetContext context)
+    {
+        var roll = context.Random.NextDouble();
+        if (roll < context.Config.HangShimmyChance)
+        {
+            return PetStateId.Shimmy;
+        }
+
+        if (roll < context.Config.HangShimmyChance + context.Config.HangDropChance)
+        {
+            context.Body.Release(Math.Vec2.Zero);
+            return PetStateId.Fall;
+        }
+
+        return PetStateId.Hang;
+    }
+}
+
+/// <summary>Moves hand over hand along the bar, turning back before running out of bar.</summary>
+internal sealed class ShimmyState : TimedState
+{
+    public override PetStateId Id => PetStateId.Shimmy;
+    protected override AnimationDef Animation => Animations.Shimmy;
+    protected override DurationRange Duration(PetConfig config) => config.ShimmySeconds;
+
+    public override void Enter(PetContext context)
+    {
+        base.Enter(context);
+        if (context.Random.Chance(0.5))
+        {
+            context.FacingLeft = !context.FacingLeft;
+        }
+    }
+
+    protected override PetStateId Next(PetContext context) => PetStateId.Hang;
+
+    protected override void Act(PetContext context, double dt)
+    {
+        var body = context.Body;
+        if (body.Mode != BodyMode.Hanging || CurrentBar(context) is not { } bar)
+        {
+            return;
+        }
+
+        var dx = context.Direction * context.Config.ShimmySpeedDip * context.Scale * dt;
+        var margin = context.HalfWidthPx * 0.5; // keep both hands on the bar
+        var next = body.Feet.X + dx;
+        if (next < bar.Left + margin || next >= bar.Right - margin)
+        {
+            context.FacingLeft = !context.FacingLeft;
+            return;
+        }
+
+        body.Feet = body.Feet with { X = next };
+    }
+
+    private static Platform? CurrentBar(PetContext context)
+    {
+        foreach (var p in context.Platforms)
+        {
+            if (p.Key == context.Body.GroundKey && p.SpansX(context.Body.Feet.X))
+            {
+                return p;
+            }
+        }
+
+        return null;
+    }
+}
+
 /// <summary>Reaction to being clicked ("petted").</summary>
 internal sealed class HappyState : TimedState
 {
