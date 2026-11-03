@@ -27,9 +27,12 @@ internal sealed class PetMenu : IDisposable
     /// <param name="rules">Thresholds for mood text.</param>
     /// <param name="act">Care action chosen.</param>
     /// <param name="onDebugOverlay">Debug overlay toggled.</param>
+    /// <param name="pushingEnabled">Initial state of "Push windows".</param>
+    /// <param name="onPushing">"Push windows" toggled.</param>
     /// <param name="onExit">Exit chosen.</param>
     public PetMenu(
-        Func<PetStats> stats, Func<bool> isAsleep, StatRules rules, Action<PetAction> act, Action<bool> onDebugOverlay, Action onExit)
+        Func<PetStats> stats, Func<bool> isAsleep, StatRules rules, Action<PetAction> act, Action<bool> onDebugOverlay,
+        bool pushingEnabled, Action<bool> onPushing, Action onExit)
     {
         _stats = stats;
         _isAsleep = isAsleep;
@@ -45,6 +48,9 @@ internal sealed class PetMenu : IDisposable
         var play = new ToolStripMenuItem("Play", null, (_, _) => act(PetAction.Play));
         _sleep = new ToolStripMenuItem("Sleep", null, (_, _) => act(_isAsleep() ? PetAction.WakeUp : PetAction.Sleep));
 
+        var pushing = new ToolStripMenuItem("Let it push windows") { CheckOnClick = true, Checked = pushingEnabled };
+        pushing.CheckedChanged += (_, _) => onPushing(pushing.Checked);
+
         var debugOverlay = new ToolStripMenuItem("Debug overlay") { CheckOnClick = true };
         debugOverlay.CheckedChanged += (_, _) => onDebugOverlay(debugOverlay.Checked);
 
@@ -55,6 +61,7 @@ internal sealed class PetMenu : IDisposable
             new ToolStripSeparator(),
             feed, play, _sleep,
             new ToolStripSeparator(),
+            pushing,
             debugOverlay,
             new ToolStripMenuItem("Exit", null, (_, _) => onExit()),
         ]);

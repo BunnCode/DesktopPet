@@ -16,11 +16,13 @@ namespace DesktopPet.App.UI;
 /// <c>DesktopPet.Platform</c> namespace before using-directives are considered.
 /// </remarks>
 internal sealed record DebugView(
-    IReadOnlyList<Core.World.Platform> Platforms, RectI PetBounds, string State, BodyMode Mode, string? GroundKey, int WindowCount);
+    IReadOnlyList<Core.World.Platform> Platforms, IReadOnlyList<Wall> Walls, RectI PetBounds, string State, BodyMode Mode,
+    string? GroundKey, int WindowCount);
 
 /// <summary>
 /// Click-through overlay showing what Core "sees": floors (green), window tops (orange), hang bars (dashed magenta),
-/// the surface the pet is on (yellow), the pet's sprite box and its state. One window per monitor so each renders at its own DPI.
+/// climbable window sides (blue) and screen edges (dotted blue), the surface the pet is on (yellow), the pet's sprite
+/// box and its state. One window per monitor so each renders at its own DPI.
 /// </summary>
 internal sealed class DebugOverlay : IDisposable
 {
@@ -105,6 +107,8 @@ internal sealed class DebugOverlay : IDisposable
         private static readonly Pen FloorPen = Frozen(new Pen(new SolidColorBrush(Color.FromArgb(220, 60, 220, 90)), 3));
         private static readonly Pen WindowPen = Frozen(new Pen(new SolidColorBrush(Color.FromArgb(220, 255, 150, 30)), 3));
         private static readonly Pen HangPen = Frozen(new Pen(new SolidColorBrush(Color.FromArgb(220, 230, 80, 230)), 3) { DashStyle = DashStyles.Dash });
+        private static readonly Pen WallPen = Frozen(new Pen(new SolidColorBrush(Color.FromArgb(220, 80, 170, 255)), 3));
+        private static readonly Pen EdgePen = Frozen(new Pen(new SolidColorBrush(Color.FromArgb(160, 80, 170, 255)), 3) { DashStyle = DashStyles.Dot });
         private static readonly Pen GroundPen = Frozen(new Pen(new SolidColorBrush(Color.FromArgb(255, 255, 235, 40)), 5));
         private static readonly Pen PetPen = Frozen(new Pen(new SolidColorBrush(Color.FromArgb(220, 40, 220, 255)), 1.5));
         private static readonly Brush LabelBackground = Frozen(new SolidColorBrush(Color.FromArgb(190, 20, 20, 20)));
@@ -143,6 +147,19 @@ internal sealed class DebugOverlay : IDisposable
                 dc.DrawLine(pen, ToDip(System.Math.Max(p.Left, bounds.Left), y), ToDip(System.Math.Min(p.Right, bounds.Right), y));
             }
 
+            foreach (var w in view.Walls)
+            {
+                if (w.X < bounds.Left || w.X > bounds.Right || w.Bottom <= bounds.Top || w.Top >= bounds.Bottom)
+                {
+                    continue;
+                }
+
+                var pen = w.Key == view.GroundKey ? GroundPen : w.Kind == WallKind.ScreenEdge ? EdgePen : WallPen;
+                var x = w.X - (w.TowardWall * 1.5); // on the side the pet clings
+                dc.DrawLine(
+                    pen, ToDip(x, System.Math.Max(w.Top, bounds.Top)), ToDip(x, System.Math.Min(w.Bottom, bounds.Bottom)));
+            }
+
             var pet = view.PetBounds;
             if (pet.Intersects(bounds))
             {
@@ -159,7 +176,7 @@ internal sealed class DebugOverlay : IDisposable
                 var tops = view.Platforms.Count - floors - bars;
                 DrawLabel(
                     dc,
-                    $"DesktopPet debug · {view.WindowCount} windows · {tops} window tops · {bars} hang bars · {floors} floors"
+                    $"DesktopPet debug · {view.WindowCount} windows · {tops} window tops · {view.Walls.Count} walls · {bars} hang bars · {floors} floors"
                     + $" · on: {view.GroundKey ?? "-"}",
                     ToDip(m.WorkArea.Left + 8, m.WorkArea.Top + 8));
             }

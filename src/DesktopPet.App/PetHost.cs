@@ -55,7 +55,7 @@ internal sealed class PetHost : IDisposable
         _loop = new GameLoop(
             new FixedStepper(config.StepSeconds, config.MaxStepsPerFrame),
             beginFrame: BeginFrame,
-            step: dt => _simulation.Tick(dt, _snapshot),
+            step: Step,
             render: Render);
 
         // Locked screen = user away: stats keep decaying but can't fall to critical.
@@ -68,6 +68,13 @@ internal sealed class PetHost : IDisposable
     public PetStats Stats => _simulation.Stats;
 
     public bool IsAsleep => _simulation.State == PetStateId.Sleep;
+
+    /// <summary>Whether the pet may push windows around (moves the user's real windows).</summary>
+    public bool PushingEnabled
+    {
+        get => _simulation.PushingEnabled;
+        set => _simulation.PushingEnabled = value;
+    }
 
     public StatRules Rules => _config.Stats;
 
@@ -194,7 +201,7 @@ internal sealed class PetHost : IDisposable
             : Vec2.Lerp(_simulation.Previous.FeetPos, current.FeetPos, alpha);
 
         _window.Present(
-            PetFrame.SpriteRect(feet, current.Size),
+            PetFrame.SpriteRect(feet + new Vec2(0, current.SinkY), current.Size),
             _atlas.Get(current.AnimationId, current.FrameIndex),
             current.FacingLeft);
 
@@ -216,7 +223,17 @@ internal sealed class PetHost : IDisposable
         _overlay?.Update(
             _snapshot.Monitors,
             new DebugView(
-                _simulation.Platforms, current.Bounds, current.State.ToString(), _simulation.Mode, _simulation.GroundKey,
-                _snapshot.Windows.Count));
+                _simulation.Platforms, _simulation.Walls, current.Bounds, current.State.ToString(), _simulation.Mode,
+                _simulation.GroundKey, _snapshot.Windows.Count));
+    }
+
+    /// <summary>One simulation step, then carry out any window moves it asked for (pushing).</summary>
+    private void Step(double dt)
+    {
+        _simulation.Tick(dt, _snapshot);
+        foreach (var command in _simulation.TakeCommands())
+        {
+            WindowManipulator.MoveBy(command.WindowId, command.Dx, command.Dy);
+        }
     }
 }

@@ -13,13 +13,21 @@ public enum PhysicsEvent
 
     /// <summary>Caught a hang bar while moving up through it.</summary>
     Grabbed,
+
+    /// <summary>Flew into a wall slowly enough to grab on.</summary>
+    Clung,
 }
 
 /// <summary>What the physics step needs to know about the world and the pet's current size.</summary>
 /// <param name="Platforms">Surfaces to land on.</param>
 /// <param name="Monitors">Monitor layout (for walls).</param>
 /// <param name="Scale">DPI scale where the pet is; DIP-based constants are multiplied by it.</param>
-public readonly record struct PhysicsWorld(IReadOnlyList<Platform> Platforms, IReadOnlyList<MonitorInfo> Monitors, double Scale);
+/// <param name="Walls">Climbable walls (window sides, screen edges); empty disables clinging.</param>
+public readonly record struct PhysicsWorld(
+    IReadOnlyList<Platform> Platforms, IReadOnlyList<MonitorInfo> Monitors, double Scale, IReadOnlyList<Wall>? Walls = null)
+{
+    public IReadOnlyList<Wall> WallsOrEmpty => Walls ?? [];
+}
 
 /// <summary>
 /// Gravity, swept one-way platform collision, wall bounces, ground tracking and skidding.
@@ -40,8 +48,99 @@ public static class PhysicsSystem
             BodyMode.Grounded => StepGrounded(body, world, dt, config),
             BodyMode.Airborne => StepAirborne(body, world, dt, config),
             BodyMode.Hanging => StepHanging(body, world, config),
+            BodyMode.Clinging => StepClinging(body, world, config),
             _ => PhysicsEvent.None, // Held: the mouse owns it
         };
+    }
+
+    /// <summary>
+    /// Keeps a clinging body on its wall: rides a window that's been moved (not resized), lets go when the wall
+    /// disappears or the body is no longer beside it.
+    /// </summary>
+    private static PhysicsEvent StepClinging(PetBody body, in PhysicsWorld world, PetConfig config)
+    {
+        var size = config.SizeDip * world.Scale;
+        var owner = body.WallOwner;
+        var feet = body.Feet;
+
+        if (FindWall(world.WallsOrEmpty, body.GroundKey, feet.Y - (size / 2)) is { } probe && !owner.IsEmpty)
+        {
+            var now = probe.Owner;
+            var dx = now.Width == owner.Width ? now.Left - owner.Left : 0;
+            var dy = now.Height == owner.Height ? now.Top - owner.Top : 0;
+            feet += new Vec2(dx, dy);
+        }
+
+        if (FindWall(world.WallsOrEmpty, body.GroundKey, feet.Y - (size / 2)) is not { } wall || !wall.SpansY(feet.Y - (size / 2)))
+        {
+            body.Feet = feet;
+            body.Release(Vec2.Zero);
+            return PhysicsEvent.LostGround;
+        }
+
+        body.Cling(wall, feet.Y, size);
+        return PhysicsEvent.None;
+    }
+
+    /// <summary>A wall by key, preferring the segment spanning <paramref name="y"/> when it's split.</summary>
+    public static Wall? FindWall(IReadOnlyList<Wall> walls, string? key, double y)
+    {
+        ArgumentNullException.ThrowIfNull(walls);
+        if (key is null)
+        {
+            return null;
+        }
+
+        Wall? any = null;
+        foreach (var w in walls)
+        {
+            if (w.Key != key)
+            {
+                continue;
+            }
+
+            if (w.SpansY(y))
+            {
+                return w;
+            }
+
+            any ??= w;
+        }
+
+        return any;
+    }
+
+    /// <summary>
+    /// A wall the pet's side would touch moving from <paramref name="fromX"/> to <paramref name="toX"/> (feet x),
+    /// facing it, with its mid-body height inside the wall's span.
+    /// </summary>
+    public static Wall? FindWallCrossing(IReadOnlyList<Wall> walls, double fromX, double toX, double midY, double halfWidth)
+    {
+        ArgumentNullException.ThrowIfNull(walls);
+        var direction = System.Math.Sign(toX - fromX);
+        if (direction == 0)
+        {
+            return null;
+        }
+
+        Wall? best = null;
+        var fromEdge = fromX + (direction * halfWidth);
+        var toEdge = toX + (direction * halfWidth);
+        foreach (var w in walls)
+        {
+            if (w.TowardWall != direction || !w.SpansY(midY))
+            {
+                continue;
+            }
+
+            var crosses = direction > 0 ? fromEdge <= w.X && toEdge >= w.X : fromEdge >= w.X && toEdge <= w.X;
+            if (crosses && (best is null || System.Math.Abs(w.X - fromEdge) < System.Math.Abs(best.Value.X - fromEdge)))
+            {
+                best = w;
+            }
+        }
+
+        return best;
     }
 
     /// <summary>Keeps a hanging body on its bar as the window moves; lets go when the bar goes away or ends.</summary>
@@ -209,6 +308,17 @@ public static class PhysicsSystem
         var from = body.Feet;
         var to = from + (velocity * dt);
         var result = PhysicsEvent.None;
+
+        // Flying into a wall it's facing: grab on if slow enough. (Too fast: screen edges bounce below, window sides are passed.)
+        if (config.EnableClimbing && velocity.X != 0 && System.Math.Abs(velocity.X) <= config.ClingMaxSpeedDip * scale)
+        {
+            var size = config.SizeDip * scale;
+            if (FindWallCrossing(world.WallsOrEmpty, from.X, to.X, to.Y - (size / 2), HalfWidth(world, config)) is { } wall)
+            {
+                body.Cling(wall, to.Y, size);
+                return PhysicsEvent.Clung;
+            }
+        }
 
         // Walls: bounce if the leading edge, at mid-body height, would end up somewhere unreachable.
         if (velocity.X != 0)

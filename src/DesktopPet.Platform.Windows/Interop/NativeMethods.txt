@@ -29,5 +29,9 @@ GetWindowRect
 DwmGetWindowAttribute
 DWMWINDOWATTRIBUTE
 
+// Pushing windows
+IsWindow
+MonitorFromWindow
+
 // Icons
 DestroyIcon

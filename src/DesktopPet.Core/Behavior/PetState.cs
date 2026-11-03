@@ -18,6 +18,9 @@ public enum PetStateId
     Sleep,
     Eat,
     Play,
+    Climb,
+    Cling,
+    Push,
 }
 
 /// <summary>
@@ -53,14 +56,17 @@ internal abstract class TimedState : PetState
 
     public override PetStateId? Update(PetContext context, double dt)
     {
-        Act(context, dt);
+        if (Act(context, dt) is { } interrupt)
+        {
+            return interrupt;
+        }
+
         _remaining -= dt;
         return _remaining <= 0 ? Next(context) : null;
     }
 
-    protected virtual void Act(PetContext context, double dt)
-    {
-    }
+    /// <summary>Per-tick behavior; returning a state switches to it right away (e.g. walked into a wall and started climbing).</summary>
+    protected virtual PetStateId? Act(PetContext context, double dt) => null;
 
     /// <summary>Replaces the remaining duration with a fresh roll from <paramref name="range"/>.</summary>
     protected void Extend(PetContext context, DurationRange range) => _remaining = context.Random.Range(range.Min, range.Max);

@@ -85,8 +85,32 @@ public sealed class PetSimulation
     /// <summary>Surfaces derived from the latest snapshot (for the debug overlay).</summary>
     public IReadOnlyList<Platform> Platforms => _platforms;
 
-    /// <summary>Key of the surface the pet stands on or hangs from, or null when airborne or held.</summary>
-    public string? GroundKey => _ctx.Body.Mode is BodyMode.Grounded or BodyMode.Hanging ? _ctx.Body.GroundKey : null;
+    /// <summary>Key of the surface the pet stands on, hangs from or clings to, or null when airborne or held.</summary>
+    public string? GroundKey =>
+        _ctx.Body.Mode is BodyMode.Grounded or BodyMode.Hanging or BodyMode.Clinging ? _ctx.Body.GroundKey : null;
+
+    /// <summary>Whether the pet may push windows (it moves the user's real windows). Starts from config.</summary>
+    public bool PushingEnabled
+    {
+        get => _ctx.PushingEnabled;
+        set => _ctx.PushingEnabled = value;
+    }
+
+    /// <summary>Climbable walls derived from the latest snapshot (for the debug overlay).</summary>
+    public IReadOnlyList<Wall> Walls => _ctx.Walls;
+
+    /// <summary>Window moves requested since the last call (pushing). The host carries them out.</summary>
+    public IReadOnlyList<WindowCommand> TakeCommands()
+    {
+        if (_ctx.Commands.Count == 0)
+        {
+            return [];
+        }
+
+        var commands = _ctx.Commands.ToArray();
+        _ctx.Commands.Clear();
+        return commands;
+    }
 
     /// <summary>True while the pet is being dragged; the host should feed <see cref="PointerMove"/> every frame.</summary>
     public bool IsHeld => _ctx.Body.Mode == BodyMode.Held;
@@ -151,7 +175,7 @@ public sealed class PetSimulation
         {
             _fsm.Update(_ctx, dt);
 
-            var world = new PhysicsWorld(_platforms, _snapshot.Monitors, _ctx.Scale);
+            var world = new PhysicsWorld(_platforms, _snapshot.Monitors, _ctx.Scale, _ctx.Walls);
             switch (PhysicsSystem.Step(_ctx.Body, world, dt, _ctx.Config))
             {
                 case PhysicsEvent.Landed when State != PetStateId.Play: // play hops land without the squash
@@ -162,6 +186,9 @@ public sealed class PetSimulation
                     break;
                 case PhysicsEvent.Grabbed:
                     _fsm.ChangeTo(PetStateId.Hang, _ctx);
+                    break;
+                case PhysicsEvent.Clung:
+                    _fsm.ChangeTo(PetStateId.Cling, _ctx);
                     break;
                 case PhysicsEvent.HitWall when _ctx.Body.Velocity.X != 0:
                     _ctx.FacingLeft = _ctx.Body.Velocity.X < 0; // face the way it's bouncing
@@ -248,6 +275,15 @@ public sealed class PetSimulation
                 return;
             }
 
+            // Let go with its side against a wall: it grabs on (unless flung hard).
+            if (_ctx.Config.EnableClimbing && velocity.Length <= _ctx.Config.ClingMaxSpeedDip * _ctx.Scale
+                && WallInReach(_ctx.Config.ClingReachDip * _ctx.Scale) is { } wall)
+            {
+                _ctx.Body.Cling(wall, _ctx.Body.Feet.Y, _ctx.SizePx);
+                _fsm.ChangeTo(PetStateId.Cling, _ctx);
+                return;
+            }
+
             _ctx.Body.Release(velocity);
             if (velocity.X != 0)
             {
@@ -321,7 +357,7 @@ public sealed class PetSimulation
         var activity = State switch
         {
             PetStateId.Sleep => StatActivity.Sleeping,
-            PetStateId.Walk or PetStateId.Play or PetStateId.Shimmy => StatActivity.Active,
+            PetStateId.Walk or PetStateId.Play or PetStateId.Shimmy or PetStateId.Climb or PetStateId.Push => StatActivity.Active,
             _ => StatActivity.Resting,
         };
 
@@ -332,6 +368,35 @@ public sealed class PetSimulation
         }
 
         _ctx.Stats = StatsSystem.Advance(_ctx.Stats, elapsed, activity, away, rules);
+    }
+
+    /// <summary>The nearest wall the pet faces with its side within <paramref name="reach"/>, alongside its middle.</summary>
+    private Wall? WallInReach(double reach)
+    {
+        var feet = _ctx.Body.Feet;
+        var midY = feet.Y - (_ctx.SizePx / 2);
+        Wall? best = null;
+        var bestDistance = double.MaxValue;
+        foreach (var w in _ctx.Walls)
+        {
+            if (!w.SpansY(midY))
+            {
+                continue;
+            }
+
+            var side = feet.X + (w.TowardWall * _ctx.HalfWidthPx);
+            var distance = System.Math.Abs(w.X - side);
+
+            // Must be on the wall's outer side (not reaching through the window from inside).
+            var onCorrectSide = w.TowardWall > 0 ? feet.X < w.X : feet.X > w.X;
+            if (onCorrectSide && distance <= reach && distance < bestDistance)
+            {
+                best = w;
+                bestDistance = distance;
+            }
+        }
+
+        return best;
     }
 
     private static Vec2 ClampSpeed(Vec2 v, double max)
@@ -351,6 +416,8 @@ public sealed class PetSimulation
         _platforms = PlatformBuilder.Build(snapshot, _ctx.Config.CaptionHeightDip, includeHangBars: _ctx.Config.EnableHanging);
         _ctx.Monitors = snapshot.Monitors;
         _ctx.Platforms = _platforms;
+        // Built whenever either feature could use them (pushing can be switched back on at runtime).
+        _ctx.Walls = _ctx.Config.EnableClimbing || _ctx.Config.EnablePushing ? WallBuilder.Build(snapshot) : [];
     }
 
     private bool ApplySafetyNet(double dt)
@@ -402,8 +469,9 @@ public sealed class PetSimulation
     private PetFrame BuildFrame()
     {
         var size = _ctx.SizePx;
+        var sink = _ctx.Animation.Current == Animation.Animations.SitLedge ? size * Animation.Animations.LedgeSinkFraction : 0;
         return new PetFrame(
             _ctx.Body.Feet, new Vec2(size, size), _ctx.FacingLeft,
-            _ctx.Animation.Current.Id, _ctx.Animation.FrameIndex, _fsm.Current.Id);
+            _ctx.Animation.Current.Id, _ctx.Animation.FrameIndex, _fsm.Current.Id, sink);
     }
 }

@@ -13,6 +13,9 @@ public enum BodyMode
 
     /// <summary>Hanging by its hands from a <see cref="PlatformKind.HangBar"/>; the top of the sprite is at the bar.</summary>
     Hanging,
+
+    /// <summary>Clinging to a <see cref="Wall"/>, the sprite's side against the wall line.</summary>
+    Clinging,
 }
 
 /// <summary>The pet as a physics object: a feet point (bottom-centre) with velocity, in physical pixels.</summary>
@@ -47,6 +50,26 @@ public sealed class PetBody
         Velocity = Vec2.Zero;
         Mode = BodyMode.Hanging;
         TrackGround(bar);
+    }
+
+    /// <summary>Owner bounds of the wall when last seen (to ride a window that's moved, not resized).</summary>
+    public Math.RectI WallOwner { get; private set; }
+
+    /// <summary>
+    /// Cling to a wall at feet height <paramref name="feetY"/>, with the sprite's side flush against the wall line.
+    /// </summary>
+    public void Cling(in Wall wall, double feetY, double size)
+    {
+        Feet = new Vec2(wall.X - (wall.TowardWall * size / 2), feetY);
+        Velocity = Vec2.Zero;
+        Mode = BodyMode.Clinging;
+        TrackWall(wall);
+    }
+
+    public void TrackWall(in Wall wall)
+    {
+        GroundKey = wall.Key;
+        WallOwner = wall.Owner;
     }
 
     /// <summary>Notes the ground's current anchor after following it.</summary>

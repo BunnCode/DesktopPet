@@ -79,6 +79,38 @@ public sealed record PetConfig
     /// <summary>Chance that a new walk heads the other way.</summary>
     public double WalkTurnChance { get; init; } = 0.5;
 
+    // ---- Walls: climbing window sides and screen edges, pushing windows ----
+
+    public bool EnableClimbing { get; init; } = true;
+
+    /// <summary>Lets the pet push real windows around. Moves the user's windows, so it can be switched off.</summary>
+    public bool EnablePushing { get; init; } = true;
+
+    /// <summary>Walking into a wall: chance to start climbing it...</summary>
+    public double ClimbChance { get; init; } = 0.35;
+
+    /// <summary>...or (window sides only) to push the window. Otherwise it turns at screen edges and walks past windows.</summary>
+    public double PushChance { get; init; } = 0.25;
+
+    /// <summary>Walking off the end of a window top: chance to climb down that window's side instead of dropping.</summary>
+    public double ClimbDownChance { get; init; } = 0.4;
+
+    /// <summary>Climbing speed, DIP/s.</summary>
+    public double ClimbSpeedDip { get; init; } = 40;
+
+    /// <summary>Thrown into a wall slower than this (DIP/s, horizontal), it grabs on.</summary>
+    public double ClingMaxSpeedDip { get; init; } = 2500;
+
+    /// <summary>Released by the mouse with its side this close to a wall it's facing (DIP), it grabs on.</summary>
+    public double ClingReachDip { get; init; } = 16;
+
+    public DurationRange ClimbSeconds { get; init; } = new(2, 6);
+    public DurationRange ClingSeconds { get; init; } = new(2, 5);
+    public DurationRange PushSeconds { get; init; } = new(2, 5);
+
+    /// <summary>Pushing speed, DIP/s (the window moves this fast).</summary>
+    public double PushSpeedDip { get; init; } = 30;
+
     // ---- Hanging from title bars ----
 
     /// <summary>

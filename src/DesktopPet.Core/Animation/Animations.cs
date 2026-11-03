@@ -42,6 +42,24 @@ public static class Animations
     /// <summary>Munching a snack.</summary>
     public static readonly AnimationDef Eat = new("eat", frameCount: 2, fps: 4, loop: true);
 
+    /// <summary>Climbing a wall to its right (mirrored for walls on the left), hand over hand.</summary>
+    public static readonly AnimationDef Climb = new("climb", frameCount: 2, fps: 4, loop: true);
+
+    /// <summary>Holding still on a wall.</summary>
+    public static readonly AnimationDef Cling = new("cling", frameCount: 2, fps: 0.8, loop: true);
+
+    /// <summary>Leaning into a window's side, pushing it along.</summary>
+    public static readonly AnimationDef Push = new("push", frameCount: 4, fps: 5, loop: true);
+
+    /// <summary>Sitting on the edge of a title bar, legs dangling over. Drawn sunk by <see cref="LedgeSinkFraction"/>.</summary>
+    public static readonly AnimationDef SitLedge = new("sit_ledge", frameCount: 2, fps: 1.5, loop: true);
+
+    /// <summary>
+    /// For <see cref="SitLedge"/>: the sprite is drawn this fraction of its height lower than the feet point, so the
+    /// body rests on the edge and the legs hang below it.
+    /// </summary>
+    public const double LedgeSinkFraction = 9.0 / 32.0;
+
     public static IReadOnlyList<AnimationDef> All { get; } =
-        [Idle, Walk, Sit, Fall, Land, Held, Happy, Hang, Shimmy, IdleSad, Sleep, Eat];
+        [Idle, Walk, Sit, Fall, Land, Held, Happy, Hang, Shimmy, IdleSad, Sleep, Eat, Climb, Cling, Push, SitLedge];
 }

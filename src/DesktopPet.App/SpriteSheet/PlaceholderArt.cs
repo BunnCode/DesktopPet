@@ -45,6 +45,8 @@ internal static class PlaceholderArt
 
     private enum FeetPose
     {
+        /// <summary>No feet under the body (drawn as <see cref="Limbs"/> instead).</summary>
+        None,
         Standing,
         DangleLeft,
         DangleRight,
@@ -64,9 +66,28 @@ internal static class PlaceholderArt
     /// <param name="Frown">Small frown under the eyes.</param>
     /// <param name="Food">Snack held in front.</param>
     /// <param name="Zzz">0 none, 1 small "z", 2 bigger "z" drifting higher.</param>
+    /// <param name="Bottom">Bottom row of the body ellipse.</param>
+    /// <param name="ShiftX">Shifts the body, face and feet horizontally (leaning away from a wall).</param>
+    /// <param name="Limbs">Wall/ledge limbs drawn after the shift, at fixed positions.</param>
+    /// <param name="LimbPhase">Which of the two alternating limb positions.</param>
     private readonly record struct Pose(
         double Top, double HalfWidth, Eyes Eyes, FeetPose Feet, bool Mouth = false, int Look = 0, bool Smile = false,
-        Arms Arms = Arms.None, bool Frown = false, Food Food = Food.None, int Zzz = 0);
+        Arms Arms = Arms.None, bool Frown = false, Food Food = Food.None, int Zzz = 0,
+        double Bottom = 29, int ShiftX = 0, Limbs Limbs = Limbs.None, int LimbPhase = 0);
+
+    private enum Limbs
+    {
+        None,
+
+        /// <summary>Hands and feet on a wall at the sprite's right edge, alternating for hand-over-hand climbing.</summary>
+        Climb,
+
+        /// <summary>Both hands pressed against a wall at the right edge.</summary>
+        Push,
+
+        /// <summary>Legs dangling below the body over a ledge, swinging.</summary>
+        Dangle,
+    }
 
     private enum Arms
     {
@@ -88,6 +109,32 @@ internal static class PlaceholderArt
 
     private static Pose PoseFor(string animationId, int frame)
     {
+        if (animationId == Animations.Climb.Id)
+        {
+            // Body leaning back from a wall on the right, hands and feet on it, alternating.
+            return new Pose(4, 11.5, Eyes.Open, FeetPose.None, Look: 1, Bottom: 28, ShiftX: -4, Limbs: Limbs.Climb, LimbPhase: frame);
+        }
+
+        if (animationId == Animations.Cling.Id)
+        {
+            // Holding still on the wall, blinking now and then.
+            return new Pose(
+                4, 11.5, frame == 0 ? Eyes.Open : Eyes.Blink, FeetPose.None, Look: 1, Bottom: 28, ShiftX: -4, Limbs: Limbs.Climb);
+        }
+
+        if (animationId == Animations.Push.Id)
+        {
+            // Leaning into the window, hands on it, straining, feet shuffling.
+            var feet = (frame % 4) switch { 0 => FeetPose.StepLeft, 2 => FeetPose.StepRight, _ => FeetPose.Standing };
+            return new Pose(8, 12.5, Eyes.Squeezed, feet, ShiftX: -2, Limbs: Limbs.Push);
+        }
+
+        if (animationId == Animations.SitLedge.Id)
+        {
+            // Perched on a title bar: body ends at row 23 (the ledge, see Animations.LedgeSinkFraction), legs swinging below.
+            return new Pose(5, 13, Eyes.Happy, FeetPose.None, Smile: true, Bottom: 23, Limbs: Limbs.Dangle, LimbPhase: frame);
+        }
+
         if (animationId == Animations.IdleSad.Id)
         {
             // Slumped, droopy-eyed, frowning; slow breathing.
@@ -183,7 +230,7 @@ internal static class PlaceholderArt
     private static uint[] Draw(Pose pose)
     {
         const int size = FrameSize;
-        const double bottom = 29;
+        var bottom = pose.Bottom;
         var px = new uint[size * size];
         var inside = new bool[size * size];
 
@@ -228,7 +275,85 @@ internal static class PlaceholderArt
         DrawFace(px, pose, (int)cy);
         DrawFood(px, pose.Food);
         DrawZzz(px, pose.Zzz);
-        return px;
+
+        if (pose.ShiftX != 0)
+        {
+            px = Shifted(px, pose.ShiftX);
+        }
+
+        if (pose.Limbs == Limbs.None)
+        {
+            return px;
+        }
+
+        // Limbs go underneath the body so they emerge from it rather than floating beside it.
+        var layered = new uint[px.Length];
+        DrawLimbs(layered, pose.Limbs, pose.LimbPhase, (int)bottom);
+        for (var i = 0; i < px.Length; i++)
+        {
+            if (px[i] != 0)
+            {
+                layered[i] = px[i];
+            }
+        }
+
+        return layered;
+    }
+
+    private static uint[] Shifted(uint[] px, int dx)
+    {
+        var result = new uint[px.Length];
+        for (var y = 0; y < FrameSize; y++)
+        {
+            for (var x = 0; x < FrameSize; x++)
+            {
+                var from = x - dx;
+                if (from >= 0 && from < FrameSize)
+                {
+                    result[(y * FrameSize) + x] = px[(y * FrameSize) + from];
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>Limbs reaching a wall at the sprite's right edge (x = 31), or legs dangling below the body.</summary>
+    private static void DrawLimbs(uint[] px, Limbs limbs, int phase, int bodyBottom)
+    {
+        switch (limbs)
+        {
+            case Limbs.Climb:
+                // Upper hand and lower foot move together, then the other pair: hand-over-hand.
+                var (handA, handB) = phase == 0 ? (6, 13) : (10, 5);
+                var (footA, footB) = phase == 0 ? (25, 19) : (21, 26);
+                Limb(px, y: handA, padHeight: 3);
+                Limb(px, y: handB, padHeight: 3);
+                Limb(px, y: footA, padHeight: 4);
+                Limb(px, y: footB, padHeight: 4);
+                break;
+
+            case Limbs.Push:
+                Limb(px, y: 14, padHeight: 3);
+                Limb(px, y: 20, padHeight: 3);
+                break;
+
+            case Limbs.Dangle:
+                // Two stubby legs hanging over the ledge, swinging slightly between frames.
+                var swing = phase == 0 ? 0 : 1;
+                FillRect(px, 10, bodyBottom - 2, 3, 6, Outline);
+                FillRect(px, 19, bodyBottom - 2, 3, 6, Outline);
+                FillRect(px, 9 - swing, bodyBottom + 3, 5, 3, Feet);
+                FillRect(px, 18 + swing, bodyBottom + 3, 5, 3, Feet);
+                break;
+        }
+    }
+
+    /// <summary>A 2 px thick limb from inside the body out to a pad touching the wall at the right edge.</summary>
+    private static void Limb(uint[] px, int y, int padHeight)
+    {
+        FillRect(px, 12, y, 17, 2, Outline);
+        FillRect(px, 28, y - ((padHeight - 2) / 2), 4, padHeight, Feet);
     }
 
     /// <summary>An apple held out in front (the art faces right), with a bite out of it once eaten.</summary>

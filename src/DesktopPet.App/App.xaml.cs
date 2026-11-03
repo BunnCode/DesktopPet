@@ -40,6 +40,8 @@ public partial class App : Application
             rules: pet.Rules,
             act: pet.Apply,
             onDebugOverlay: enabled => pet.DebugOverlayEnabled = enabled,
+            pushingEnabled: pet.PushingEnabled,
+            onPushing: enabled => pet.PushingEnabled = enabled,
             onExit: Shutdown);
         _tray = new TrayIcon(PlaceholderArt.TrayIconPixels(), PlaceholderArt.FrameSize, _menu.Strip);
 

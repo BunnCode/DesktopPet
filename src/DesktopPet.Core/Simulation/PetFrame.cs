@@ -10,9 +10,13 @@ namespace DesktopPet.Core.Simulation;
 /// <param name="AnimationId">Animation to draw.</param>
 /// <param name="FrameIndex">Frame within that animation.</param>
 /// <param name="State">Current behavior, for debugging and UI.</param>
-public readonly record struct PetFrame(Vec2 FeetPos, Vec2 Size, bool FacingLeft, string AnimationId, int FrameIndex, PetStateId State)
+/// <param name="SinkY">
+/// Draw the sprite this many pixels below the feet point (e.g. sitting on a ledge with legs hanging over it).
+/// </param>
+public readonly record struct PetFrame(
+    Vec2 FeetPos, Vec2 Size, bool FacingLeft, string AnimationId, int FrameIndex, PetStateId State, double SinkY = 0)
 {
-    public RectI Bounds => SpriteRect(FeetPos, Size);
+    public RectI Bounds => SpriteRect(FeetPos + new Vec2(0, SinkY), Size);
 
     /// <summary>Sprite rectangle whose bottom edge sits on <paramref name="feet"/>.Y, centred on <paramref name="feet"/>.X.</summary>
     public static RectI SpriteRect(Vec2 feet, Vec2 size)
