@@ -1,4 +1,5 @@
-using DesktopPet.Core.Animation;
+using DesktopPet.Core.Abstractions;
+using DesktopPet.Core.Behavior;
 using DesktopPet.Core.Math;
 using DesktopPet.Core.Physics;
 using DesktopPet.Core.World;
@@ -7,25 +8,25 @@ namespace DesktopPet.Core.Simulation;
 
 /// <summary>
 /// The whole pet, stepped at a fixed rate against the latest desktop snapshot.
-/// M2: spawns at the top of the primary monitor, falls and lands on work-area floors, respawns if lost.
-/// Animation selection here is a stopgap until the behavior state machine (M3).
+/// Each tick: behavior acts → physics resolves → physics events force Fall/Land → safety net → animation.
 /// </summary>
 public sealed class PetSimulation
 {
-    private readonly PetConfig _config;
-    private readonly PetBody _body = new();
-    private readonly AnimationPlayer _animation = new(Animations.Fall);
+    private readonly PetContext _ctx;
+    private readonly StateMachine _fsm;
 
     private DesktopSnapshot _snapshot = DesktopSnapshot.Empty;
     private IReadOnlyList<Platform> _platforms = [];
-    private double _scale = 1.0;
     private double _lostSeconds;
 
-    public PetSimulation(PetConfig config, DesktopSnapshot snapshot)
+    /// <param name="config">Tuning.</param>
+    /// <param name="snapshot">Initial desktop; the pet spawns at the top of its primary monitor.</param>
+    /// <param name="random">Randomness for behavior choices; seeded from the clock if omitted.</param>
+    public PetSimulation(PetConfig config, DesktopSnapshot snapshot, IRandom? random = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(snapshot);
-        _config = config;
+        _ctx = new PetContext(config, random ?? new SeededRandom(Environment.TickCount));
         UpdateWorld(snapshot);
 
         var monitors = snapshot.Monitors;
@@ -36,9 +37,10 @@ public sealed class PetSimulation
         }
         else
         {
-            _body.Feet = new Vec2(100, 100);
+            _ctx.Body.Feet = new Vec2(100, 100);
         }
 
+        _fsm = new StateMachine(_ctx, PetStateId.Fall);
         Current = BuildFrame();
         Previous = Current;
     }
@@ -49,7 +51,9 @@ public sealed class PetSimulation
     /// <summary>State before the latest step; renderers interpolate between this and <see cref="Current"/>.</summary>
     public PetFrame Previous { get; private set; }
 
-    public BodyMode Mode => _body.Mode;
+    public BodyMode Mode => _ctx.Body.Mode;
+
+    public PetStateId State => _fsm.Current.Id;
 
     /// <summary>Number of times the safety net has respawned the pet (diagnostics/tests).</summary>
     public int RespawnCount { get; private set; }
@@ -61,19 +65,33 @@ public sealed class PetSimulation
         UpdateWorld(snapshot);
 
         var teleported = false;
-        var physicsEvent = PhysicsEvent.None;
 
-        // No monitors (e.g. mid display change): freeze physics rather than fall forever.
+        // No monitors (e.g. mid display change): freeze rather than fall forever.
         if (_snapshot.Monitors.Count > 0)
         {
-            physicsEvent = PhysicsSystem.Step(_body, _platforms, dt, _scale, _config);
-            teleported = ApplySafetyNet(dt);
-            _scale = (WorldQuery.MonitorAt(_snapshot.Monitors, _body.Feet)
-                ?? WorldQuery.Nearest(_snapshot.Monitors, _body.Feet))?.Scale ?? _scale;
+            _fsm.Update(_ctx, dt);
+
+            switch (PhysicsSystem.Step(_ctx.Body, _platforms, dt, _ctx.Scale, _ctx.Config))
+            {
+                case PhysicsEvent.Landed:
+                    _fsm.ChangeTo(PetStateId.Land, _ctx);
+                    break;
+                case PhysicsEvent.LostGround:
+                    _fsm.ChangeTo(PetStateId.Fall, _ctx);
+                    break;
+            }
+
+            if (ApplySafetyNet(dt))
+            {
+                teleported = true;
+                _fsm.ChangeTo(PetStateId.Fall, _ctx);
+            }
+
+            _ctx.Scale = (WorldQuery.MonitorAt(_snapshot.Monitors, _ctx.Body.Feet)
+                ?? WorldQuery.Nearest(_snapshot.Monitors, _ctx.Body.Feet))?.Scale ?? _ctx.Scale;
         }
 
-        UpdateAnimation(physicsEvent);
-        _animation.Update(dt);
+        _ctx.Animation.Update(dt);
 
         Current = BuildFrame();
         if (teleported)
@@ -85,11 +103,23 @@ public sealed class PetSimulation
     /// <summary>Puts the pet somewhere, airborne. Used by tests now and by drag/throw in M4.</summary>
     internal void Place(Vec2 feet, Vec2 velocity)
     {
-        _body.Feet = feet;
-        _body.Release(velocity);
+        _ctx.Body.Feet = feet;
+        _ctx.Body.Release(velocity);
         _lostSeconds = 0;
+        _fsm.ChangeTo(PetStateId.Fall, _ctx);
         Current = BuildFrame();
         Previous = Current;
+    }
+
+    /// <summary>Test hook: switch behavior directly.</summary>
+    internal void ForceState(PetStateId state, bool? facingLeft = null)
+    {
+        if (facingLeft is { } f)
+        {
+            _ctx.FacingLeft = f;
+        }
+
+        _fsm.ChangeTo(state, _ctx);
     }
 
     private void UpdateWorld(DesktopSnapshot snapshot)
@@ -101,24 +131,24 @@ public sealed class PetSimulation
 
         _snapshot = snapshot;
         _platforms = PlatformBuilder.Build(snapshot);
+        _ctx.Monitors = snapshot.Monitors;
     }
 
     private bool ApplySafetyNet(double dt)
     {
-        if (!WorldQuery.IsLost(_snapshot.Monitors, _body.Feet))
+        if (!WorldQuery.IsLost(_snapshot.Monitors, _ctx.Body.Feet))
         {
             _lostSeconds = 0;
             return false;
         }
 
         _lostSeconds += dt;
-        if (_lostSeconds < _config.LostGraceSeconds)
+        if (_lostSeconds < _ctx.Config.LostGraceSeconds)
         {
             return false;
         }
 
-        var monitor = WorldQuery.Nearest(_snapshot.Monitors, _body.Feet)!;
-        SpawnAtTop(monitor);
+        SpawnAtTop(WorldQuery.Nearest(_snapshot.Monitors, _ctx.Body.Feet)!);
         RespawnCount++;
         return true;
     }
@@ -126,33 +156,17 @@ public sealed class PetSimulation
     private void SpawnAtTop(MonitorInfo monitor)
     {
         var area = monitor.WorkArea;
-        _scale = monitor.Scale;
-        _body.Feet = new Vec2(area.Left + (area.Width / 2.0), area.Top + SizePx());
-        _body.Release(Vec2.Zero);
+        _ctx.Scale = monitor.Scale;
+        _ctx.Body.Feet = new Vec2(area.Left + (area.Width / 2.0), area.Top + _ctx.SizePx);
+        _ctx.Body.Release(Vec2.Zero);
         _lostSeconds = 0;
     }
 
-    private void UpdateAnimation(PhysicsEvent physicsEvent)
-    {
-        if (_body.Mode == BodyMode.Airborne)
-        {
-            _animation.Play(Animations.Fall);
-        }
-        else if (physicsEvent == PhysicsEvent.Landed)
-        {
-            _animation.Play(Animations.Land, restart: true);
-        }
-        else if (_animation.Current != Animations.Land || _animation.IsFinished)
-        {
-            _animation.Play(Animations.Idle);
-        }
-    }
-
-    private double SizePx() => _config.SizeDip * _scale;
-
     private PetFrame BuildFrame()
     {
-        var size = SizePx();
-        return new PetFrame(_body.Feet, new Vec2(size, size), FacingLeft: false, _animation.Current.Id, _animation.FrameIndex);
+        var size = _ctx.SizePx;
+        return new PetFrame(
+            _ctx.Body.Feet, new Vec2(size, size), _ctx.FacingLeft,
+            _ctx.Animation.Current.Id, _ctx.Animation.FrameIndex, _fsm.Current.Id);
     }
 }

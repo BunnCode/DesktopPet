@@ -128,6 +128,30 @@ public class PhysicsSystemTests
     }
 
     [Fact]
+    public void Grounded_hands_over_to_adjacent_platform_at_same_height()
+    {
+        var next = new Platform(PlatformKind.Floor, "next", 1000, 1920, 3840);
+        var body = new PetBody();
+        body.Land(1919, 1000, "floor");
+        body.Feet = body.Feet with { X = 1921 };
+
+        Assert.Equal(PhysicsEvent.None, PhysicsSystem.Step(body, [Floor, next], Dt, 1.0, Config));
+        Assert.Equal(BodyMode.Grounded, body.Mode);
+        Assert.Equal("next", body.GroundKey);
+    }
+
+    [Fact]
+    public void Grounded_walks_off_edge_when_neighbour_is_lower()
+    {
+        var lower = new Platform(PlatformKind.Floor, "lower", 1048, 1920, 3840);
+        var body = new PetBody();
+        body.Land(1919, 1000, "floor");
+        body.Feet = body.Feet with { X = 1921 };
+
+        Assert.Equal(PhysicsEvent.LostGround, PhysicsSystem.Step(body, [Floor, lower], Dt, 1.0, Config));
+    }
+
+    [Fact]
     public void Grounded_falls_when_platform_disappears()
     {
         var body = new PetBody();

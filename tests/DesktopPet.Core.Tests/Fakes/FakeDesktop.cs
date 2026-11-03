@@ -12,10 +12,20 @@ internal sealed class FakeDesktop
 {
     private readonly List<MonitorInfo> _monitors = [];
 
-    public FakeDesktop Monitor(int x, int y, int width, int height, double scale = 1.0, int taskbar = 0, bool? primary = null, string? id = null)
+    /// <param name="x">Left edge.</param>
+    /// <param name="y">Top edge.</param>
+    /// <param name="width">Width.</param>
+    /// <param name="height">Height.</param>
+    /// <param name="scale">DPI scale.</param>
+    /// <param name="taskbar">Height of a bottom taskbar (shrinks the work area).</param>
+    /// <param name="primary">Mark as primary; defaults to the first monitor added.</param>
+    /// <param name="id">Device name; defaults to <c>\\.\DISPLAYn</c>.</param>
+    /// <param name="workArea">Explicit work area (e.g. side taskbar); overrides <paramref name="taskbar"/>.</param>
+    public FakeDesktop Monitor(
+        int x, int y, int width, int height, double scale = 1.0, int taskbar = 0, bool? primary = null, string? id = null, RectI? workArea = null)
     {
         var bounds = RectI.FromSize(x, y, width, height);
-        var work = bounds with { Bottom = bounds.Bottom - taskbar };
+        var work = workArea ?? bounds with { Bottom = bounds.Bottom - taskbar };
         var isPrimary = primary ?? _monitors.Count == 0;
         if (isPrimary)
         {

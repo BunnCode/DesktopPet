@@ -21,6 +21,26 @@ public static class WorldQuery
     }
 
     /// <summary>
+    /// Whether a walking pet's leading edge may occupy <paramref name="x"/> at feet height <paramref name="feetY"/>:
+    /// true if that spot is inside some monitor's work area. Everything else is a wall: screen edges, side taskbars,
+    /// and a neighbour monitor whose floor is higher than ours. A neighbour with a lower floor is open (the pet drops down).
+    /// </summary>
+    public static bool IsWalkable(IReadOnlyList<MonitorInfo> monitors, double x, double feetY)
+    {
+        ArgumentNullException.ThrowIfNull(monitors);
+        var probe = new Vec2(x, feetY - 1);
+        foreach (var m in monitors)
+        {
+            if (m.WorkArea.Contains(probe))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// True when the pet is somewhere it can never recover from by falling: beside every monitor, below every
     /// monitor in its column, or in a vertical gap. Being above the top of a monitor is fine; gravity brings it back.
     /// </summary>

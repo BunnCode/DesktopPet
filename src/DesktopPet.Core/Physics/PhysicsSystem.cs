@@ -45,8 +45,21 @@ public static class PhysicsSystem
             }
         }
 
-        if (ground is not { } g || !g.SpansX(body.Feet.X) || g.Y > body.Feet.Y + SnapDownTolerance)
+        if (ground is not { } g || g.Y > body.Feet.Y + SnapDownTolerance)
         {
+            body.Release(Vec2.Zero);
+            return PhysicsEvent.LostGround;
+        }
+
+        if (!g.SpansX(body.Feet.X))
+        {
+            // Walked off the end. Hand over to a neighbouring surface at the same height (e.g. the next monitor's floor).
+            if (FindAdjacent(platforms, body.Feet.X, g.Y) is { } next)
+            {
+                body.Land(body.Feet.X, next.Y, next.Key);
+                return PhysicsEvent.None;
+            }
+
             body.Release(Vec2.Zero);
             return PhysicsEvent.LostGround;
         }
@@ -54,6 +67,19 @@ public static class PhysicsSystem
         // Surface moved up (or by less than the tolerance): stay on it.
         body.Feet = body.Feet with { Y = g.Y };
         return PhysicsEvent.None;
+    }
+
+    private static Platform? FindAdjacent(IReadOnlyList<Platform> platforms, double x, double y)
+    {
+        foreach (var p in platforms)
+        {
+            if (p.SpansX(x) && System.Math.Abs(p.Y - y) <= SnapDownTolerance)
+            {
+                return p;
+            }
+        }
+
+        return null;
     }
 
     private static PhysicsEvent StepAirborne(PetBody body, IReadOnlyList<Platform> platforms, double dt, double scale, PetConfig config)

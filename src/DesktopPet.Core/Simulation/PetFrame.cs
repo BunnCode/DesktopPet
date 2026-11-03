@@ -1,3 +1,4 @@
+using DesktopPet.Core.Behavior;
 using DesktopPet.Core.Math;
 
 namespace DesktopPet.Core.Simulation;
@@ -5,10 +6,11 @@ namespace DesktopPet.Core.Simulation;
 /// <summary>Everything a renderer needs to draw the pet for one simulation step.</summary>
 /// <param name="FeetPos">Bottom-centre of the pet, physical pixels.</param>
 /// <param name="Size">Physical size of the pet's sprite box.</param>
-/// <param name="FacingLeft">Whether to mirror the sprite horizontally.</param>
+/// <param name="FacingLeft">Whether to mirror the sprite horizontally (art faces right).</param>
 /// <param name="AnimationId">Animation to draw.</param>
 /// <param name="FrameIndex">Frame within that animation.</param>
-public readonly record struct PetFrame(Vec2 FeetPos, Vec2 Size, bool FacingLeft, string AnimationId, int FrameIndex)
+/// <param name="State">Current behavior, for debugging and UI.</param>
+public readonly record struct PetFrame(Vec2 FeetPos, Vec2 Size, bool FacingLeft, string AnimationId, int FrameIndex, PetStateId State)
 {
     public RectI Bounds => SpriteRect(FeetPos, Size);
 

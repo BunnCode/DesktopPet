@@ -28,6 +28,17 @@ public class WorldQueryTests
     public void IsLost(double x, double y, bool expected) =>
         Assert.Equal(expected, WorldQuery.IsLost(Layout, new Vec2(x, y)));
 
+    [Theory]
+    [InlineData(1900, 1080, true)]   // inside A's work area
+    [InlineData(1950, 1080, true)]   // B at A's floor height: B is taller, so open
+    [InlineData(1950, 1240, true)]   // on B's floor
+    [InlineData(1900, 1240, false)]  // below A: nothing there
+    [InlineData(-1, 500, false)]     // left screen edge
+    [InlineData(4480, 500, false)]   // right edge is exclusive
+    [InlineData(4479, 500, true)]
+    public void IsWalkable(double x, double feetY, bool expected) =>
+        Assert.Equal(expected, WorldQuery.IsWalkable(Layout, x, feetY));
+
     [Fact]
     public void Feet_on_bottom_edge_count_as_inside()
     {

@@ -1,3 +1,5 @@
+using DesktopPet.Core.Abstractions;
+using DesktopPet.Core.Physics;
 using DesktopPet.Core.Simulation;
 using DesktopPet.Core.World;
 
@@ -6,6 +8,15 @@ namespace DesktopPet.Core.Tests.Fakes;
 internal static class SimulationExtensions
 {
     public const double Dt = 1.0 / 60.0;
+
+    /// <summary>
+    /// A simulation with deterministic randomness. The default (always 0.0) picks Idle with its minimum duration
+    /// and never turns, so tests that don't care about behavior get a pet that stays put.
+    /// </summary>
+    public static PetSimulation NewSim(DesktopSnapshot snapshot, IRandom? random = null, PetConfig? config = null) =>
+        new(config ?? PetConfig.Default, snapshot, random ?? new FakeRandom(0.0));
+
+    public static bool Grounded(PetSimulation sim) => sim.Mode == BodyMode.Grounded;
 
     /// <summary>Steps until <paramref name="until"/> holds; fails the test if it doesn't within <paramref name="maxTicks"/>.</summary>
     public static int RunUntil(this PetSimulation sim, DesktopSnapshot snapshot, Func<PetSimulation, bool> until, int maxTicks = 600)
@@ -19,7 +30,7 @@ internal static class SimulationExtensions
             }
         }
 
-        Assert.Fail($"Condition not met within {maxTicks} ticks. Feet={sim.Current.FeetPos}, Mode={sim.Mode}");
+        Assert.Fail($"Condition not met within {maxTicks} ticks. Feet={sim.Current.FeetPos}, Mode={sim.Mode}, State={sim.State}");
         return -1;
     }
 
@@ -30,4 +41,7 @@ internal static class SimulationExtensions
             sim.Tick(Dt, snapshot);
         }
     }
+
+    public static void RunSeconds(this PetSimulation sim, DesktopSnapshot snapshot, double seconds) =>
+        sim.Run(snapshot, (int)System.Math.Round(seconds / Dt));
 }

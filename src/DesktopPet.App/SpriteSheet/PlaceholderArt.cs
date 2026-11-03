@@ -26,6 +26,7 @@ internal static class PlaceholderArt
         Blink,
         Wide,
         Squeezed,
+        Happy,
     }
 
     private enum FeetPose
@@ -33,11 +34,18 @@ internal static class PlaceholderArt
         Standing,
         DangleLeft,
         DangleRight,
+        StepLeft,
+        StepRight,
+        Sitting,
     }
 
     /// <param name="Top">Top row of the body ellipse (body bottom is fixed at row 29).</param>
     /// <param name="HalfWidth">Horizontal radius of the body.</param>
-    private readonly record struct Pose(double Top, double HalfWidth, Eyes Eyes, FeetPose Feet, bool Mouth = false);
+    /// <param name="Eyes">Eye style.</param>
+    /// <param name="Feet">Feet style.</param>
+    /// <param name="Mouth">Small open mouth.</param>
+    /// <param name="Look">Horizontal eye offset; positive looks right (the art's facing direction).</param>
+    private readonly record struct Pose(double Top, double HalfWidth, Eyes Eyes, FeetPose Feet, bool Mouth = false, int Look = 0);
 
     public static uint[] Frame(string animationId, int frameIndex) => Draw(PoseFor(animationId, frameIndex));
 
@@ -49,6 +57,24 @@ internal static class PlaceholderArt
         {
             // Stretched tall and narrow, eyes wide, feet fluttering.
             return new Pose(4, 12, Eyes.Wide, frame % 2 == 0 ? FeetPose.DangleLeft : FeetPose.DangleRight, Mouth: true);
+        }
+
+        if (animationId == Animations.Walk.Id)
+        {
+            // Waddle: step, pass (bob up), other step, pass. Eyes look where it's going.
+            return frame switch
+            {
+                0 => new Pose(8, 13, Eyes.Open, FeetPose.StepLeft, Look: 1),
+                1 => new Pose(7, 12.6, Eyes.Open, FeetPose.Standing, Look: 1),
+                2 => new Pose(8, 13, Eyes.Open, FeetPose.StepRight, Look: 1),
+                _ => new Pose(7, 12.6, Eyes.Open, FeetPose.Standing, Look: 1),
+            };
+        }
+
+        if (animationId == Animations.Sit.Id)
+        {
+            // Plopped down wide and low, eyes closed happily, gentle sway.
+            return new Pose(frame == 0 ? 11 : 12, frame == 0 ? 14.2 : 14.6, Eyes.Happy, FeetPose.Sitting);
         }
 
         if (animationId == Animations.Land.Id)
@@ -134,19 +160,42 @@ internal static class PlaceholderArt
                 FillRect(px, 10, 29, 4, 2, Feet);
                 FillRect(px, 18, 29, 4, 3, Feet);
                 break;
+            case FeetPose.StepLeft: // back foot planted, front foot lifted and forward
+                FillRect(px, 8, 29, 6, 2, Feet);
+                FillRect(px, 9, 31, 4, 1, Feet);
+                FillRect(px, 19, 29, 6, 2, Feet);
+                break;
+            case FeetPose.StepRight: // the other foot planted
+                FillRect(px, 10, 29, 6, 2, Feet);
+                FillRect(px, 18, 29, 6, 2, Feet);
+                FillRect(px, 19, 31, 4, 1, Feet);
+                break;
+            case FeetPose.Sitting: // splayed out flat to the sides
+                FillRect(px, 4, 30, 6, 2, Feet);
+                FillRect(px, 22, 30, 6, 2, Feet);
+                break;
         }
     }
 
     private static void DrawFace(uint[] px, Pose pose, int centreY)
     {
         var eyeY = centreY - 1;
+        var look = pose.Look;
         switch (pose.Eyes)
         {
             case Eyes.Open:
-                FillRect(px, 11, eyeY - 1, 2, 3, Eye);
-                FillRect(px, 19, eyeY - 1, 2, 3, Eye);
-                SetPixel(px, 11, eyeY - 1, EyeShine);
-                SetPixel(px, 19, eyeY - 1, EyeShine);
+                FillRect(px, 11 + look, eyeY - 1, 2, 3, Eye);
+                FillRect(px, 19 + look, eyeY - 1, 2, 3, Eye);
+                SetPixel(px, 11 + look + (look > 0 ? 1 : 0), eyeY - 1, EyeShine);
+                SetPixel(px, 19 + look + (look > 0 ? 1 : 0), eyeY - 1, EyeShine);
+                break;
+            case Eyes.Happy: // ^ ^
+                SetPixel(px, 10, eyeY, Eye);
+                SetPixel(px, 11, eyeY - 1, Eye);
+                SetPixel(px, 12, eyeY, Eye);
+                SetPixel(px, 19, eyeY, Eye);
+                SetPixel(px, 20, eyeY - 1, Eye);
+                SetPixel(px, 21, eyeY, Eye);
                 break;
             case Eyes.Blink:
                 FillRect(px, 10, eyeY + 1, 3, 1, Eye);
