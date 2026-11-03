@@ -19,6 +19,10 @@ internal static class PlaceholderArt
     private const uint Eye = 0xFF1E1A1A;
     private const uint EyeShine = 0xFFFFFFFF;
     private const uint Blush = 0xFFEE8A7A;
+    private const uint Apple = 0xFFD8352B;
+    private const uint AppleShine = 0xFFF27A6E;
+    private const uint Leaf = 0xFF4CAF50;
+    private const uint Snooze = 0xFF9FC5FF;
 
     private enum Eyes
     {
@@ -27,6 +31,16 @@ internal static class PlaceholderArt
         Wide,
         Squeezed,
         Happy,
+
+        /// <summary>Half-closed, lids sloping down at the outer corners: sad.</summary>
+        Droopy,
+    }
+
+    private enum Food
+    {
+        None,
+        Whole,
+        Bitten,
     }
 
     private enum FeetPose
@@ -47,8 +61,12 @@ internal static class PlaceholderArt
     /// <param name="Look">Horizontal eye offset; positive looks right (the art's facing direction).</param>
     /// <param name="Smile">Small smile under the eyes.</param>
     /// <param name="Arms">Arms raised to grip something at the top edge of the sprite.</param>
+    /// <param name="Frown">Small frown under the eyes.</param>
+    /// <param name="Food">Snack held in front.</param>
+    /// <param name="Zzz">0 none, 1 small "z", 2 bigger "z" drifting higher.</param>
     private readonly record struct Pose(
-        double Top, double HalfWidth, Eyes Eyes, FeetPose Feet, bool Mouth = false, int Look = 0, bool Smile = false, Arms Arms = Arms.None);
+        double Top, double HalfWidth, Eyes Eyes, FeetPose Feet, bool Mouth = false, int Look = 0, bool Smile = false,
+        Arms Arms = Arms.None, bool Frown = false, Food Food = Food.None, int Zzz = 0);
 
     private enum Arms
     {
@@ -70,6 +88,26 @@ internal static class PlaceholderArt
 
     private static Pose PoseFor(string animationId, int frame)
     {
+        if (animationId == Animations.IdleSad.Id)
+        {
+            // Slumped, droopy-eyed, frowning; slow breathing.
+            return new Pose(frame == 0 ? 9 : 10, 13.4, Eyes.Droopy, FeetPose.Standing, Frown: true);
+        }
+
+        if (animationId == Animations.Sleep.Id)
+        {
+            // Curled up low, eyes shut, a "z" drifting up.
+            return new Pose(frame == 0 ? 11 : 12, 14.4, Eyes.Blink, FeetPose.Sitting, Zzz: frame + 1);
+        }
+
+        if (animationId == Animations.Eat.Id)
+        {
+            // Happily munching an apple held out front.
+            return new Pose(
+                8, 13, Eyes.Happy, FeetPose.Standing, Mouth: frame == 0, Smile: frame == 1,
+                Food: frame == 0 ? Food.Whole : Food.Bitten);
+        }
+
         if (animationId == Animations.Fall.Id)
         {
             // Stretched tall and narrow, eyes wide, feet fluttering.
@@ -188,7 +226,53 @@ internal static class PlaceholderArt
         DrawFeet(px, pose.Feet);
         DrawArms(px, pose.Arms, (int)top);
         DrawFace(px, pose, (int)cy);
+        DrawFood(px, pose.Food);
+        DrawZzz(px, pose.Zzz);
         return px;
+    }
+
+    /// <summary>An apple held out in front (the art faces right), with a bite out of it once eaten.</summary>
+    private static void DrawFood(uint[] px, Food food)
+    {
+        if (food == Food.None)
+        {
+            return;
+        }
+
+        FillRect(px, 24, 21, 5, 6, Apple);
+        FillRect(px, 23, 22, 7, 4, Apple);
+        SetPixel(px, 25, 22, AppleShine);
+        SetPixel(px, 26, 20, Outline); // stem
+        FillRect(px, 27, 19, 2, 1, Leaf);
+
+        if (food == Food.Bitten)
+        {
+            // Bite on the side facing the mouth. The apple overlaps the body, so the bite shows body, not a
+            // transparent hole through the pet.
+            FillRect(px, 23, 22, 2, 2, Body);
+            SetPixel(px, 24, 21, Body);
+        }
+    }
+
+    /// <summary>A pixel "z" over the head; the second frame is bigger and higher, so it seems to drift up.</summary>
+    private static void DrawZzz(uint[] px, int zzz)
+    {
+        if (zzz == 1)
+        {
+            // 4 wide so the diagonal actually slants (3 wide reads as an "I").
+            FillRect(px, 23, 5, 4, 1, Snooze);
+            SetPixel(px, 25, 6, Snooze);
+            SetPixel(px, 24, 7, Snooze);
+            FillRect(px, 23, 8, 4, 1, Snooze);
+        }
+        else if (zzz == 2)
+        {
+            FillRect(px, 25, 1, 5, 1, Snooze);
+            SetPixel(px, 28, 2, Snooze);
+            SetPixel(px, 27, 3, Snooze);
+            SetPixel(px, 26, 4, Snooze);
+            FillRect(px, 25, 5, 5, 1, Snooze);
+        }
     }
 
     /// <summary>Arms from the shoulders up to hands at the very top rows (where the sprite's top meets the bar).</summary>
@@ -264,6 +348,14 @@ internal static class PlaceholderArt
                 SetPixel(px, 11 + look + (look > 0 ? 1 : 0), eyeY - 1, EyeShine);
                 SetPixel(px, 19 + look + (look > 0 ? 1 : 0), eyeY - 1, EyeShine);
                 break;
+            case Eyes.Droopy: // heavy lids sloping down to the outside
+                FillRect(px, 11, eyeY, 2, 2, Eye);
+                FillRect(px, 19, eyeY, 2, 2, Eye);
+                FillRect(px, 10, eyeY - 1, 3, 1, Outline);
+                SetPixel(px, 9, eyeY, Outline);
+                FillRect(px, 19, eyeY - 1, 3, 1, Outline);
+                SetPixel(px, 22, eyeY, Outline);
+                break;
             case Eyes.Happy: // ^ ^
                 SetPixel(px, 10, eyeY, Eye);
                 SetPixel(px, 11, eyeY - 1, Eye);
@@ -295,6 +387,13 @@ internal static class PlaceholderArt
         if (pose.Mouth)
         {
             FillRect(px, 15, eyeY + 4, 2, 2, Eye);
+        }
+
+        if (pose.Frown)
+        {
+            SetPixel(px, 14, eyeY + 5, Eye);
+            FillRect(px, 15, eyeY + 4, 2, 1, Eye);
+            SetPixel(px, 17, eyeY + 5, Eye);
         }
 
         if (pose.Smile)

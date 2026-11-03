@@ -25,10 +25,18 @@ internal sealed record DebugView(
 internal sealed class DebugOverlay : IDisposable
 {
     private readonly List<(MonitorInfo Monitor, OverlayWindow Window)> _windows = [];
+    private IReadOnlyList<MonitorInfo> _builtFor = [];
+    private bool _rebuilding;
 
     public void Update(IReadOnlyList<MonitorInfo> monitors, DebugView view)
     {
-        if (!_windows.Select(w => w.Monitor).SequenceEqual(monitors))
+        // Creating/positioning windows can re-enter here (WPF renders synchronously on resize); never nest a rebuild.
+        if (_rebuilding)
+        {
+            return;
+        }
+
+        if (!_builtFor.SequenceEqual(monitors))
         {
             Rebuild(monitors);
         }
@@ -47,19 +55,29 @@ internal sealed class DebugOverlay : IDisposable
         }
 
         _windows.Clear();
+        _builtFor = [];
     }
 
     private void Rebuild(IReadOnlyList<MonitorInfo> monitors)
     {
-        Dispose();
-        foreach (var monitor in monitors)
+        _rebuilding = true;
+        try
         {
-            var window = new OverlayWindow();
-            var hwnd = new WindowInteropHelper(window).EnsureHandle();
-            PetWindowInterop.ApplyOverlayStyles(hwnd);
-            PetWindowInterop.SetBounds(hwnd, monitor.Bounds);
-            window.Show();
-            _windows.Add((monitor, window));
+            Dispose();
+            _builtFor = monitors;
+            foreach (var monitor in monitors)
+            {
+                var window = new OverlayWindow();
+                var hwnd = new WindowInteropHelper(window).EnsureHandle();
+                PetWindowInterop.ApplyOverlayStyles(hwnd);
+                PetWindowInterop.SetBounds(hwnd, monitor.Bounds);
+                window.Show();
+                _windows.Add((monitor, window));
+            }
+        }
+        finally
+        {
+            _rebuilding = false;
         }
     }
 

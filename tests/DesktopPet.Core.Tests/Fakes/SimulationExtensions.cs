@@ -13,8 +13,11 @@ internal static class SimulationExtensions
     /// A simulation with deterministic randomness. The default (always 0.0) picks Idle with its minimum duration
     /// and never turns, so tests that don't care about behavior get a pet that stays put.
     /// </summary>
-    public static PetSimulation NewSim(DesktopSnapshot snapshot, IRandom? random = null, PetConfig? config = null) =>
-        new(config ?? PetConfig.Default, snapshot, random ?? new FakeRandom(0.0));
+    /// <remarks>The wall clock is frozen unless a <paramref name="clock"/> is passed, so stats don't drift with real time.</remarks>
+    public static PetSimulation NewSim(
+        DesktopSnapshot snapshot, IRandom? random = null, PetConfig? config = null, FakeClock? clock = null,
+        Core.Persistence.SaveData? save = null) =>
+        new(config ?? PetConfig.Default, snapshot, random ?? new FakeRandom(0.0), clock ?? new FakeClock(), save);
 
     public static bool Grounded(PetSimulation sim) => sim.Mode == BodyMode.Grounded;
 

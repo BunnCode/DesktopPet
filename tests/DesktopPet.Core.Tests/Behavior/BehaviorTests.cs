@@ -19,7 +19,7 @@ public class BehaviorTests
     [InlineData(0.85, PetStateId.Sit)]   // 8.08
     [InlineData(0.999, PetStateId.Sit)]
     public void Picker_maps_roll_to_weighted_behavior(double roll, PetStateId expected) =>
-        Assert.Equal(expected, BehaviorPicker.Pick(PetConfig.Default, new FakeRandom(roll)));
+        Assert.Equal(expected, BehaviorPicker.Pick(PetConfig.Default, new FakeRandom(roll), Core.Stats.PetStats.Fresh));
 
     [Fact]
     public void Picker_never_picks_zero_weight_behavior()
@@ -28,7 +28,7 @@ public class BehaviorTests
         var random = new SeededRandom(1);
         for (var i = 0; i < 1000; i++)
         {
-            Assert.Equal(PetStateId.Walk, BehaviorPicker.Pick(config, random));
+            Assert.Equal(PetStateId.Walk, BehaviorPicker.Pick(config, random, Core.Stats.PetStats.Fresh));
         }
     }
 

@@ -7,8 +7,8 @@ using DesktopPet.Platform.Windows;
 namespace DesktopPet.App.UI;
 
 /// <summary>
-/// Notification-area icon. Essential: the pet has no taskbar button or Alt-Tab entry, so this is how you quit.
-/// Uses WinForms' NotifyIcon; WPF's dispatcher pumps the messages it needs.
+/// Notification-area icon. Essential: the pet has no taskbar button or Alt-Tab entry, so this is how you reach it
+/// and quit. Uses WinForms' NotifyIcon; WPF's dispatcher pumps the messages it needs.
 /// </summary>
 internal sealed class TrayIcon : IDisposable
 {
@@ -18,22 +18,10 @@ internal sealed class TrayIcon : IDisposable
 
     /// <param name="argbPixels">Icon image, 0xAARRGGBB.</param>
     /// <param name="size">Icon width and height.</param>
-    /// <param name="onExit">Exit chosen.</param>
-    /// <param name="onDebugOverlay">Debug overlay toggled; receives the new state.</param>
-    public TrayIcon(uint[] argbPixels, int size, Action onExit, Action<bool> onDebugOverlay)
+    /// <param name="menu">Right-click menu (shared with the pet).</param>
+    public TrayIcon(uint[] argbPixels, int size, ContextMenuStrip menu)
     {
         (_icon, _hIcon) = CreateIcon(argbPixels, size);
-
-        var debugOverlay = new ToolStripMenuItem("Debug overlay") { CheckOnClick = true };
-        debugOverlay.CheckedChanged += (_, _) => onDebugOverlay(debugOverlay.Checked);
-
-        var menu = new ContextMenuStrip();
-        menu.Items.Add(new ToolStripMenuItem("DesktopPet") { Enabled = false });
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(debugOverlay);
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Exit", image: null, (_, _) => onExit());
-
         _notifyIcon = new NotifyIcon
         {
             Icon = _icon,
@@ -46,7 +34,7 @@ internal sealed class TrayIcon : IDisposable
     public void Dispose()
     {
         _notifyIcon.Visible = false;
-        _notifyIcon.ContextMenuStrip?.Dispose();
+        _notifyIcon.ContextMenuStrip = null; // owned by PetMenu
         _notifyIcon.Dispose();
         _icon.Dispose();
         NativeIcon.Destroy(_hIcon); // Icon.FromHandle doesn't own the handle

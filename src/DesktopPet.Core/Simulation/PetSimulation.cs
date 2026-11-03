@@ -2,7 +2,9 @@ using DesktopPet.Core.Abstractions;
 using DesktopPet.Core.Behavior;
 using DesktopPet.Core.Input;
 using DesktopPet.Core.Math;
+using DesktopPet.Core.Persistence;
 using DesktopPet.Core.Physics;
+using DesktopPet.Core.Stats;
 using DesktopPet.Core.World;
 
 namespace DesktopPet.Core.Simulation;
@@ -17,10 +19,12 @@ public sealed class PetSimulation
     private readonly PetContext _ctx;
     private readonly StateMachine _fsm;
     private readonly ThrowEstimator _throw;
+    private readonly IClock _clock;
 
     private DesktopSnapshot _snapshot = DesktopSnapshot.Empty;
     private IReadOnlyList<Platform> _platforms = [];
     private double _lostSeconds;
+    private DateTimeOffset _statsUpdatedAt;
 
     // Pointer gesture in progress.
     private Vec2? _pressAt;
@@ -29,12 +33,25 @@ public sealed class PetSimulation
     /// <param name="config">Tuning.</param>
     /// <param name="snapshot">Initial desktop; the pet spawns at the top of its primary monitor.</param>
     /// <param name="random">Randomness for behavior choices; seeded from the clock if omitted.</param>
-    public PetSimulation(PetConfig config, DesktopSnapshot snapshot, IRandom? random = null)
+    /// <param name="clock">Wall clock for stat decay; the system clock if omitted.</param>
+    /// <param name="save">
+    /// A previous run's save. Its stats are caught up for the time since it was written, counted as time away
+    /// (so nothing drops to critical while the app was closed). A fresh pet if omitted.
+    /// </param>
+    public PetSimulation(PetConfig config, DesktopSnapshot snapshot, IRandom? random = null, IClock? clock = null, SaveData? save = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(snapshot);
         _ctx = new PetContext(config, random ?? new SeededRandom(Environment.TickCount));
         _throw = new ThrowEstimator(config.ThrowWindowSeconds);
+        _clock = clock ?? SystemClock.Instance;
+        _statsUpdatedAt = _clock.UtcNow;
+        if (save is not null)
+        {
+            var offline = _statsUpdatedAt - save.SavedAtUtc;
+            _ctx.Stats = StatsSystem.CatchUp(save.Stats, offline, config.Stats);
+        }
+
         UpdateWorld(snapshot);
 
         var monitors = snapshot.Monitors;
@@ -77,11 +94,55 @@ public sealed class PetSimulation
     /// <summary>Number of times the safety net has respawned the pet (diagnostics/tests).</summary>
     public int RespawnCount { get; private set; }
 
+    public PetStats Stats => _ctx.Stats;
+
+    /// <summary>
+    /// Set by the host while the user is away (screen locked). Stats keep decaying but can't fall to critical.
+    /// </summary>
+    public bool UserAway { get; set; }
+
+    /// <summary>A snapshot of what should survive a restart.</summary>
+    public SaveData CreateSave() => SaveData.From(_ctx.Stats, _clock.UtcNow);
+
+    /// <summary>
+    /// Menu actions. Stats change immediately; the matching behavior plays if the pet is on the ground
+    /// (a held, falling or hanging pet still gets fed, it just doesn't stop to munch).
+    /// </summary>
+    public void Apply(PetAction action)
+    {
+        UpdateStats();
+        _ctx.Stats = StatsSystem.Apply(_ctx.Stats, action, _ctx.Config.Stats);
+        var grounded = _ctx.Body.Mode == BodyMode.Grounded;
+
+        switch (action)
+        {
+            case PetAction.Feed when grounded:
+                _fsm.ChangeTo(PetStateId.Eat, _ctx);
+                break;
+            case PetAction.Play when grounded:
+                _fsm.ChangeTo(PetStateId.Play, _ctx);
+                break;
+            case PetAction.Sleep:
+                _ctx.TuckedIn = true;
+                if (grounded)
+                {
+                    _fsm.ChangeTo(PetStateId.Sleep, _ctx);
+                }
+
+                break;
+            case PetAction.WakeUp when State == PetStateId.Sleep:
+                _ctx.TuckedIn = false;
+                _fsm.ChangeTo(PetStateId.Idle, _ctx);
+                break;
+        }
+    }
+
     public void Tick(double dt, DesktopSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         Previous = Current;
         UpdateWorld(snapshot);
+        UpdateStats();
 
         var teleported = false;
 
@@ -93,7 +154,7 @@ public sealed class PetSimulation
             var world = new PhysicsWorld(_platforms, _snapshot.Monitors, _ctx.Scale);
             switch (PhysicsSystem.Step(_ctx.Body, world, dt, _ctx.Config))
             {
-                case PhysicsEvent.Landed:
+                case PhysicsEvent.Landed when State != PetStateId.Play: // play hops land without the squash
                     _fsm.ChangeTo(PetStateId.Land, _ctx);
                     break;
                 case PhysicsEvent.LostGround:
@@ -195,8 +256,14 @@ public sealed class PetSimulation
 
             _fsm.ChangeTo(PetStateId.Fall, _ctx);
         }
+        else if (State == PetStateId.Sleep)
+        {
+            Apply(PetAction.WakeUp); // a click wakes it
+        }
         else if (_ctx.Body.Mode == BodyMode.Grounded)
         {
+            UpdateStats();
+            _ctx.Stats = StatsSystem.Petted(_ctx.Stats, _ctx.Config.Stats);
             _fsm.ChangeTo(PetStateId.Happy, _ctx); // a click: being petted
         }
     }
@@ -233,6 +300,38 @@ public sealed class PetSimulation
         }
 
         _fsm.ChangeTo(state, _ctx);
+    }
+
+    /// <summary>
+    /// Advances stats by the real time since the last update. A long gap means the process was frozen
+    /// (PC asleep/hibernating) and counts as time away, like a locked screen.
+    /// </summary>
+    private void UpdateStats()
+    {
+        var now = _clock.UtcNow;
+        var elapsed = now - _statsUpdatedAt;
+        _statsUpdatedAt = now;
+        if (elapsed <= TimeSpan.Zero)
+        {
+            return;
+        }
+
+        var rules = _ctx.Config.Stats;
+        var away = UserAway || elapsed > rules.AwayGap;
+        var activity = State switch
+        {
+            PetStateId.Sleep => StatActivity.Sleeping,
+            PetStateId.Walk or PetStateId.Play or PetStateId.Shimmy => StatActivity.Active,
+            _ => StatActivity.Resting,
+        };
+
+        // Frozen-process gaps: the pet "napped" through them, like offline time.
+        if (elapsed > rules.AwayGap)
+        {
+            activity = StatActivity.Sleeping;
+        }
+
+        _ctx.Stats = StatsSystem.Advance(_ctx.Stats, elapsed, activity, away, rules);
     }
 
     private static Vec2 ClampSpeed(Vec2 v, double max)

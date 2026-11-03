@@ -38,6 +38,17 @@ public partial class PetWindow : Window
     /// <summary>Capture was taken away mid-gesture (e.g. Alt-Tab, another window grabbed the mouse).</summary>
     public event EventHandler? PointerCanceled;
 
+    /// <summary>Right-clicked: show the pet's menu.</summary>
+    public event EventHandler? MenuRequested;
+
+    protected override void OnMouseRightButtonUp(MouseButtonEventArgs e)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        base.OnMouseRightButtonUp(e);
+        MenuRequested?.Invoke(this, EventArgs.Empty);
+        e.Handled = true;
+    }
+
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
     {
         ArgumentNullException.ThrowIfNull(e);

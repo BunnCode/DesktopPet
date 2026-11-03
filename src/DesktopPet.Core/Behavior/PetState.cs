@@ -15,6 +15,9 @@ public enum PetStateId
     Happy,
     Hang,
     Shimmy,
+    Sleep,
+    Eat,
+    Play,
 }
 
 /// <summary>
@@ -59,6 +62,9 @@ internal abstract class TimedState : PetState
     {
     }
 
+    /// <summary>Replaces the remaining duration with a fresh roll from <paramref name="range"/>.</summary>
+    protected void Extend(PetContext context, DurationRange range) => _remaining = context.Random.Range(range.Min, range.Max);
+
     /// <summary>What to do when the duration runs out. Grounded behaviors pick by weight.</summary>
-    protected virtual PetStateId Next(PetContext context) => BehaviorPicker.Pick(context.Config, context.Random);
+    protected virtual PetStateId Next(PetContext context) => BehaviorPicker.Pick(context.Config, context.Random, context.Stats);
 }

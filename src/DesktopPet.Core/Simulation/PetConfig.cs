@@ -60,6 +60,19 @@ public sealed record PetConfig
     public DurationRange WalkSeconds { get; init; } = new(2, 7);
     public DurationRange SitSeconds { get; init; } = new(4, 10);
 
+    /// <summary>A nap chosen by the pet itself; tucking it in from the menu sleeps until rested instead.</summary>
+    public DurationRange NapSeconds { get; init; } = new(30, 120);
+
+    public double EatSeconds { get; init; } = 2.5;
+
+    /// <summary>Hops when playing, and how high each one is (DIP/s of upward launch speed).</summary>
+    public int PlayHops { get; init; } = 3;
+
+    public double PlayHopSpeedDip { get; init; } = 650;
+
+    /// <summary>Tamagotchi rates and thresholds.</summary>
+    public Stats.StatRules Stats { get; init; } = Core.Stats.StatRules.Default;
+
     /// <summary>How long the happy reaction to a click lasts.</summary>
     public DurationRange HappySeconds { get; init; } = new(1.0, 1.5);
 
@@ -96,7 +109,10 @@ public sealed record PetConfig
     public double HangDropChance { get; init; } = 0.3;
 }
 
-/// <summary>Relative likelihood of each voluntary behavior when the current one ends.</summary>
-public sealed record BehaviorWeights(double Idle = 3, double Walk = 5, double Sit = 1.5);
+/// <summary>
+/// Base likelihood of each voluntary behavior when the current one ends; <see cref="Behavior.BehaviorPicker"/>
+/// adjusts them by stats (tired → sleep, sad → sit). Sleep's weight only applies once tired.
+/// </summary>
+public sealed record BehaviorWeights(double Idle = 3, double Walk = 5, double Sit = 1.5, double Sleep = 6);
 
 public readonly record struct DurationRange(double Min, double Max);

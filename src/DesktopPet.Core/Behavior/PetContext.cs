@@ -29,6 +29,11 @@ internal sealed class PetContext
 
     public bool FacingLeft { get; set; }
 
+    public Stats.PetStats Stats { get; set; } = Core.Stats.PetStats.Fresh;
+
+    /// <summary>Set by the menu's "Sleep": sleep until rested rather than a short nap.</summary>
+    public bool TuckedIn { get; set; }
+
     public double SizePx => Config.SizeDip * Scale;
     public double HalfWidthPx => SizePx * Config.BodyHalfWidthFraction;
 

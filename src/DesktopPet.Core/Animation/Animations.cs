@@ -33,5 +33,15 @@ public static class Animations
     /// <summary>Moving hand over hand along a title bar.</summary>
     public static readonly AnimationDef Shimmy = new("shimmy", frameCount: 2, fps: 5, loop: true);
 
-    public static IReadOnlyList<AnimationDef> All { get; } = [Idle, Walk, Sit, Fall, Land, Held, Happy, Hang, Shimmy];
+    /// <summary>Idle when unhappy: droopy eyes, frown, slow breathing.</summary>
+    public static readonly AnimationDef IdleSad = new("idle_sad", frameCount: 2, fps: 1, loop: true);
+
+    /// <summary>Curled up asleep, a "z" drifting up.</summary>
+    public static readonly AnimationDef Sleep = new("sleep", frameCount: 2, fps: 1, loop: true);
+
+    /// <summary>Munching a snack.</summary>
+    public static readonly AnimationDef Eat = new("eat", frameCount: 2, fps: 4, loop: true);
+
+    public static IReadOnlyList<AnimationDef> All { get; } =
+        [Idle, Walk, Sit, Fall, Land, Held, Happy, Hang, Shimmy, IdleSad, Sleep, Eat];
 }

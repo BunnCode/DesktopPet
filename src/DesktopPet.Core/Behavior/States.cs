@@ -25,7 +25,7 @@ internal sealed class LandState : PetState
     // Waits for the squash to play out and for any skid from a throw to stop.
     public override PetStateId? Update(PetContext context, double dt) =>
         context.Animation.IsFinished && context.Body.Velocity.X == 0
-            ? BehaviorPicker.Pick(context.Config, context.Random)
+            ? BehaviorPicker.Pick(context.Config, context.Random, context.Stats)
             : null;
 }
 
@@ -129,6 +129,102 @@ internal sealed class IdleState : TimedState
     public override PetStateId Id => PetStateId.Idle;
     protected override AnimationDef Animation => Animations.Idle;
     protected override DurationRange Duration(PetConfig config) => config.IdleSeconds;
+
+    public override void Enter(PetContext context)
+    {
+        base.Enter(context);
+        if (context.Stats.Happiness < context.Config.Stats.Sad || context.Stats.Lowest < context.Config.Stats.Critical)
+        {
+            context.Animation.Play(Animations.IdleSad, restart: true);
+        }
+    }
+}
+
+/// <summary>
+/// Asleep. A self-chosen nap lasts a while; when tucked in from the menu it sleeps until rested.
+/// Either way it wakes once energy is back up. Clicking it wakes it (handled by the simulation).
+/// </summary>
+internal sealed class SleepState : TimedState
+{
+    private static readonly DurationRange TuckedIn = new(30 * 60, 30 * 60);
+
+    public override PetStateId Id => PetStateId.Sleep;
+    protected override AnimationDef Animation => Animations.Sleep;
+    protected override DurationRange Duration(PetConfig config) => config.NapSeconds;
+
+    public override void Enter(PetContext context)
+    {
+        base.Enter(context);
+        if (context.TuckedIn)
+        {
+            Extend(context, TuckedIn);
+        }
+    }
+
+    public override PetStateId? Update(PetContext context, double dt)
+    {
+        if (context.Stats.Energy >= context.Config.Stats.WellRested)
+        {
+            context.TuckedIn = false;
+            return Next(context);
+        }
+
+        var next = base.Update(context, dt);
+        if (next is not null)
+        {
+            context.TuckedIn = false;
+        }
+
+        return next;
+    }
+}
+
+/// <summary>Munching the snack it was just given.</summary>
+internal sealed class EatState : TimedState
+{
+    public override PetStateId Id => PetStateId.Eat;
+    protected override AnimationDef Animation => Animations.Eat;
+    protected override DurationRange Duration(PetConfig config) => new(config.EatSeconds, config.EatSeconds);
+}
+
+/// <summary>Playing: a few real hops (physics jumps), then back to normal life.</summary>
+internal sealed class PlayState : PetState
+{
+    private const double SettleSeconds = 0.35;
+    private int _hopsLeft;
+    private double _settle;
+
+    public override PetStateId Id => PetStateId.Play;
+
+    public override void Enter(PetContext context)
+    {
+        _hopsLeft = context.Config.PlayHops;
+        _settle = 0.15;
+        context.Animation.Play(Animations.Happy, restart: true);
+    }
+
+    public override PetStateId? Update(PetContext context, double dt)
+    {
+        var body = context.Body;
+        if (body.Mode != BodyMode.Grounded)
+        {
+            _settle = SettleSeconds;
+            return body.Mode == BodyMode.Airborne ? null : BehaviorPicker.Pick(context.Config, context.Random, context.Stats);
+        }
+
+        if ((_settle -= dt) > 0)
+        {
+            return null;
+        }
+
+        if (_hopsLeft-- > 0)
+        {
+            body.Release(new Math.Vec2(0, -context.Config.PlayHopSpeedDip * context.Scale));
+            return null;
+        }
+
+        return BehaviorPicker.Pick(context.Config, context.Random, context.Stats);
+    }
 }
 
 internal sealed class SitState : TimedState
