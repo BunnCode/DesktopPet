@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- WPF composition root: windows, rendering, menus, tray. Wires Platform.Windows into Core. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DesktopPet.Core\DesktopPet.Core.csproj" />
+    <ProjectReference Include="..\DesktopPet.Platform.Windows\DesktopPet.Platform.Windows.csproj" />
+  </ItemGroup>
+
+</Project>

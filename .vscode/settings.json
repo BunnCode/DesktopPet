@@ -1,0 +1,7 @@
+{
+  "dotnet.defaultSolution": "DesktopPet.slnx",
+  "files.exclude": {
+    "**/bin": true,
+    "**/obj": true
+  }
+}

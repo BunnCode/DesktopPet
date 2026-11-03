@@ -1,0 +1,54 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build",
+      "detail": "Build the whole solution (Debug)",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["build", "${workspaceFolder}/DesktopPet.slnx", "-nologo", "/property:GenerateFullPaths=true", "/consoleloggerparameters:NoSummary"],
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "test",
+      "detail": "Run all unit tests",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["test", "${workspaceFolder}/DesktopPet.slnx", "-nologo", "/property:GenerateFullPaths=true"],
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "run",
+      "detail": "Build and start the pet without the debugger",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["run", "--project", "${workspaceFolder}/src/DesktopPet.App/DesktopPet.App.csproj"],
+      "problemMatcher": "$msCompile",
+      "presentation": { "reveal": "silent" }
+    },
+    {
+      "label": "watch tests",
+      "detail": "Re-run Core tests on every save",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["watch", "test", "--project", "${workspaceFolder}/tests/DesktopPet.Core.Tests/DesktopPet.Core.Tests.csproj"],
+      "isBackground": true,
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "publish",
+      "detail": "Self-contained single-file DesktopPet.exe in ./publish (runs without the .NET runtime or any IDE)",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "publish", "${workspaceFolder}/src/DesktopPet.App/DesktopPet.App.csproj",
+        "-c", "Release", "-r", "win-x64", "--self-contained", "true",
+        "-p:PublishSingleFile=true", "-p:IncludeNativeLibrariesForSelfExtract=true",
+        "-o", "${workspaceFolder}/publish"
+      ],
+      "problemMatcher": "$msCompile"
+    }
+  ]
+}
