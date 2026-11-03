@@ -5,8 +5,19 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <!-- Only for the tray NotifyIcon. -->
+    <UseWindowsForms>true</UseWindowsForms>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- WFO0003 wants WinForms' SetHighDpiMode instead of the manifest. This is a WPF app (WinForms is only
+         the tray icon) and the manifest is what makes the whole process PerMonitorV2 before any window exists. -->
+    <NoWarn>$(NoWarn);WFO0003</NoWarn>
   </PropertyGroup>
+
+  <!-- WinForms implicit usings clash with WPF types (Application, Image, ...); import them explicitly where needed. -->
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\DesktopPet.Core\DesktopPet.Core.csproj" />
