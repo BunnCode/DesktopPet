@@ -16,8 +16,9 @@ public static class MonitorSource
 
         BOOL Collect(HMONITOR handle, HDC dc, RECT* clip, LPARAM data)
         {
-            var info = new MONITORINFO { cbSize = (uint)sizeof(MONITORINFO) };
-            if (PInvoke.GetMonitorInfo(handle, &info))
+            var info = new MONITORINFOEXW();
+            info.monitorInfo.cbSize = (uint)sizeof(MONITORINFOEXW);
+            if (PInvoke.GetMonitorInfo(handle, (MONITORINFO*)&info))
             {
                 var scale = 1.0;
                 // PerMonitorV2 (which this app requires) needs Windows 10 1703+.
@@ -28,10 +29,11 @@ public static class MonitorSource
                 }
 
                 monitors.Add(new MonitorInfo(
-                    ToRect(info.rcMonitor),
-                    ToRect(info.rcWork),
-                    scale,
-                    IsPrimary: (info.dwFlags & PInvoke.MONITORINFOF_PRIMARY) != 0));
+                    Id: info.szDevice.ToString(),
+                    Bounds: ToRect(info.monitorInfo.rcMonitor),
+                    WorkArea: ToRect(info.monitorInfo.rcWork),
+                    Scale: scale,
+                    IsPrimary: (info.monitorInfo.dwFlags & PInvoke.MONITORINFOF_PRIMARY) != 0));
             }
 
             return true; // continue enumeration

@@ -10,14 +10,20 @@ namespace DesktopPet.App;
 internal sealed class GameLoop : IDisposable
 {
     private readonly FixedStepper _stepper;
+    private readonly Action _beginFrame;
     private readonly Action<double> _step;
     private readonly Action<double> _render;
     private TimeSpan? _lastRenderingTime;
     private bool _running;
 
-    public GameLoop(FixedStepper stepper, Action<double> step, Action<double> render)
+    /// <param name="stepper">Fixed-step accumulator.</param>
+    /// <param name="beginFrame">Once per frame before stepping (e.g. sample the desktop).</param>
+    /// <param name="step">One fixed simulation step of the given seconds.</param>
+    /// <param name="render">Draw with the interpolation alpha in [0, 1).</param>
+    public GameLoop(FixedStepper stepper, Action beginFrame, Action<double> step, Action<double> render)
     {
         _stepper = stepper;
+        _beginFrame = beginFrame;
         _step = step;
         _render = render;
     }
@@ -60,6 +66,11 @@ internal sealed class GameLoop : IDisposable
             }
 
             var steps = _stepper.Advance((now - last).TotalSeconds);
+            if (steps > 0)
+            {
+                _beginFrame();
+            }
+
             for (var i = 0; i < steps; i++)
             {
                 _step(_stepper.StepSeconds);

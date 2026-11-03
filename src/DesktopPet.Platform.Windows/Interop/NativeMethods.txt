@@ -6,6 +6,7 @@ GetCursorPos
 // Monitors
 EnumDisplayMonitors
 GetMonitorInfo
+MONITORINFOEXW
 MONITORINFOF_PRIMARY
 GetDpiForMonitor
 

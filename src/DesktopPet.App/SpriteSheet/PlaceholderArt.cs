@@ -5,6 +5,7 @@ namespace DesktopPet.App.SpriteSheet;
 /// <summary>
 /// Procedurally generated 32×32 pixel-art blob, so we have something to look at before real art exists.
 /// Pixels are 0xAARRGGBB; everything outside the shape is alpha 0 so clicks pass through.
+/// The body always rests on row 29 with feet below it, so the sprite's bottom edge is the feet line.
 /// </summary>
 internal static class PlaceholderArt
 {
@@ -19,32 +20,64 @@ internal static class PlaceholderArt
     private const uint EyeShine = 0xFFFFFFFF;
     private const uint Blush = 0xFFEE8A7A;
 
-    public static uint[] Frame(string animationId, int frameIndex) => animationId switch
+    private enum Eyes
     {
-        _ when animationId == Animations.Idle.Id => Idle(frameIndex),
-        _ => Idle(0),
-    };
-
-    public static uint[] TrayIconPixels() => Idle(0);
-
-    /// <summary>16 frames: breathe in (body squashes 1px) on frames 4–7 and 12–15, blink on 13.</summary>
-    private static uint[] Idle(int frame)
-    {
-        var squash = (frame / 4) % 2 == 1 ? 1 : 0;
-        var blink = frame == 13;
-        return DrawBlob(squash, blink);
+        Open,
+        Blink,
+        Wide,
+        Squeezed,
     }
 
-    private static uint[] DrawBlob(int squash, bool blink)
+    private enum FeetPose
+    {
+        Standing,
+        DangleLeft,
+        DangleRight,
+    }
+
+    /// <param name="Top">Top row of the body ellipse (body bottom is fixed at row 29).</param>
+    /// <param name="HalfWidth">Horizontal radius of the body.</param>
+    private readonly record struct Pose(double Top, double HalfWidth, Eyes Eyes, FeetPose Feet, bool Mouth = false);
+
+    public static uint[] Frame(string animationId, int frameIndex) => Draw(PoseFor(animationId, frameIndex));
+
+    public static uint[] TrayIconPixels() => Draw(PoseFor(Animations.Idle.Id, 0));
+
+    private static Pose PoseFor(string animationId, int frame)
+    {
+        if (animationId == Animations.Fall.Id)
+        {
+            // Stretched tall and narrow, eyes wide, feet fluttering.
+            return new Pose(4, 12, Eyes.Wide, frame % 2 == 0 ? FeetPose.DangleLeft : FeetPose.DangleRight, Mouth: true);
+        }
+
+        if (animationId == Animations.Land.Id)
+        {
+            // Big squash on impact, recovering to the idle shape.
+            return frame switch
+            {
+                0 => new Pose(13, 15, Eyes.Squeezed, FeetPose.Standing),
+                1 => new Pose(10, 14.2, Eyes.Squeezed, FeetPose.Standing),
+                2 => new Pose(8, 13.5, Eyes.Open, FeetPose.Standing),
+                _ => new Pose(6, 12.6, Eyes.Open, FeetPose.Standing),
+            };
+        }
+
+        // Idle (16 frames): breathe in (1px squash) on frames 4–7 and 12–15, blink on 13.
+        var squash = (frame / 4) % 2 == 1;
+        return new Pose(squash ? 8 : 7, 13, frame == 13 ? Eyes.Blink : Eyes.Open, FeetPose.Standing);
+    }
+
+    private static uint[] Draw(Pose pose)
     {
         const int size = FrameSize;
+        const double bottom = 29;
         var px = new uint[size * size];
         var inside = new bool[size * size];
 
-        // Body: ellipse resting on the feet. Squash lowers the top edge by 1px.
-        double top = 7 + squash, bottom = 29;
+        double top = pose.Top;
         double cx = size / 2.0, cy = (top + bottom) / 2.0;
-        double rx = 13.0, ry = (bottom - top) / 2.0;
+        double rx = pose.HalfWidth, ry = (bottom - top) / 2.0;
 
         for (var y = 0; y < size; y++)
         {
@@ -70,40 +103,81 @@ internal static class PlaceholderArt
                     || !inside[((y - 1) * size) + x] || !inside[((y + 1) * size) + x];
 
                 // Soft highlight in the upper-left.
-                var hx = (x + 0.5 - (cx - 5)) / 5.0;
-                var hy = (y + 0.5 - (top + 5)) / 3.5;
+                var hx = (x + 0.5 - (cx - (rx * 0.4))) / (rx * 0.38);
+                var hy = (y + 0.5 - (top + (ry * 0.45))) / (ry * 0.3);
                 var highlight = (hx * hx) + (hy * hy) <= 1.0;
 
                 px[(y * size) + x] = edge ? Outline : highlight ? BodyLight : Body;
             }
         }
 
-        // Feet: two little ovals under the body.
-        FillRect(px, 9, 29, 6, 2, Feet);
-        FillRect(px, 17, 29, 6, 2, Feet);
-        FillRect(px, 10, 31, 4, 1, Feet);
-        FillRect(px, 18, 31, 4, 1, Feet);
+        DrawFeet(px, pose.Feet);
+        DrawFace(px, pose, (int)cy);
+        return px;
+    }
 
-        // Face.
-        var eyeY = (int)cy - 1;
-        if (blink)
+    private static void DrawFeet(uint[] px, FeetPose feet)
+    {
+        switch (feet)
         {
-            FillRect(px, 10, eyeY + 1, 3, 1, Eye);
-            FillRect(px, 19, eyeY + 1, 3, 1, Eye);
+            case FeetPose.Standing:
+                FillRect(px, 9, 29, 6, 2, Feet);
+                FillRect(px, 17, 29, 6, 2, Feet);
+                FillRect(px, 10, 31, 4, 1, Feet);
+                FillRect(px, 18, 31, 4, 1, Feet);
+                break;
+            case FeetPose.DangleLeft:
+                FillRect(px, 10, 29, 4, 3, Feet);
+                FillRect(px, 18, 29, 4, 2, Feet);
+                break;
+            case FeetPose.DangleRight:
+                FillRect(px, 10, 29, 4, 2, Feet);
+                FillRect(px, 18, 29, 4, 3, Feet);
+                break;
         }
-        else
+    }
+
+    private static void DrawFace(uint[] px, Pose pose, int centreY)
+    {
+        var eyeY = centreY - 1;
+        switch (pose.Eyes)
         {
-            FillRect(px, 11, eyeY - 1, 2, 3, Eye);
-            FillRect(px, 19, eyeY - 1, 2, 3, Eye);
-            px[((eyeY - 1) * size) + 11] = EyeShine;
-            px[((eyeY - 1) * size) + 19] = EyeShine;
+            case Eyes.Open:
+                FillRect(px, 11, eyeY - 1, 2, 3, Eye);
+                FillRect(px, 19, eyeY - 1, 2, 3, Eye);
+                SetPixel(px, 11, eyeY - 1, EyeShine);
+                SetPixel(px, 19, eyeY - 1, EyeShine);
+                break;
+            case Eyes.Blink:
+                FillRect(px, 10, eyeY + 1, 3, 1, Eye);
+                FillRect(px, 19, eyeY + 1, 3, 1, Eye);
+                break;
+            case Eyes.Wide:
+                FillRect(px, 10, eyeY - 2, 3, 4, Eye);
+                FillRect(px, 19, eyeY - 2, 3, 4, Eye);
+                SetPixel(px, 10, eyeY - 2, EyeShine);
+                SetPixel(px, 19, eyeY - 2, EyeShine);
+                break;
+            case Eyes.Squeezed: // > <
+                SetPixel(px, 10, eyeY - 1, Eye);
+                SetPixel(px, 11, eyeY, Eye);
+                SetPixel(px, 10, eyeY + 1, Eye);
+                SetPixel(px, 21, eyeY - 1, Eye);
+                SetPixel(px, 20, eyeY, Eye);
+                SetPixel(px, 21, eyeY + 1, Eye);
+                break;
+        }
+
+        if (pose.Mouth)
+        {
+            FillRect(px, 15, eyeY + 4, 2, 2, Eye);
         }
 
         FillRect(px, 8, eyeY + 3, 2, 1, Blush);
         FillRect(px, 22, eyeY + 3, 2, 1, Blush);
-
-        return px;
     }
+
+    private static void SetPixel(uint[] px, int x, int y, uint color) => FillRect(px, x, y, 1, 1, color);
 
     private static void FillRect(uint[] px, int x, int y, int w, int h, uint color)
     {

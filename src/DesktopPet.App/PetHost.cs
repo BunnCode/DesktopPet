@@ -2,6 +2,7 @@ using DesktopPet.App.SpriteSheet;
 using DesktopPet.Core.Animation;
 using DesktopPet.Core.Math;
 using DesktopPet.Core.Simulation;
+using DesktopPet.Core.World;
 using DesktopPet.Platform.Windows;
 
 namespace DesktopPet.App;
@@ -9,15 +10,18 @@ namespace DesktopPet.App;
 /// <summary>Owns one pet: simulation, sprites, window and loop. Glue only; behavior lives in Core.</summary>
 internal sealed class PetHost : IDisposable
 {
+    private readonly DesktopSource _desktop = new();
     private readonly PetSimulation _simulation;
     private readonly SpriteAtlas _atlas;
     private readonly PetWindow _window;
     private readonly GameLoop _loop;
+    private DesktopSnapshot _snapshot;
 
     public PetHost()
     {
         var config = PetConfig.Default;
-        _simulation = new PetSimulation(config, MonitorSource.GetMonitors());
+        _snapshot = _desktop.GetSnapshot();
+        _simulation = new PetSimulation(config, _snapshot);
         _atlas = SpriteAtlas.CreatePlaceholder(Animations.All);
 
         _window = new PetWindow();
@@ -26,7 +30,8 @@ internal sealed class PetHost : IDisposable
 
         _loop = new GameLoop(
             new FixedStepper(config.StepSeconds, config.MaxStepsPerFrame),
-            step: _simulation.Tick,
+            beginFrame: () => _snapshot = _desktop.GetSnapshot(),
+            step: dt => _simulation.Tick(dt, _snapshot),
             render: Render);
     }
 
