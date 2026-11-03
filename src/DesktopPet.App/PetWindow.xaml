@@ -9,6 +9,7 @@
         ShowInTaskbar="False"
         ShowActivated="False"
         ResizeMode="NoResize"
+        Cursor="Hand"
         Width="64" Height="64">
     <!-- AllowsTransparency makes this a per-pixel-alpha layered window:
          Windows routes clicks on fully transparent (alpha 0) pixels to whatever is underneath. -->

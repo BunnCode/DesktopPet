@@ -6,6 +6,9 @@ public enum BodyMode
 {
     Airborne,
     Grounded,
+
+    /// <summary>Being dragged by the mouse; physics leaves it alone.</summary>
+    Held,
 }
 
 /// <summary>The pet as a physics object: a feet point (bottom-centre) with velocity, in physical pixels.</summary>
@@ -18,10 +21,11 @@ public sealed class PetBody
     /// <summary><see cref="World.Platform.Key"/> of the surface under the pet while grounded.</summary>
     public string? GroundKey { get; private set; }
 
-    public void Land(double x, double y, string platformKey)
+    /// <summary>Touch down on a platform. Horizontal speed is kept so a thrown pet can skid.</summary>
+    public void Land(double x, double y, string platformKey, double skidVelocityX = 0)
     {
         Feet = new Vec2(x, y);
-        Velocity = Vec2.Zero;
+        Velocity = new Vec2(skidVelocityX, 0);
         Mode = BodyMode.Grounded;
         GroundKey = platformKey;
     }
@@ -30,6 +34,13 @@ public sealed class PetBody
     {
         Velocity = velocity;
         Mode = BodyMode.Airborne;
+        GroundKey = null;
+    }
+
+    public void Grab()
+    {
+        Velocity = Vec2.Zero;
+        Mode = BodyMode.Held;
         GroundKey = null;
     }
 }

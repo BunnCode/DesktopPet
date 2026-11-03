@@ -11,6 +11,8 @@ public enum PetStateId
     Idle,
     Walk,
     Sit,
+    Held,
+    Happy,
 }
 
 /// <summary>

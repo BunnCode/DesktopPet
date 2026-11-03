@@ -1,5 +1,6 @@
 using DesktopPet.Core.Abstractions;
 using DesktopPet.Core.Behavior;
+using DesktopPet.Core.Input;
 using DesktopPet.Core.Math;
 using DesktopPet.Core.Physics;
 using DesktopPet.Core.World;
@@ -9,15 +10,21 @@ namespace DesktopPet.Core.Simulation;
 /// <summary>
 /// The whole pet, stepped at a fixed rate against the latest desktop snapshot.
 /// Each tick: behavior acts → physics resolves → physics events force Fall/Land → safety net → animation.
+/// Pointer input arrives between ticks via <see cref="PointerDown"/>/<see cref="PointerMove"/>/<see cref="PointerUp"/>.
 /// </summary>
 public sealed class PetSimulation
 {
     private readonly PetContext _ctx;
     private readonly StateMachine _fsm;
+    private readonly ThrowEstimator _throw;
 
     private DesktopSnapshot _snapshot = DesktopSnapshot.Empty;
     private IReadOnlyList<Platform> _platforms = [];
     private double _lostSeconds;
+
+    // Pointer gesture in progress.
+    private Vec2? _pressAt;
+    private Vec2 _grabOffset;
 
     /// <param name="config">Tuning.</param>
     /// <param name="snapshot">Initial desktop; the pet spawns at the top of its primary monitor.</param>
@@ -27,6 +34,7 @@ public sealed class PetSimulation
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(snapshot);
         _ctx = new PetContext(config, random ?? new SeededRandom(Environment.TickCount));
+        _throw = new ThrowEstimator(config.ThrowWindowSeconds);
         UpdateWorld(snapshot);
 
         var monitors = snapshot.Monitors;
@@ -55,6 +63,11 @@ public sealed class PetSimulation
 
     public PetStateId State => _fsm.Current.Id;
 
+    public Vec2 Velocity => _ctx.Body.Velocity;
+
+    /// <summary>True while the pet is being dragged; the host should feed <see cref="PointerMove"/> every frame.</summary>
+    public bool IsHeld => _ctx.Body.Mode == BodyMode.Held;
+
     /// <summary>Number of times the safety net has respawned the pet (diagnostics/tests).</summary>
     public int RespawnCount { get; private set; }
 
@@ -71,7 +84,8 @@ public sealed class PetSimulation
         {
             _fsm.Update(_ctx, dt);
 
-            switch (PhysicsSystem.Step(_ctx.Body, _platforms, dt, _ctx.Scale, _ctx.Config))
+            var world = new PhysicsWorld(_platforms, _snapshot.Monitors, _ctx.Scale);
+            switch (PhysicsSystem.Step(_ctx.Body, world, dt, _ctx.Config))
             {
                 case PhysicsEvent.Landed:
                     _fsm.ChangeTo(PetStateId.Land, _ctx);
@@ -79,9 +93,12 @@ public sealed class PetSimulation
                 case PhysicsEvent.LostGround:
                     _fsm.ChangeTo(PetStateId.Fall, _ctx);
                     break;
+                case PhysicsEvent.HitWall when _ctx.Body.Velocity.X != 0:
+                    _ctx.FacingLeft = _ctx.Body.Velocity.X < 0; // face the way it's bouncing
+                    break;
             }
 
-            if (ApplySafetyNet(dt))
+            if (!IsHeld && ApplySafetyNet(dt))
             {
                 teleported = true;
                 _fsm.ChangeTo(PetStateId.Fall, _ctx);
@@ -100,7 +117,83 @@ public sealed class PetSimulation
         }
     }
 
-    /// <summary>Puts the pet somewhere, airborne. Used by tests now and by drag/throw in M4.</summary>
+    // ---- Pointer input (physical screen pixels, timestamps in seconds) ----
+
+    /// <summary>Left button pressed on the pet. The platform layer only reports presses on visible pixels.</summary>
+    public void PointerDown(Vec2 position, double time)
+    {
+        _pressAt = position;
+        _throw.Clear();
+        _throw.Add(time, position);
+    }
+
+    public void PointerMove(Vec2 position, double time)
+    {
+        if (_pressAt is not { } pressAt)
+        {
+            return;
+        }
+
+        if (!IsHeld)
+        {
+            var threshold = _ctx.Config.DragThresholdDip * _ctx.Scale;
+            if ((position - pressAt).LengthSquared < threshold * threshold)
+            {
+                return;
+            }
+
+            // Pick up, keeping the pet where it was relative to the cursor at the press (no jump).
+            _grabOffset = _ctx.Body.Feet - pressAt;
+            _ctx.Body.Grab();
+            _lostSeconds = 0;
+            _fsm.ChangeTo(PetStateId.Held, _ctx);
+        }
+
+        _ctx.Body.Feet = position + _grabOffset;
+        _throw.Add(time, position);
+    }
+
+    public void PointerUp(Vec2 position, double time)
+    {
+        if (_pressAt is null)
+        {
+            return;
+        }
+
+        _pressAt = null;
+
+        if (IsHeld)
+        {
+            _ctx.Body.Feet = position + _grabOffset;
+            _throw.Add(time, position);
+            var velocity = ClampSpeed(_throw.Velocity(time), _ctx.Config.MaxThrowSpeedDip * _ctx.Scale);
+            _ctx.Body.Release(velocity);
+            if (velocity.X != 0)
+            {
+                _ctx.FacingLeft = velocity.X < 0;
+            }
+
+            _fsm.ChangeTo(PetStateId.Fall, _ctx);
+        }
+        else if (_ctx.Body.Mode == BodyMode.Grounded)
+        {
+            _fsm.ChangeTo(PetStateId.Happy, _ctx); // a click: being petted
+        }
+    }
+
+    /// <summary>Abandons a gesture (e.g. mouse capture lost); a held pet is dropped in place.</summary>
+    public void PointerCancel()
+    {
+        if (IsHeld)
+        {
+            _ctx.Body.Release(Vec2.Zero);
+            _fsm.ChangeTo(PetStateId.Fall, _ctx);
+        }
+
+        _pressAt = null;
+    }
+
+    /// <summary>Puts the pet somewhere, airborne. Used by tests.</summary>
     internal void Place(Vec2 feet, Vec2 velocity)
     {
         _ctx.Body.Feet = feet;
@@ -120,6 +213,12 @@ public sealed class PetSimulation
         }
 
         _fsm.ChangeTo(state, _ctx);
+    }
+
+    private static Vec2 ClampSpeed(Vec2 v, double max)
+    {
+        var length = v.Length;
+        return length > max ? v * (max / length) : v;
     }
 
     private void UpdateWorld(DesktopSnapshot snapshot)

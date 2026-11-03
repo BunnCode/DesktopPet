@@ -26,8 +26,28 @@ public sealed record PetConfig
     /// <summary>Maximum fall speed, DIP/s.</summary>
     public double TerminalVelocityDip { get; init; } = 2200;
 
+    /// <summary>Exponential decay rate of horizontal speed in the air, per second.</summary>
+    public double AirDragPerSecond { get; init; } = 0.4;
+
+    /// <summary>Fraction of horizontal speed kept when bouncing off a wall.</summary>
+    public double WallRestitution { get; init; } = 0.55;
+
+    /// <summary>Deceleration of a skid after landing with horizontal speed, DIP/s².</summary>
+    public double GroundFrictionDip { get; init; } = 2400;
+
     /// <summary>How long the pet may be somewhere unrecoverable (see <see cref="World.WorldQuery.IsLost"/>) before respawning.</summary>
     public double LostGraceSeconds { get; init; } = 0.5;
+
+    // ---- Mouse ----
+
+    /// <summary>Pointer travel before a press becomes a drag; shorter presses are clicks ("pet the pet").</summary>
+    public double DragThresholdDip { get; init; } = 4;
+
+    /// <summary>How much recent pointer motion the throw velocity is fitted over.</summary>
+    public double ThrowWindowSeconds { get; init; } = 0.1;
+
+    /// <summary>Throw speed cap, DIP/s.</summary>
+    public double MaxThrowSpeedDip { get; init; } = 3500;
 
     // ---- Behavior ----
 
@@ -39,6 +59,9 @@ public sealed record PetConfig
     public DurationRange IdleSeconds { get; init; } = new(2, 5);
     public DurationRange WalkSeconds { get; init; } = new(2, 7);
     public DurationRange SitSeconds { get; init; } = new(4, 10);
+
+    /// <summary>How long the happy reaction to a click lasts.</summary>
+    public DurationRange HappySeconds { get; init; } = new(1.0, 1.5);
 
     /// <summary>Chance that a new walk heads the other way.</summary>
     public double WalkTurnChance { get; init; } = 0.5;

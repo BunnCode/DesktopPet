@@ -21,5 +21,11 @@ public static class Animations
     /// <summary>Squash on impact, recovering over 4 frames.</summary>
     public static readonly AnimationDef Land = new("land", frameCount: 4, fps: 14, loop: false);
 
-    public static IReadOnlyList<AnimationDef> All { get; } = [Idle, Walk, Sit, Fall, Land];
+    /// <summary>Dangling from the cursor, feet kicking.</summary>
+    public static readonly AnimationDef Held = new("held", frameCount: 2, fps: 6, loop: true);
+
+    /// <summary>Clicked: happy wiggle.</summary>
+    public static readonly AnimationDef Happy = new("happy", frameCount: 4, fps: 8, loop: true);
+
+    public static IReadOnlyList<AnimationDef> All { get; } = [Idle, Walk, Sit, Fall, Land, Held, Happy];
 }

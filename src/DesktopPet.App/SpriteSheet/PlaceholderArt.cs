@@ -45,7 +45,8 @@ internal static class PlaceholderArt
     /// <param name="Feet">Feet style.</param>
     /// <param name="Mouth">Small open mouth.</param>
     /// <param name="Look">Horizontal eye offset; positive looks right (the art's facing direction).</param>
-    private readonly record struct Pose(double Top, double HalfWidth, Eyes Eyes, FeetPose Feet, bool Mouth = false, int Look = 0);
+    /// <param name="Smile">Small smile under the eyes.</param>
+    private readonly record struct Pose(double Top, double HalfWidth, Eyes Eyes, FeetPose Feet, bool Mouth = false, int Look = 0, bool Smile = false);
 
     public static uint[] Frame(string animationId, int frameIndex) => Draw(PoseFor(animationId, frameIndex));
 
@@ -57,6 +58,24 @@ internal static class PlaceholderArt
         {
             // Stretched tall and narrow, eyes wide, feet fluttering.
             return new Pose(4, 12, Eyes.Wide, frame % 2 == 0 ? FeetPose.DangleLeft : FeetPose.DangleRight, Mouth: true);
+        }
+
+        if (animationId == Animations.Held.Id)
+        {
+            // Scrunched-eyed and protesting, feet kicking.
+            return new Pose(5, 12, Eyes.Squeezed, frame % 2 == 0 ? FeetPose.DangleLeft : FeetPose.DangleRight, Mouth: true);
+        }
+
+        if (animationId == Animations.Happy.Id)
+        {
+            // Squash-stretch wiggle with closed happy eyes and a smile.
+            return frame switch
+            {
+                0 => new Pose(9, 14, Eyes.Happy, FeetPose.Standing, Smile: true),
+                1 => new Pose(5, 12, Eyes.Happy, FeetPose.Standing, Smile: true),
+                2 => new Pose(9, 14, Eyes.Happy, FeetPose.Standing, Smile: true),
+                _ => new Pose(7, 13, Eyes.Happy, FeetPose.Standing, Smile: true),
+            };
         }
 
         if (animationId == Animations.Walk.Id)
@@ -220,6 +239,13 @@ internal static class PlaceholderArt
         if (pose.Mouth)
         {
             FillRect(px, 15, eyeY + 4, 2, 2, Eye);
+        }
+
+        if (pose.Smile)
+        {
+            SetPixel(px, 14, eyeY + 3, Eye);
+            FillRect(px, 15, eyeY + 4, 2, 1, Eye);
+            SetPixel(px, 17, eyeY + 3, Eye);
         }
 
         FillRect(px, 8, eyeY + 3, 2, 1, Blush);

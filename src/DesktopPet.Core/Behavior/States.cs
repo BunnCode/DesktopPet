@@ -22,8 +22,29 @@ internal sealed class LandState : PetState
 
     public override void Enter(PetContext context) => context.Animation.Play(Animations.Land, restart: true);
 
+    // Waits for the squash to play out and for any skid from a throw to stop.
     public override PetStateId? Update(PetContext context, double dt) =>
-        context.Animation.IsFinished ? BehaviorPicker.Pick(context.Config, context.Random) : null;
+        context.Animation.IsFinished && context.Body.Velocity.X == 0
+            ? BehaviorPicker.Pick(context.Config, context.Random)
+            : null;
+}
+
+/// <summary>Dangling from the mouse. Left by the simulation on release (→ Fall).</summary>
+internal sealed class HeldState : PetState
+{
+    public override PetStateId Id => PetStateId.Held;
+
+    public override void Enter(PetContext context) => context.Animation.Play(Animations.Held);
+
+    public override PetStateId? Update(PetContext context, double dt) => null;
+}
+
+/// <summary>Reaction to being clicked ("petted").</summary>
+internal sealed class HappyState : TimedState
+{
+    public override PetStateId Id => PetStateId.Happy;
+    protected override AnimationDef Animation => Animations.Happy;
+    protected override DurationRange Duration(PetConfig config) => config.HappySeconds;
 }
 
 internal sealed class IdleState : TimedState
