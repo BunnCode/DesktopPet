@@ -103,7 +103,52 @@ internal static class PlaceholderArt
         ReachBack,
     }
 
-    public static uint[] Frame(string animationId, int frameIndex) => Draw(PoseFor(animationId, frameIndex));
+    /// <summary>Colour schemes so several pets can be told apart: orange, blue, green, pink, lavender.</summary>
+    public const int VariantCount = 5;
+
+    /// <summary>(body, highlight, outline/feet, blush) per variant; variant 0 is the original orange.</summary>
+    private static readonly (uint Body, uint Light, uint Outline, uint Blush)[] Palettes =
+    [
+        (Body, BodyLight, Outline, Blush),
+        (0xFF6FA8F2, 0xFFA9CDF8, 0xFF1F4E8C, 0xFFEE8A9A),
+        (0xFF8CD17A, 0xFFBDE8B0, 0xFF2F6B27, 0xFFEE8A7A),
+        (0xFFF29AC2, 0xFFF8C6DE, 0xFF8A2F5E, 0xFFE0607E),
+        (0xFFB79CF0, 0xFFD6C8F8, 0xFF4E3A8C, 0xFFEE8AB0),
+    ];
+
+    /// <param name="animationId">Animation.</param>
+    /// <param name="frameIndex">Frame within it.</param>
+    /// <param name="variant">Colour scheme (wraps around <see cref="VariantCount"/>).</param>
+    public static uint[] Frame(string animationId, int frameIndex, int variant = 0) =>
+        Recolor(Draw(PoseFor(animationId, frameIndex)), variant);
+
+    /// <summary>
+    /// Swaps the base palette for a variant's. The art is drawn in the base colours, which are distinct constants,
+    /// so an exact colour swap recolours it without threading a palette through every drawing routine.
+    /// </summary>
+    private static uint[] Recolor(uint[] px, int variant)
+    {
+        var index = ((variant % VariantCount) + VariantCount) % VariantCount;
+        if (index == 0)
+        {
+            return px;
+        }
+
+        var p = Palettes[index];
+        for (var i = 0; i < px.Length; i++)
+        {
+            px[i] = px[i] switch
+            {
+                Body => p.Body,
+                BodyLight => p.Light,
+                Outline => p.Outline, // also the feet colour
+                Blush => p.Blush,
+                var other => other,
+            };
+        }
+
+        return px;
+    }
 
     public static uint[] TrayIconPixels() => Draw(PoseFor(Animations.Idle.Id, 0));
 

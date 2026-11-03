@@ -13,8 +13,11 @@
         Width="64" Height="64">
     <!-- AllowsTransparency makes this a per-pixel-alpha layered window:
          Windows routes clicks on fully transparent (alpha 0) pixels to whatever is underneath. -->
+    <!-- Uniform + bottom-centre: custom art with non-square cells keeps its shape and its feet on the feet point. -->
     <Image x:Name="Sprite"
-           Stretch="Fill"
+           Stretch="Uniform"
+           VerticalAlignment="Bottom"
+           HorizontalAlignment="Center"
            RenderOptions.BitmapScalingMode="NearestNeighbor"
            RenderTransformOrigin="0.5,0.5">
         <Image.RenderTransform>

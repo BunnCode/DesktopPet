@@ -31,6 +31,10 @@ internal sealed class TrayIcon : IDisposable
         };
     }
 
+    /// <summary>A notification from the tray icon (Windows shows it as a toast).</summary>
+    public void Notify(string title, string text, bool warning = false) =>
+        _notifyIcon.ShowBalloonTip(5000, title, text, warning ? ToolTipIcon.Warning : ToolTipIcon.Info);
+
     public void Dispose()
     {
         _notifyIcon.Visible = false;

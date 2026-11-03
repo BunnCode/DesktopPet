@@ -16,8 +16,14 @@ namespace DesktopPet.App.UI;
 /// <c>DesktopPet.Platform</c> namespace before using-directives are considered.
 /// </remarks>
 internal sealed record DebugView(
-    IReadOnlyList<Core.World.Platform> Platforms, IReadOnlyList<Wall> Walls, RectI PetBounds, string State, BodyMode Mode,
-    string? GroundKey, int WindowCount);
+    IReadOnlyList<Core.World.Platform> Platforms, IReadOnlyList<Wall> Walls, IReadOnlyList<DebugPet> Pets, int WindowCount)
+{
+    /// <summary>Surfaces some pet is standing on, hanging from or clinging to (highlighted).</summary>
+    public HashSet<string> InUse { get; } = [.. Pets.Select(p => p.GroundKey).OfType<string>()];
+}
+
+/// <summary>One pet's box and state for the overlay.</summary>
+internal sealed record DebugPet(string Name, RectI Bounds, string State, BodyMode Mode, string? GroundKey);
 
 /// <summary>
 /// Click-through overlay showing what Core "sees": floors (green), window tops (orange), hang bars (dashed magenta),
@@ -141,7 +147,7 @@ internal sealed class DebugOverlay : IDisposable
                     continue;
                 }
 
-                var pen = p.Key == view.GroundKey ? GroundPen
+                var pen = view.InUse.Contains(p.Key) ? GroundPen
                     : p.Kind switch { PlatformKind.Floor => FloorPen, PlatformKind.HangBar => HangPen, _ => WindowPen };
                 var y = p.Kind == PlatformKind.HangBar ? p.Y + 1.5 : p.Y - 1.5; // draw on the open side of the edge
                 dc.DrawLine(pen, ToDip(System.Math.Max(p.Left, bounds.Left), y), ToDip(System.Math.Min(p.Right, bounds.Right), y));
@@ -154,19 +160,23 @@ internal sealed class DebugOverlay : IDisposable
                     continue;
                 }
 
-                var pen = w.Key == view.GroundKey ? GroundPen : w.Kind == WallKind.ScreenEdge ? EdgePen : WallPen;
+                var pen = view.InUse.Contains(w.Key) ? GroundPen : w.Kind == WallKind.ScreenEdge ? EdgePen : WallPen;
                 var x = w.X - (w.TowardWall * 1.5); // on the side the pet clings
                 dc.DrawLine(
                     pen, ToDip(x, System.Math.Max(w.Top, bounds.Top)), ToDip(x, System.Math.Min(w.Bottom, bounds.Bottom)));
             }
 
-            var pet = view.PetBounds;
-            if (pet.Intersects(bounds))
+            foreach (var pet in view.Pets)
             {
-                var topLeft = ToDip(pet.Left, pet.Top);
-                var bottomRight = ToDip(pet.Right, pet.Bottom);
+                if (!pet.Bounds.Intersects(bounds))
+                {
+                    continue;
+                }
+
+                var topLeft = ToDip(pet.Bounds.Left, pet.Bounds.Top);
+                var bottomRight = ToDip(pet.Bounds.Right, pet.Bounds.Bottom);
                 dc.DrawRectangle(null, PetPen, new Rect(topLeft, bottomRight));
-                DrawLabel(dc, $"{view.State} · {view.Mode}", new Point(topLeft.X, topLeft.Y - 18));
+                DrawLabel(dc, $"{pet.Name}: {pet.State} · {pet.Mode}", new Point(topLeft.X, topLeft.Y - 18));
             }
 
             if (m.IsPrimary)
@@ -176,8 +186,8 @@ internal sealed class DebugOverlay : IDisposable
                 var tops = view.Platforms.Count - floors - bars;
                 DrawLabel(
                     dc,
-                    $"DesktopPet debug · {view.WindowCount} windows · {tops} window tops · {view.Walls.Count} walls · {bars} hang bars · {floors} floors"
-                    + $" · on: {view.GroundKey ?? "-"}",
+                    $"DesktopPet debug · {view.Pets.Count} pets · {view.WindowCount} windows · {tops} window tops"
+                    + $" · {view.Walls.Count} walls · {bars} hang bars · {floors} floors",
                     ToDip(m.WorkArea.Left + 8, m.WorkArea.Top + 8));
             }
         }

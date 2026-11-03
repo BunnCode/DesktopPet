@@ -24,9 +24,10 @@ This document describes the design **as built**, the status of each milestone, a
 | M5 | Windows as platforms, riding windows, debug overlay | Done | `6291c79` |
 | M6 | Hunger/happiness/energy stats, care menu, saving | Done | `6485fc9` |
 | M7 | Climbing window sides and screen edges, pushing windows, title-bar perch | Done | `e19ea8d` |
-| M8 | Polish (optional) | Not started | |
+| M8 | Settings file and real sprite sheets (live reload) | Done | |
+| M9 | Multiple pets | Done | |
 
-235 unit tests, all in `DesktopPet.Core.Tests`.
+273 unit tests, all in `DesktopPet.Core.Tests`.
 
 ### Changes from the original plan
 
@@ -232,13 +233,17 @@ push a window off screen.
 - **Game loop:** WPF's per-frame event drives the fixed 60 Hz stepper (at most 5 catch-up steps). It ignores the event
   when it fires re-entrantly: resizing a WPF window renders synchronously, which once caused a crash when enabling the
   overlay.
-- **Art:** `PlaceholderArt` draws every animation procedurally as 32×32 pixel art at startup (drawn facing right,
-  mirrored when facing left).
+- **Art:** custom sprites from `sprites\` where defined (see `docs/SPRITES.md`), otherwise `PlaceholderArt`, which draws
+  every animation procedurally as 32×32 pixel art (drawn facing right, mirrored when facing left).
+- **Customization** (`Customization/`): `DataFolder` (paths, settings load, `problems.txt`), and `CustomizationWatcher`,
+  which notices edits to `settings.json` and `sprites\` and reloads them after a 400 ms pause.
 - **Menu** (right-click the pet or the tray icon): mood line, stat bars, Feed / Play / Sleep or Wake up,
-  "Let it push windows", Debug overlay, Exit.
+  "Let it push windows", Customize (Edit settings, Open data folder, Export sprite template), Debug overlay, Exit.
 - **Debug overlay:** click-through, one per monitor. Floors green, window tops orange, walls blue (screen edges dotted),
   hang bars dashed magenta, the current surface yellow, plus the pet box, state and a summary line.
-- **Saving:** `%LOCALAPPDATA%\DesktopPet\save.json`, written atomically (temp file, then swap) every minute, after
+- **Data folder** `%LOCALAPPDATA%\DesktopPet\`: `save.json` (plus `save-n.json` per extra pet), `settings.json`,
+  `sprites\`, `sprite-template\`, `problems.txt`.
+- **Saving:** `save.json`, written atomically (temp file, then swap) every minute, after
   actions, on exit and on logoff. A missing or corrupt file gives a fresh pet.
 
 ---
@@ -266,15 +271,58 @@ push a window off screen.
   screen edges.
 - **No fullscreen detection:** the pet stays on top of games and videos.
 - **Memory** is about 127 MB (WPF plus WinForms for the tray icon and menu).
+- **Two settings need a restart:** `StepSeconds` and `MaxStepsPerFrame`. Everything else applies live.
 
 ---
 
-## Next: M8 and leftovers (not started)
+## M8: settings file and real sprite sheets (done)
+Chosen and built 2026-11-03. Checked live: a dropped-in sprite sheet and edited settings applied within about a second,
+and an invalid value was rejected while the pet kept running. Everything customizable lives in the data folder `%LOCALAPPDATA%\DesktopPet\` next to `save.json`.
+
+**Settings (`settings.json`)**
+- The whole `PetConfig` (with `StatRules` nested) as JSON. Written with the defaults on first run.
+- Comments and trailing commas are allowed. Missing keys keep their defaults; unknown keys are ignored.
+- Every value is range-checked (`PetConfig.Validate`). Problems are listed in a tray notification.
+- **Live reload:** saving the file applies it within half a second (`PetSimulation.Reconfigure`). A file with errors is
+  ignored and the previous settings stay in force; at startup, errors fall back to the defaults.
+  `StepSeconds` and `MaxStepsPerFrame` only apply on restart.
+- Parsing and validation are pure Core code (`PetConfigFile`), unit-tested.
+
+**Sprites (`sprites\atlas.json` plus PNGs)**
+- `atlas.json` gives a default image and cell size, and for each animation id a strip of frames: row, starting column,
+  frame count, optionally its own image. Options: `facesLeft` (art drawn facing left) and `smooth` (high-quality scaling
+  instead of nearest-neighbour, for non-pixel art).
+- Fewer frames than the game expects cycle; extras are ignored. **Animations not listed use the placeholder art,** so art
+  can be replaced one animation at a time. Problems (missing image, frame outside the image, unknown animation) are
+  reported in a tray notification, and the affected animations fall back to placeholders.
+- Frames are drawn uniformly scaled into the square sprite box, aligned bottom-centre (the feet point).
+- **Live reload** of `sprites\` like settings.
+- The atlas is parsed and checked by pure Core code (`SpriteSheetSpec`); the App only decodes and crops PNGs.
+- **Menu → Customize:** Edit settings, Open data folder, Export sprite template. The template is the placeholder art as
+  one sheet plus a matching `atlas.json` in `sprite-template\`, to copy into `sprites\` and paint over.
+- Art conventions (documented in `docs/SPRITES.md`): feet at the bottom centre; climb, cling and push art touches the
+  wall at the side the art faces; hang art grips at the top edge; `sit_ledge` sits 9/32 of the height above the bottom.
+
+## M9: multiple pets (done)
+Chosen and built 2026-11-03. Checked live: three saves started three pets in three colours, spread across the screen.
+- **One `PetHost` per pet** (window, simulation, loop, save). They share one `DesktopSource`, so window and monitor
+  polling happens once. Pets don't interact with each other; each excludes all of our process's windows anyway.
+- **Which pets exist = which save files exist.** Pet 1 is `save.json` (unchanged, so existing saves carry over); pet *n*
+  is `save-n.json`. At startup every save becomes a pet; with none, pet 1 is created. The naming and ID logic is pure
+  Core code (`PetRoster`), unit-tested.
+- **Menu:** *Add a pet* drops a new pet from the top of the primary monitor at a random x (`PetSimulation.DropFrom`) and
+  saves it right away. At startup, every pet after the first also drops in at a random x; otherwise they'd all spawn at
+  the top centre and land in a pile. *Remove this pet* closes it and deletes its save, and is disabled for the last pet. At most 8.
+- **Which pet the menu is for:** right-click opens it for that pet; the header names it ("Pet 2 · happy") and Feed /
+  Play / Sleep act on it. The tray opens it for the pet last right-clicked (the first pet by default).
+  "Let it push windows" applies to every pet, including new ones.
+- **Telling them apart:** placeholder art gets a colour per pet (orange, blue, green, pink, lavender, then repeating).
+  Custom sprites are shared by all pets.
+- **Debug overlay** moves to the App: one overlay showing the shared surfaces and every pet's box and state.
+
+## Next: leftovers (not started)
 Candidates, none chosen yet:
-- **Real sprite sheets:** PNG sheets plus a JSON atlas behind `SpriteAtlas`, keeping the placeholder art as a fallback.
-- **Settings file:** load `PetConfig` from JSON next to the save, with a menu item to open it.
 - **Start with Windows:** a menu toggle using the per-user Run registry key.
-- **Multiple pets:** one `PetHost` per pet, each with its own save.
 - **Hide for fullscreen apps:** hide the pet, and pause pushing, on a monitor with a fullscreen app in front.
 - **Lower idle CPU:** tick less often while nothing on screen changes.
 - **OS notifications instead of polling:** `SetWinEventHook` for window moves, plus display-change and work-area

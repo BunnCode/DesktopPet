@@ -3,7 +3,6 @@ using System.IO;
 using System.Windows.Threading;
 using DesktopPet.App.SpriteSheet;
 using DesktopPet.App.UI;
-using DesktopPet.Core.Animation;
 using DesktopPet.Core.Behavior;
 using DesktopPet.Core.Math;
 using DesktopPet.Core.Persistence;
@@ -15,37 +14,43 @@ using Microsoft.Win32;
 
 namespace DesktopPet.App;
 
-/// <summary>Owns one pet: simulation, sprites, window, loop, saving. Glue only; behavior lives in Core.</summary>
-internal sealed class PetHost : IDisposable
+/// <summary>
+/// Owns one pet: simulation, sprites, window, loop, saving. Glue only; behavior lives in Core.
+/// Several can run side by side; they share one <see cref="DesktopSource"/>.
+/// </summary>
+internal sealed class PetHost : IPetControls, IDisposable
 {
     private static readonly TimeSpan AutosaveInterval = TimeSpan.FromMinutes(1);
 
-    private readonly DesktopSource _desktop = new();
-    private readonly PetConfig _config;
+    private readonly DesktopSource _desktop;
     private readonly ISaveStore _store;
     private readonly PetSimulation _simulation;
-    private readonly SpriteAtlas _atlas;
     private readonly PetWindow _window;
     private readonly GameLoop _loop;
     private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
     private readonly Stopwatch _sinceSave = Stopwatch.StartNew();
+    private SpriteAtlas _atlas;
     private DesktopSnapshot _snapshot;
     private bool _pointerActive;
-    private DebugOverlay? _overlay;
-    private int _frameCount;
+    private bool _closed;
 
+    /// <param name="id">Pet number (1, 2, …); also picks its placeholder colours.</param>
     /// <param name="config">Tuning.</param>
     /// <param name="store">Where the pet is loaded from and saved to.</param>
-    public PetHost(PetConfig config, ISaveStore store)
+    /// <param name="atlas">Sprites to draw with.</param>
+    /// <param name="desktop">The desktop, shared by all pets.</param>
+    public PetHost(int id, PetConfig config, ISaveStore store, SpriteAtlas atlas, DesktopSource desktop)
     {
-        _config = config;
+        Id = id;
         _store = store;
+        _desktop = desktop;
         _snapshot = _desktop.GetSnapshot();
         _simulation = new PetSimulation(config, _snapshot, save: _store.Load());
-        _atlas = SpriteAtlas.CreatePlaceholder(Animations.All);
+        _atlas = atlas;
 
         _window = new PetWindow();
         _window.CreateHandle();
+        _window.SetSmoothing(atlas.Smooth);
         _window.PointerPressed += OnPointerPressed;
         _window.PointerReleased += OnPointerReleased;
         _window.PointerCanceled += OnPointerCanceled;
@@ -65,6 +70,13 @@ internal sealed class PetHost : IDisposable
     /// <summary>The pet was right-clicked.</summary>
     public event EventHandler? MenuRequested;
 
+    public int Id { get; }
+
+    /// <summary>Placeholder colour scheme for this pet.</summary>
+    public int Variant => (Id - 1) % PlaceholderArt.VariantCount;
+
+    public string Name => $"Pet {Id}";
+
     public PetStats Stats => _simulation.Stats;
 
     public bool IsAsleep => _simulation.State == PetStateId.Sleep;
@@ -76,32 +88,34 @@ internal sealed class PetHost : IDisposable
         set => _simulation.PushingEnabled = value;
     }
 
-    public StatRules Rules => _config.Stats;
+    public StatRules Rules => _simulation.Config.Stats;
 
-    /// <summary>Shows/hides the click-through overlay that draws platforms and pet state.</summary>
-    public bool DebugOverlayEnabled
+    /// <summary>What this pet sees and is doing, for the debug overlay.</summary>
+    public (IReadOnlyList<Core.World.Platform> Platforms, IReadOnlyList<Wall> Walls, DesktopSnapshot Snapshot, DebugPet Pet) DebugInfo
     {
-        get => _overlay is not null;
-        set
+        get
         {
-            if (value == DebugOverlayEnabled)
-            {
-                return;
-            }
-
-            if (value)
-            {
-                _overlay = new DebugOverlay();
-                UpdateOverlay();
-                _window.BringToFront(); // keep the pet above the overlay
-            }
-            else
-            {
-                _overlay!.Dispose();
-                _overlay = null;
-            }
+            var current = _simulation.Current;
+            var pet = new DebugPet(Name, current.Bounds, current.State.ToString(), _simulation.Mode, _simulation.GroundKey);
+            return (_simulation.Platforms, _simulation.Walls, _snapshot, pet);
         }
     }
+
+    /// <summary>Applies edited settings live (the fixed step rate only changes on restart).</summary>
+    public void Reconfigure(PetConfig config) => _simulation.Reconfigure(config);
+
+    /// <summary>Switches to reloaded sprites.</summary>
+    public void SetAtlas(SpriteAtlas atlas)
+    {
+        _atlas = atlas;
+        _window.SetSmoothing(atlas.Smooth);
+        Render(alpha: 1);
+    }
+
+    /// <summary>Drops the pet in from a point (a newly added pet arriving from the top of the screen).</summary>
+    public void DropFrom(Vec2 feet) => _simulation.DropFrom(feet);
+
+    public void BringToFront() => _window.BringToFront();
 
     public void Start()
     {
@@ -118,6 +132,11 @@ internal sealed class PetHost : IDisposable
     /// <summary>Writes the save file. Failures (disk full, permissions) are swallowed: the pet keeps running.</summary>
     public void Save()
     {
+        if (_closed)
+        {
+            return;
+        }
+
         try
         {
             _store.Save(_simulation.CreateSave());
@@ -130,14 +149,26 @@ internal sealed class PetHost : IDisposable
         _sinceSave.Restart();
     }
 
-    public void Dispose()
+    /// <summary>Stops the pet and closes its window, saving first unless it's being removed.</summary>
+    public void Close(bool save)
     {
+        if (_closed)
+        {
+            return;
+        }
+
+        if (save)
+        {
+            Save();
+        }
+
+        _closed = true;
         SystemEvents.SessionSwitch -= OnSessionSwitch;
         _loop.Dispose();
-        Save();
-        _overlay?.Dispose();
         _window.Close();
     }
+
+    public void Dispose() => Close(save: true);
 
     /// <summary>Seconds on a monotonic clock, for pointer timestamps.</summary>
     private static double Now() => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
@@ -203,28 +234,12 @@ internal sealed class PetHost : IDisposable
         _window.Present(
             PetFrame.SpriteRect(feet + new Vec2(0, current.SinkY), current.Size),
             _atlas.Get(current.AnimationId, current.FrameIndex),
-            current.FacingLeft);
-
-        // The overlay re-renders full-screen layered windows in software; ~15 Hz is plenty for debugging.
-        if (_overlay is not null && ++_frameCount % 4 == 0)
-        {
-            UpdateOverlay();
-        }
+            current.FacingLeft != _atlas.ArtFacesLeft); // mirror when the art faces the other way
 
         if (_sinceSave.Elapsed >= AutosaveInterval)
         {
             Save();
         }
-    }
-
-    private void UpdateOverlay()
-    {
-        var current = _simulation.Current;
-        _overlay?.Update(
-            _snapshot.Monitors,
-            new DebugView(
-                _simulation.Platforms, _simulation.Walls, current.Bounds, current.State.ToString(), _simulation.Mode,
-                _simulation.GroundKey, _snapshot.Windows.Count));
     }
 
     /// <summary>One simulation step, then carry out any window moves it asked for (pushing).</summary>

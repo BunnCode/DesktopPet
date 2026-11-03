@@ -16,7 +16,8 @@ internal sealed class PetContext
         PushingEnabled = config.EnablePushing;
     }
 
-    public PetConfig Config { get; }
+    /// <summary>Current tuning; replaced live when the settings file changes.</summary>
+    public PetConfig Config { get; set; }
     public IRandom Random { get; }
     public PetBody Body { get; } = new();
     public AnimationPlayer Animation { get; } = new(Animations.Fall);

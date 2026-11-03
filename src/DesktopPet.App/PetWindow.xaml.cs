@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using DesktopPet.Core.Math;
 using DesktopPet.Platform.Windows;
@@ -87,6 +88,10 @@ public partial class PetWindow : Window
             PointerCanceled?.Invoke(this, EventArgs.Empty);
         }
     }
+
+    /// <summary>Nearest-neighbour for pixel art (crisp), high quality for painted art.</summary>
+    public void SetSmoothing(bool smooth) =>
+        RenderOptions.SetBitmapScalingMode(Sprite, smooth ? BitmapScalingMode.HighQuality : BitmapScalingMode.NearestNeighbor);
 
     /// <summary>Re-asserts topmost now (e.g. after other topmost windows such as the debug overlay appeared).</summary>
     public void BringToFront()

@@ -18,7 +18,7 @@ public sealed class PetSimulation
 {
     private readonly PetContext _ctx;
     private readonly StateMachine _fsm;
-    private readonly ThrowEstimator _throw;
+    private ThrowEstimator _throw;
     private readonly IClock _clock;
 
     private DesktopSnapshot _snapshot = DesktopSnapshot.Empty;
@@ -88,6 +88,28 @@ public sealed class PetSimulation
     /// <summary>Key of the surface the pet stands on, hangs from or clings to, or null when airborne or held.</summary>
     public string? GroundKey =>
         _ctx.Body.Mode is BodyMode.Grounded or BodyMode.Hanging or BodyMode.Clinging ? _ctx.Body.GroundKey : null;
+
+    public PetConfig Config => _ctx.Config;
+
+    /// <summary>
+    /// Swaps in new tuning without restarting: the pet keeps its position, stats and current behavior; surfaces and walls
+    /// are rebuilt on the next tick (so switching off climbing or hanging drops a pet that relied on them).
+    /// The menu's push switch follows the new config only if the config's own push setting changed.
+    /// The fixed step rate is the host's business and isn't changed here.
+    /// </summary>
+    public void Reconfigure(PetConfig config)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+        var old = _ctx.Config;
+        _ctx.Config = config;
+        _throw = new ThrowEstimator(config.ThrowWindowSeconds);
+        if (config.EnablePushing != old.EnablePushing)
+        {
+            _ctx.PushingEnabled = config.EnablePushing;
+        }
+
+        _snapshot = DesktopSnapshot.Empty; // force UpdateWorld to rebuild platforms and walls with the new switches
+    }
 
     /// <summary>Whether the pet may push windows (it moves the user's real windows). Starts from config.</summary>
     public bool PushingEnabled
@@ -315,6 +337,9 @@ public sealed class PetSimulation
 
         _pressAt = null;
     }
+
+    /// <summary>Drops the pet in from <paramref name="feet"/> (e.g. a newly added pet arriving from the top of the screen).</summary>
+    public void DropFrom(Vec2 feet) => Place(feet, Vec2.Zero);
 
     /// <summary>Puts the pet somewhere, airborne. Used by tests.</summary>
     internal void Place(Vec2 feet, Vec2 velocity)
