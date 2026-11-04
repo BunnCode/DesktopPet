@@ -492,3 +492,6 @@ $RECYCLE.BIN/
 
 # Pet data (saves, settings, sprites)
 /data/
+
+# Release archive
+/publish.7z
