@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+using DesktopPet.Core.Chat;
 using DesktopPet.Core.Simulation;
 
 namespace DesktopPet.Core.Traits;
@@ -17,6 +19,20 @@ public sealed record PetTraits
 
     /// <summary>How often it says each kind of line (used by <see cref="Chat.ChatDirector"/>, not by <see cref="ApplyTo"/>).</summary>
     public ChatTraits Chat { get; init; } = new();
+
+    /// <summary>Fixed (neutered): it never mates. Set from the menu or by hand.</summary>
+    public bool Fixed { get; init; }
+
+    /// <summary>
+    /// The built-in rabbit's jacket colour, #RRGGBB. Null: the colour that goes with the pet's number. Hatched pets get
+    /// a blend of their parents'.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Jacket { get; init; }
+
+    /// <summary>The names of its parents, for a pet that hatched from an egg; null otherwise.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public TextList? Parents { get; init; }
 
     /// <summary>An average pet: every multiplier 1.</summary>
     public static PetTraits Neutral(string name) => new() { Name = name };
@@ -61,8 +77,12 @@ public sealed record PetTraits
 /// <summary>How fast each need drops compared with an average pet (2 = twice as fast; sleep still restores energy at the normal rate).</summary>
 public sealed record Neediness(double Hunger = 1, double Happiness = 1, double Energy = 1);
 
-/// <summary>How often the pet chooses each behavior compared with an average pet (2 = twice as likely).</summary>
-public sealed record BehaviorTraits(double Idle = 1, double Walk = 1, double Sit = 1, double Sleep = 1, double Climb = 1, double Push = 1);
+/// <summary>
+/// How often the pet chooses each behavior compared with an average pet (2 = twice as likely). <see cref="Mating"/>
+/// scales its chance of mating (used by <see cref="Breeding.BreedingDirector"/>, not by <see cref="PetTraits.ApplyTo"/>).
+/// </summary>
+public sealed record BehaviorTraits(
+    double Idle = 1, double Walk = 1, double Sit = 1, double Sleep = 1, double Climb = 1, double Push = 1, double Mating = 1);
 
 /// <summary>
 /// How often the pet says each kind of line compared with an average pet (0 = never, 2 = twice as often).

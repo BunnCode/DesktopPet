@@ -87,7 +87,7 @@ public sealed record PetConfig
     /// </summary>
     public Traits.TraitRange NewPetNeediness { get; init; } = new(0.5, 2.0);
 
-    /// <summary>A new pet's behavior multipliers (idle, walk, sit, sleep, climb, push) are rolled in this range.</summary>
+    /// <summary>A new pet's behavior multipliers (idle, walk, sit, sleep, climb, push, mating) are rolled in this range.</summary>
     public Traits.TraitRange NewPetBehavior { get; init; } = new(0.5, 2.0);
 
     /// <summary>A new pet's chat multipliers (needy lines, banter, jokes, sticky notes) are rolled in this range.</summary>
@@ -163,6 +163,11 @@ public sealed record PetConfig
 
     /// <summary>Speech bubbles and sticky notes from the local language model.</summary>
     public Chat.ChatRules Chat { get; init; } = new();
+
+    // ---- Breeding ----
+
+    /// <summary>When pets mate and how eggs hatch.</summary>
+    public Breeding.BreedingRules Breeding { get; init; } = new();
 }
 
 /// <summary>Tuning for furniture: when pets choose it, how they get there, and the kick and bounce physics.</summary>

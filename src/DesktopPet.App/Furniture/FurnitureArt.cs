@@ -55,7 +55,8 @@ internal static class FurnitureArt
         return copy.ToArray();
     }
 
-    private static BitmapSource[]? BuiltIn(FurnitureSpec spec)
+    /// <summary>The built-in frames for a kind that has them (the defaults and the egg), or null.</summary>
+    public static BitmapSource[]? BuiltIn(FurnitureSpec spec)
     {
         if (DefaultPng(spec.Kind) is not { } png)
         {

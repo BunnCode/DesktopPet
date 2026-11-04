@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows.Media.Imaging;
 using DesktopPet.App.UI;
+using DesktopPet.Core.Breeding;
 using DesktopPet.Core.Furniture;
 using DesktopPet.Core.Math;
 using DesktopPet.Core.Simulation;
@@ -32,6 +33,7 @@ internal sealed class FurnitureHost : IDisposable
     private DesktopSnapshot _snapshot;
     private int _savedVersion;
     private bool _closed;
+    private bool _rendering;
 
     /// <param name="config">Shared tuning (physics, drag threshold).</param>
     /// <param name="desktop">The desktop, shared with the pets.</param>
@@ -51,7 +53,19 @@ internal sealed class FurnitureHost : IDisposable
 
     public FurnitureWorld World { get; }
 
-    public int Count => World.Items.Count;
+    /// <summary>Pieces of furniture (eggs aren't furniture here: they count toward the pet cap instead).</summary>
+    public int Count => World.Items.Count(i => i.Egg is null);
+
+    /// <summary>Eggs waiting to hatch.</summary>
+    public int EggCount => World.EggItems.Count();
+
+    /// <summary>Lays an egg at <paramref name="feet"/> (physical pixels).</summary>
+    public void AddEgg(Vec2 feet, EggInfo egg)
+    {
+        World.AddEgg(feet, egg);
+        Render(alpha: 1);
+        Save();
+    }
 
     /// <summary>The kinds that can be placed, with their art. Furniture of kinds that are gone is removed.</summary>
     public void SetSpecs(IReadOnlyList<FurnitureSpec> specs, Dictionary<string, BitmapSource[]> art)
@@ -90,9 +104,10 @@ internal sealed class FurnitureHost : IDisposable
         Save();
     }
 
+    /// <summary>Removes all the furniture (not the eggs).</summary>
     public void RemoveAll()
     {
-        foreach (var item in World.Items.ToList())
+        foreach (var item in World.Items.Where(i => i.Egg is null).ToList())
         {
             World.Remove(item);
         }
@@ -125,7 +140,7 @@ internal sealed class FurnitureHost : IDisposable
     /// <summary>What the debug overlay shows for each piece.</summary>
     public IReadOnlyList<DebugPet> DebugInfo =>
         [.. World.Items.Select(i => new DebugPet(
-            i.Spec.Name, i.Current.Bounds, i.Spec.Slots > 0 ? $"{i.Occupied}/{i.Spec.Slots}" : "pen", i.Mode, i.GroundKey))];
+            i.Spec.Name, i.Current.Bounds, i.Egg is not null ? "egg" : i.Spec.Slots > 0 ? $"{i.Occupied}/{i.Spec.Slots}" : "pen", i.Mode, i.GroundKey))];
 
     /// <summary>Re-asserts that the furniture is on top of ordinary windows (pets go above it afterwards).</summary>
     public void BringToFront()
@@ -169,11 +184,26 @@ internal sealed class FurnitureHost : IDisposable
 
     private void Render(double alpha)
     {
-        if (_closed)
+        // Creating a window can run a frame of our own loop before it returns: a nested Render would make a second
+        // window for the same piece, which then stays behind on screen, never moved or closed.
+        if (_closed || _rendering)
         {
             return;
         }
 
+        _rendering = true;
+        try
+        {
+            RenderItems(alpha);
+        }
+        finally
+        {
+            _rendering = false;
+        }
+    }
+
+    private void RenderItems(double alpha)
+    {
         var added = false;
         foreach (var item in World.Items)
         {

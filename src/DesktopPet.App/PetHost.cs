@@ -5,6 +5,7 @@ using DesktopPet.App.SpriteSheet;
 using DesktopPet.App.UI;
 using DesktopPet.Core.Animation;
 using DesktopPet.Core.Behavior;
+using DesktopPet.Core.Breeding;
 using DesktopPet.Core.Chat;
 using DesktopPet.Core.Furniture;
 using DesktopPet.Core.Math;
@@ -82,8 +83,11 @@ internal sealed class PetHost : IPetControls, IDisposable
 
     public int Id { get; }
 
-    /// <summary>Built-in art colour scheme (jacket colour) for this pet.</summary>
-    public int Variant => (Id - 1) % DefaultArt.VariantCount;
+    /// <summary>The built-in rabbit's jacket colours for this pet: its own, or the one that goes with its number.</summary>
+    public JacketShades Jacket => JacketColors.For(Id, Traits.Jacket);
+
+    /// <summary>The pet as breeding sees it.</summary>
+    public BreedingPet BreedingInfo => new(Id, _simulation);
 
     public string Name => _simulation.Traits.Name;
 

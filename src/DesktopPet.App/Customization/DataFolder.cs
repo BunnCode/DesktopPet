@@ -28,6 +28,7 @@ internal sealed class DataFolder(string root)
     public string Pets => Path.Combine(Root, PetRoster.PetsFolderName);
     public string Furniture => Path.Combine(Root, FurnitureSpecFile.FolderName);
     public string Room => Path.Combine(Root, RoomStore.FileName);
+    public string PersonalityTraitsPath => Path.Combine(Root, PersonalityTraits.FileName);
 
     /// <summary>A second place for chat models (the first is the <c>models</c> folder next to the app).</summary>
     public string Models => Path.Combine(Root, "models");
@@ -138,6 +139,45 @@ internal sealed class DataFolder(string root)
     {
         EnsurePetFolder(petId);
         File.WriteAllText(PersonalityPath(petId), text + "\n");
+    }
+
+    /// <summary>Whether the pet has its own sprite sheet (an atlas.json in its sprites folder).</summary>
+    public bool HasOwnSprites(int petId) => File.Exists(Path.Combine(PetSprites(petId), SpriteSheet.SpriteAtlas.AtlasFileName));
+
+    /// <summary>Copies one pet's own sprites folder into another's (a hatchling taking after a parent).</summary>
+    public void CopySprites(int fromPetId, int toPetId)
+    {
+        var from = PetSprites(fromPetId);
+        var to = PetSprites(toPetId);
+        foreach (var file in Directory.EnumerateFiles(from, "*", System.IO.SearchOption.AllDirectories))
+        {
+            var target = Path.Combine(to, Path.GetRelativePath(from, file));
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(file, target, overwrite: true);
+        }
+    }
+
+    /// <summary>
+    /// The personality traits new pets are given, from personality-traits.json (written with the defaults when
+    /// missing). A broken or empty file gives the defaults, with the problems.
+    /// </summary>
+    public (IReadOnlyList<PersonalityTrait> Traits, IReadOnlyList<string> Errors) LoadPersonalityTraits()
+    {
+        try
+        {
+            if (!File.Exists(PersonalityTraitsPath))
+            {
+                File.WriteAllText(PersonalityTraitsPath, PersonalityTraits.Serialize(PersonalityTraits.Defaults));
+                return (PersonalityTraits.Defaults, []);
+            }
+
+            var parsed = PersonalityTraits.Parse(File.ReadAllText(PersonalityTraitsPath));
+            return parsed.Traits is { } traits ? (traits, []) : (PersonalityTraits.Defaults, parsed.Errors);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return (PersonalityTraits.Defaults, [$"couldn't be read: {e.Message}"]);
+        }
     }
 
     /// <summary>Moves a pet's whole folder to the Recycle Bin, so a removed pet (and its art) can still be restored.</summary>

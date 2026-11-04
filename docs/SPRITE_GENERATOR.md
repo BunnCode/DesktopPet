@@ -26,7 +26,7 @@ python tools/sprites/make_rabbit.py --furniture-preview f.png        # plus an 8
 
 ## Output contract (what the app relies on)
 
-- 32×32 cells. 16 columns (the most frames any animation has: `idle`) × 19 rows, one row per animation in
+- 32×32 cells. 16 columns (the most frames any animation has: `idle`) × 20 rows, one row per animation in
   **`ORDER`, which must match `Animations.All` in Core** (`DefaultArt` finds the row by the animation's index
   in `Animations.All`). Frame *n* is column *n*. Each animation needs exactly its `AnimationDef.FrameCount` frames;
   unused cells stay transparent.
@@ -35,8 +35,7 @@ python tools/sprites/make_rabbit.py --furniture-preview f.png        # plus an 8
 - Pose conventions from `docs/SPRITES.md`: `climb`/`cling`/`push` hands (and climbing feet) touch columns 30–31;
   `hang`/`shimmy` hands grip row 0; `sit_ledge` has its seat at row 23 with the legs below.
 - **Jacket colours `J`, `j`, `k` must not appear anywhere else**: `DefaultArt` recolours them per pet by exact
-  ARGB match (`DefaultArt.Jacket`, `JacketShade`, `JacketLight`). If you change them in `PAL`, change those
-  constants too.
+  ARGB match against `JacketColors.Variants[0]` in Core. If you change them in `PAL`, change that entry too.
 
 ## How it's built
 
@@ -55,6 +54,7 @@ characters, painted back to front and converted to RGBA at the end.
 | `X` | anger mark (unused so far) | `G` / `V` | grey plastic / dark screen, mat |
 | `O` / `o` | wood / wood shade | `C` / `c` | couch fabric / shade |
 | `U` / `u` | blanket / shade | `Y` | yellow (game pixels) |
+| `Q` / `q` | heart / heart shine | `A` / `a` | egg shell / speckles and shade |
 
 ### Helpers
 - `grid(rows)` pads rows to equal width. `blank()` is an empty 32×32 grid.
@@ -112,6 +112,7 @@ Returns `{animation id: [grid, ...]}`. One block per animation, each a short loc
 | `kick` | 4 | front foot lifted, leg kicked out (> < eyes, open mouth), leg up in follow-through, standing |
 | `game` | 2 | `SIT` body, arms to a controller in front, head bobbing, buttons swapping colour |
 | `bounce` | 2 | squashed with happy eyes, then stretched with arms flung wide and tall ears |
+| `love` | 2 | standing, happy eyes and blush looking ahead, head bobbing; a `HEART` and `HEART_SMALL` float in front of the face |
 
 ### Furniture (`FURNITURE`)
 Each kind is a function returning a list of frames (character grids of any size), drawn with `fill` and `border`
@@ -128,6 +129,7 @@ the couch seat, bed blanket and trampoline mat tops are 9 px up, drawn 16 DIP up
 | `bed` | 40×16 | 1 |
 | `playpen` | 56×20 | 1 (posts and rails; the inside is transparent) |
 | `trough` | 24×10 | 1 |
+| `egg` | 12×13 | 4 (still, still, top half tipped left, tipped right; built in, not written to the furniture folder; `Eggs.Spec` in Core) |
 
 ## Common edits
 

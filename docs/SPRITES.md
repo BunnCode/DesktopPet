@@ -60,6 +60,7 @@ list goes to `problems.txt` in the data folder, and the affected animations use 
 | `kick` | 4 | Kicking a ball (plays once per kick) |
 | `game` | 2 | Sitting with a controller, playing games at the TV |
 | `bounce` | 2 | Bouncing on the trampoline or the couch |
+| `love` | 2 | Courting another pet: gazing at it (it's on the side the art faces), hearts floating up |
 
 ## Conventions
 - **Facing:** draw facing right, or set `"facesLeft": true`. The game mirrors the art when the pet turns.

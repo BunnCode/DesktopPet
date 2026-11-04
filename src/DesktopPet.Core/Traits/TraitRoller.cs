@@ -23,7 +23,7 @@ public static class TraitRoller
             Neediness = new Neediness(Multiplier(random, need), Multiplier(random, need), Multiplier(random, need)),
             Behavior = new BehaviorTraits(
                 Multiplier(random, act), Multiplier(random, act), Multiplier(random, act),
-                Multiplier(random, act), Multiplier(random, act), Multiplier(random, act)),
+                Multiplier(random, act), Multiplier(random, act), Multiplier(random, act), Multiplier(random, act)),
             Chat = new ChatTraits(
                 Multiplier(random, chat), Multiplier(random, chat), Multiplier(random, chat), Multiplier(random, chat), Multiplier(random, chat)),
         };

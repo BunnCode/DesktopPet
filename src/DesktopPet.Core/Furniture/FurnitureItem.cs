@@ -58,6 +58,9 @@ public sealed class FurnitureItem
     /// <summary>The surface it stands on, or null while airborne or held.</summary>
     public string? GroundKey => IsGrounded ? Body.GroundKey : null;
 
+    /// <summary>What the egg holds, if this is an egg (<see cref="Breeding.Eggs"/>).</summary>
+    public Breeding.EggInfo? Egg { get; internal set; }
+
     /// <summary>Taken out of the world; pets heading for it give up.</summary>
     public bool IsRemoved { get; internal set; }
 

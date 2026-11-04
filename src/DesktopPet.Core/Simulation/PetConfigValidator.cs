@@ -145,6 +145,23 @@ public static class PetConfigValidator
             Range("Furniture.BounceLaunchDip", f.BounceLaunchDip, 0, 10_000);
         }
 
+        var breeding = c.Breeding;
+        if (breeding is null)
+        {
+            errors.Add("Breeding is missing.");
+        }
+        else
+        {
+            Range("Breeding.MatesPerHour", breeding.MatesPerHour, 0, 3_600);
+            Range("Breeding.CooldownHours", breeding.CooldownHours, 0, 10_000);
+            Range("Breeding.MinStat", breeding.MinStat, 0, 100);
+            Range("Breeding.ReachDip", breeding.ReachDip, 0, 100_000);
+            Range("Breeding.CourtshipSeconds", breeding.CourtshipSeconds, 0, 600);
+            Range("Breeding.ApproachSeconds", breeding.ApproachSeconds, 1, 600);
+            Range("Breeding.HatchMinutes", breeding.HatchMinutes, 0, 100_000);
+            Range("Breeding.Variation", breeding.Variation, 0, 1);
+        }
+
         var chat = c.Chat;
         if (chat is null)
         {

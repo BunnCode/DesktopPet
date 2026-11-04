@@ -19,6 +19,9 @@ sprite animation.
 - **Multiple pets:** up to 8, each with its own name, neediness, personality and (optionally) its own sprites.
 - **Furniture:** a ball, TV, couch, trampoline, bed, play pen and trough. Pets use them on their own when they need
   to. You can add your own furniture as JSON files and images. See [docs/FURNITURE.md](docs/FURNITURE.md).
+- **Eggs and babies:** now and then two happy pets standing together court each other and lay an egg. It hatches
+  into a child that takes after both parents: its numbers, a blend of their jacket colours, and one parent's
+  sprites. Pets can be fixed from the menu so they don't breed.
 - **Speech bubbles and sticky notes:** pets talk about their needs, banter with each other, tell jokes, react to
   clicks and stick notes on the window they're standing on. The text comes from a local model (Qwen3.5-2B via
   LLamaSharp), and nothing is sent anywhere. See [docs/CHAT.md](docs/CHAT.md).

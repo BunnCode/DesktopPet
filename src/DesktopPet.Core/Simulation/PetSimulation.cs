@@ -61,6 +61,7 @@ public sealed class PetSimulation
         {
             var offline = _statsUpdatedAt - save.SavedAtUtc;
             _ctx.Stats = StatsSystem.CatchUp(save.Stats, offline, config.Stats);
+            LastMatedUtc = save.LastMatedUtc;
         }
 
         UpdateWorld(snapshot);
@@ -247,7 +248,54 @@ public sealed class PetSimulation
     public bool UserAway { get; set; }
 
     /// <summary>A snapshot of what should survive a restart.</summary>
-    public SaveData CreateSave() => SaveData.From(_ctx.Stats, _clock.UtcNow);
+    public SaveData CreateSave() => SaveData.From(_ctx.Stats, _clock.UtcNow, LastMatedUtc);
+
+    // ---- Courtship (driven by Breeding.BreedingDirector) ----
+
+    /// <summary>When it last mated or hatched (from its save); null if never.</summary>
+    public DateTimeOffset? LastMatedUtc { get; private set; }
+
+    /// <summary>
+    /// Free to start courting: standing on the ground idling, walking or sitting, not in a pen, not on its way to
+    /// furniture.
+    /// </summary>
+    public bool CanCourt =>
+        _ctx.Body.Mode == BodyMode.Grounded && State is PetStateId.Idle or PetStateId.Walk or PetStateId.Sit
+        && _ctx.Pen is null && _ctx.Errand is null;
+
+    /// <summary>Courting: walking up to its partner or gazing at it.</summary>
+    public bool IsCourting => State == PetStateId.Court;
+
+    /// <summary>Courting and next to its partner (or as near as it could get).</summary>
+    public bool CourtshipArrived => IsCourting && _ctx.Courtship is { Arrived: true };
+
+    /// <summary>
+    /// Starts courting: it walks to <paramref name="meetX"/> (feet x) on its surface, then faces the way given and gazes
+    /// with hearts until <see cref="EndCourtship"/>. It gives up by itself after <paramref name="giveUpSeconds"/>.
+    /// </summary>
+    public void Court(double meetX, bool faceLeft, double giveUpSeconds)
+    {
+        _ctx.CancelErrand();
+        _ctx.Courtship = new Courtship(meetX, faceLeft, giveUpSeconds);
+        _fsm.ChangeTo(PetStateId.Court, _ctx);
+    }
+
+    /// <summary>
+    /// Ends a courtship: <paramref name="mated"/> starts its cooldown and it hops with joy; otherwise it just carries
+    /// on. Does nothing to a pet that's stopped courting already (except the cooldown).
+    /// </summary>
+    public void EndCourtship(bool mated)
+    {
+        if (mated)
+        {
+            LastMatedUtc = _clock.UtcNow;
+        }
+
+        if (IsCourting)
+        {
+            _fsm.ChangeTo(mated ? PetStateId.Happy : PetStateId.Idle, _ctx);
+        }
+    }
 
     /// <summary>
     /// Menu actions. Stats change immediately; the matching behavior plays if the pet is on the ground

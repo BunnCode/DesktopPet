@@ -6,7 +6,8 @@ namespace DesktopPet.Core.Persistence;
 /// <summary>What survives a restart. Versioned for future migrations.</summary>
 public sealed record SaveData
 {
-    public const int CurrentVersion = 1;
+    /// <summary>2 added <see cref="LastMatedUtc"/>; version 1 files load with it unset.</summary>
+    public const int CurrentVersion = 2;
 
     public int Version { get; init; } = CurrentVersion;
     public double Hunger { get; init; }
@@ -14,10 +15,13 @@ public sealed record SaveData
     public double Energy { get; init; }
     public DateTimeOffset SavedAtUtc { get; init; }
 
+    /// <summary>When it last mated or hatched (the mating cooldown runs from here); null if never.</summary>
+    public DateTimeOffset? LastMatedUtc { get; init; }
+
     public PetStats Stats => new PetStats(Hunger, Happiness, Energy).Clamped();
 
-    public static SaveData From(PetStats stats, DateTimeOffset now) =>
-        new() { Hunger = stats.Hunger, Happiness = stats.Happiness, Energy = stats.Energy, SavedAtUtc = now };
+    public static SaveData From(PetStats stats, DateTimeOffset now, DateTimeOffset? lastMated = null) =>
+        new() { Hunger = stats.Hunger, Happiness = stats.Happiness, Energy = stats.Energy, SavedAtUtc = now, LastMatedUtc = lastMated };
 }
 
 public interface ISaveStore

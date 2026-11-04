@@ -23,6 +23,7 @@ public enum PetStateId
     Push,
     GoToFurniture,
     UseFurniture,
+    Court,
 }
 
 /// <summary>

@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using DesktopPet.App.Breeding;
 using DesktopPet.App.Chat;
 using DesktopPet.App.Customization;
 using DesktopPet.App.Furniture;
@@ -10,10 +11,12 @@ using DesktopPet.App.SpriteSheet;
 using DesktopPet.App.UI;
 using DesktopPet.Core.Abstractions;
 using DesktopPet.Core.Animation;
+using DesktopPet.Core.Breeding;
 using DesktopPet.Core.Furniture;
 using DesktopPet.Core.Math;
 using DesktopPet.Core.Persistence;
 using DesktopPet.Core.Simulation;
+using DesktopPet.Core.Stats;
 using DesktopPet.Core.Traits;
 using DesktopPet.Platform.Windows;
 
@@ -45,6 +48,7 @@ public partial class App : Application
     private DebugOverlay? _overlay;
     private FurnitureHost? _furniture;
     private ChatHost? _chat;
+    private BreedingHost? _breeding;
     private Dictionary<string, FurnitureSpec> _furnitureSpecs = new(StringComparer.OrdinalIgnoreCase);
     private System.Windows.Forms.ContextMenuStrip? _furnitureMenu;
     private DispatcherTimer? _overlayTimer;
@@ -98,11 +102,12 @@ public partial class App : Application
 
         _menu = new PetMenu(
             defaultTarget: () => _lastClicked ?? _pets[0],
-            canAdd: () => _pets.Count < PetRoster.MaxPets,
+            canAdd: () => _pets.Count + (_furniture?.EggCount ?? 0) < PetRoster.MaxPets,
             canRemove: () => _pets.Count > 1,
             onAdd: AddPet,
             onRemove: pet => RemovePet((PetHost)pet),
             petFiles: (pet => EditTraits((PetHost)pet), pet => DataFolder.Open(_data.PetFolder(((PetHost)pet).Id))),
+            onFixed: (pet, isFixed) => SetFixed((PetHost)pet, isFixed),
             furniture: new FurnitureActions(
                 Kinds: () => [.. _furnitureSpecs.Values.Select(s => (s.Kind, s.Name))],
                 CanAdd: () => _furniture!.Count < FurnitureHost.MaxItems,
@@ -130,6 +135,9 @@ public partial class App : Application
         };
         var (modelPath, searched) = _data.FindModel(_config.Chat.ModelFile);
         _chat.Start(modelPath, searched);
+
+        _breeding = new BreedingHost(() => _pets, _furniture, LayEgg, Hatch) { Rules = _config.Breeding };
+        _breeding.Start();
 
         if (settings.Errors.Count > 0)
         {
@@ -159,6 +167,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         _watcher?.Dispose();
+        _breeding?.Dispose();
         SetDebugOverlay(false);
         _chat?.Dispose();
         foreach (var pet in _pets)
@@ -190,7 +199,8 @@ public partial class App : Application
     /// <param name="loaded">Its traits.json as read, or null if it has none.</param>
     /// <param name="names">Names of all pets, including ones not started yet; a newly rolled name is added.</param>
     /// <param name="dropIn">Drop in at a random spot rather than at the top centre.</param>
-    private List<string> StartPet(int id, TraitsParseResult? loaded, List<string> names, bool dropIn)
+    /// <param name="dropAt">Drop in here instead (a hatchling, where its egg was).</param>
+    private List<string> StartPet(int id, TraitsParseResult? loaded, List<string> names, bool dropIn, Vec2? dropAt = null)
     {
         var problems = new List<string>();
         _data.EnsurePetFolder(id);
@@ -212,8 +222,7 @@ public partial class App : Application
             personality = described;
         }
 
-        var variant = (id - 1) % DefaultArt.VariantCount;
-        var (atlas, layers) = SpriteAtlas.Load(_data.SpriteFolders(id), Animations.All, variant);
+        var (atlas, layers) = SpriteAtlas.Load(_data.SpriteFolders(id), Animations.All, JacketColors.For(id, traits.Jacket));
         problems.AddRange(SpriteProblems(layers, traits.Name));
 
         var pet = new PetHost(id, _config, traits, personality, new JsonFileSaveStore(_data.SavePath(id)), atlas, _desktop!, _furniture!.World)
@@ -226,7 +235,11 @@ public partial class App : Application
             _menu?.ShowFor(pet, System.Windows.Forms.Cursor.Position);
         };
 
-        if (dropIn)
+        if (dropAt is { } at)
+        {
+            pet.DropFrom(at);
+        }
+        else if (dropIn)
         {
             pet.DropFrom(RandomDropPoint());
         }
@@ -239,15 +252,21 @@ public partial class App : Application
 
     private void AddPet()
     {
-        if (_pets.Count >= PetRoster.MaxPets)
+        if (_pets.Count + (_furniture?.EggCount ?? 0) >= PetRoster.MaxPets)
         {
             return;
         }
 
-        // Also skip ids of pet folders that exist but weren't loaded (beyond the cap), so none gets overwritten.
-        var id = PetRoster.NextId(_pets.Select(p => p.Id).Concat(_data.ExistingPets()));
+        // A new pet: random numbers, then a few personality traits from the list, which nudge them.
+        var id = NewPetId();
         var names = _pets.Select(p => p.Name).ToList();
-        var problems = StartPet(id, loaded: null, names, dropIn: true); // shown last, so it's above the debug overlay if that's on
+        var (list, listProblems) = _data.LoadPersonalityTraits();
+        var (traits, personality) = PersonalityTraits.Give(TraitRoller.Roll(_config, _traitRandom, names), list, _traitRandom);
+        var problems = listProblems.Select(p => $"{PersonalityTraits.FileName} (the default list is used): {p}").ToList();
+        TryWrite(() => _data.WriteTraits(id, traits), problems);
+        TryWrite(() => _data.WritePersonality(id, personality), problems);
+        names.Add(traits.Name);
+        problems.AddRange(StartPet(id, new TraitsParseResult(traits, []), names, dropIn: true)); // shown last, so it's above the debug overlay if that's on
         if (problems.Count > 0)
         {
             ReportProblems("The new pet's files have problems", problems);
@@ -259,6 +278,98 @@ public partial class App : Application
         }
     }
 
+    /// <summary>A free pet id; also skips folders that exist but weren't loaded (beyond the cap), so none gets overwritten.</summary>
+    private int NewPetId() => PetRoster.NextId(_pets.Select(p => p.Id).Concat(_data.ExistingPets()));
+
+    // ---- Breeding ----
+
+    /// <summary>Two pets mated: the egg drops in between them, holding the child they'll have.</summary>
+    private void LayEgg(Mating mating)
+    {
+        var a = _pets.FirstOrDefault(p => p.Id == mating.ParentA);
+        var b = _pets.FirstOrDefault(p => p.Id == mating.ParentB);
+        if (a is null || b is null || _furniture is null)
+        {
+            return;
+        }
+
+        var egg = Inheritance.Egg(
+            new Parent(a.Id, a.Traits, _data.HasOwnSprites(a.Id)), new Parent(b.Id, b.Traits, _data.HasOwnSprites(b.Id)),
+            _config.Breeding, _traitRandom, DateTimeOffset.UtcNow);
+        _furniture.AddEgg(mating.EggFeet, egg);
+        BringPetsToFront();
+        _tray?.Notify($"{a.Name} and {b.Name} had an egg", $"It hatches {HatchesIn(egg)}.");
+    }
+
+    /// <summary>
+    /// An egg's time has come: the child gets a free id and name, personality traits from the list, maybe a parent's
+    /// sprites, and comes out where the egg was (on its mating cooldown, like its parents).
+    /// </summary>
+    private void Hatch(FurnitureItem item)
+    {
+        if (item.Egg is not { } egg || _furniture is null)
+        {
+            return;
+        }
+
+        _furniture.Remove(item);
+        var id = NewPetId();
+        var names = _pets.Select(p => p.Name).ToList();
+        var (list, listProblems) = _data.LoadPersonalityTraits();
+        var named = egg.Child with { Name = PetNames.Pick(_traitRandom, names) };
+        var (traits, personality) = PersonalityTraits.Give(named, list, _traitRandom);
+        var problems = listProblems.Select(p => $"{PersonalityTraits.FileName} (the default list is used): {p}").ToList();
+        var now = DateTimeOffset.UtcNow;
+        TryWrite(() => _data.WriteTraits(id, traits), problems);
+        TryWrite(() => _data.WritePersonality(id, personality), problems);
+        TryWrite(() => new JsonFileSaveStore(_data.SavePath(id)).Save(SaveData.From(PetStats.Fresh, now, lastMated: now)), problems);
+        if (egg.SpritesFrom is { } parent && _data.HasOwnSprites(parent))
+        {
+            TryWrite(() => _data.CopySprites(parent, id), problems);
+        }
+
+        names.Add(traits.Name);
+        var feet = item.Feet;
+        problems.AddRange(StartPet(id, new TraitsParseResult(traits, []), names, dropIn: false, dropAt: new Vec2(feet.X, feet.Y - 2)));
+        if (problems.Count > 0)
+        {
+            ReportProblems($"{traits.Name}'s files have problems", problems);
+        }
+        else
+        {
+            _tray?.Notify($"{egg.ParentNames}'s egg hatched: meet {traits.Name}", personality);
+        }
+    }
+
+    /// <summary>"in about 40 minutes", "any moment now".</summary>
+    private static string HatchesIn(EggInfo egg)
+    {
+        var minutes = (int)System.Math.Ceiling((egg.HatchAtUtc - DateTimeOffset.UtcNow).TotalMinutes);
+        return minutes switch
+        {
+            <= 1 => "any moment now",
+            < 90 => $"in about {minutes} minutes",
+            _ => $"in about {System.Math.Round(minutes / 60.0)} hours",
+        };
+    }
+
+    /// <summary>Fixes a pet (or undoes it) by rewriting its traits.json: a fixed pet never mates.</summary>
+    private void SetFixed(PetHost pet, bool isFixed)
+    {
+        var traits = pet.Traits with { Fixed = isFixed };
+        var problems = new List<string>();
+        TryWrite(() => _data.WriteTraits(pet.Id, traits), problems);
+        if (problems.Count > 0)
+        {
+            ReportProblems($"{pet.Name}'s traits.json couldn't be written", problems);
+            return;
+        }
+
+        pet.SetTraits(traits);
+        _tray?.Notify(isFixed ? $"{pet.Name} is fixed" : $"{pet.Name} isn't fixed any more",
+            isFixed ? "No babies from now on." : "Babies are possible again.");
+    }
+
     /// <summary>Closes the pet and moves its folder to the Recycle Bin, so it doesn't come back next time.</summary>
     private void RemovePet(PetHost pet)
     {
@@ -268,6 +379,7 @@ public partial class App : Application
         }
 
         _chat?.Forget(pet.Id);
+        _breeding?.Forget(pet.Id);
         pet.Close(save: false);
         if (_lastClicked == pet)
         {
@@ -333,6 +445,12 @@ public partial class App : Application
         var specs = new List<FurnitureSpec>();
         foreach (var (kind, result) in _data.LoadFurniture([.. Animations.All.Select(a => a.Id)]))
         {
+            if (string.Equals(kind, Eggs.Kind, StringComparison.OrdinalIgnoreCase))
+            {
+                problems.Add($@"furniture\{kind}.json: ""{Eggs.Kind}"" is the built-in egg; rename the file to use it as furniture");
+                continue;
+            }
+
             if (result.Spec is { } spec)
             {
                 specs.Add(spec);
@@ -358,6 +476,7 @@ public partial class App : Application
             }
         }
 
+        art[Eggs.Kind] = FurnitureArt.BuiltIn(Eggs.Spec) ?? [];
         _furnitureSpecs = specs.ToDictionary(s => s.Kind, StringComparer.OrdinalIgnoreCase);
         _furniture!.SetSpecs(specs, art);
         return problems;
@@ -396,6 +515,11 @@ public partial class App : Application
         var header = new System.Windows.Forms.ToolStripLabel(item.Spec.Name);
         header.Font = new System.Drawing.Font(header.Font, System.Drawing.FontStyle.Bold);
         _furnitureMenu.Items.Add(header);
+        if (item.Egg is { } laid)
+        {
+            _furnitureMenu.Items.Add(new System.Windows.Forms.ToolStripLabel($"Laid by {laid.ParentNames}. It hatches {HatchesIn(laid)}."));
+        }
+
         if (item.Spec.IsPen)
         {
             _furnitureMenu.Items.Add(new System.Windows.Forms.ToolStripLabel("Drop a pet in to keep it safe; drag it out to let it go."));
@@ -465,6 +589,12 @@ public partial class App : Application
             {
                 _chat.Rules = config.Chat; // the model file and the GPU choice only change on restart
             }
+
+            if (_breeding is not null)
+            {
+                _breeding.Rules = config.Breeding;
+            }
+
             _tray?.Notify("Settings applied", "Your changes to settings.json are live.");
         }
         else
@@ -479,7 +609,7 @@ public partial class App : Application
         var problems = new List<string>();
         foreach (var pet in _pets)
         {
-            var (atlas, layers) = SpriteAtlas.Load(_data.SpriteFolders(pet.Id), Animations.All, pet.Variant);
+            var (atlas, layers) = SpriteAtlas.Load(_data.SpriteFolders(pet.Id), Animations.All, pet.Jacket);
             pet.SetAtlas(atlas);
             problems.AddRange(SpriteProblems(layers, pet.Name));
         }
@@ -522,7 +652,7 @@ public partial class App : Application
                 break;
 
             case PetFileKind.Sprites:
-                var (atlas, layers) = SpriteAtlas.Load(_data.SpriteFolders(id), Animations.All, pet.Variant);
+                var (atlas, layers) = SpriteAtlas.Load(_data.SpriteFolders(id), Animations.All, pet.Jacket);
                 pet.SetAtlas(atlas);
                 var problems = SpriteProblems(layers, pet.Name);
                 if (problems.Count > 0)
@@ -553,7 +683,14 @@ public partial class App : Application
         }
 
         var oldName = pet.Name;
+        var oldJacket = pet.Jacket;
         pet.SetTraits(traits);
+        if (pet.Jacket != oldJacket)
+        {
+            var (atlas, _) = SpriteAtlas.Load(_data.SpriteFolders(pet.Id), Animations.All, pet.Jacket);
+            pet.SetAtlas(atlas);
+        }
+
         var renamed = oldName != traits.Name ? $"{oldName} is now called {traits.Name}. " : string.Empty;
         _tray?.Notify($"{traits.Name}'s traits applied", renamed + "Your changes to traits.json are live.");
     }

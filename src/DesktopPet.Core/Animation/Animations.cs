@@ -63,6 +63,9 @@ public static class Animations
     /// <summary>Bouncing (trampoline, jumping on the couch): arms up, legs tucked.</summary>
     public static readonly AnimationDef Bounce = new("bounce", frameCount: 2, fps: 4, loop: true);
 
+    /// <summary>Courting another pet: gazing at it, blushing, hearts floating up.</summary>
+    public static readonly AnimationDef Love = new("love", frameCount: 2, fps: 2, loop: true);
+
     /// <summary>
     /// For <see cref="SitLedge"/>: the sprite is drawn this fraction of its height lower than the feet point, so the
     /// body rests on the edge and the legs hang below it.
@@ -70,7 +73,7 @@ public static class Animations
     public const double LedgeSinkFraction = 9.0 / 32.0;
 
     public static IReadOnlyList<AnimationDef> All { get; } =
-        [Idle, Walk, Sit, Fall, Land, Held, Happy, Hang, Shimmy, IdleSad, Sleep, Eat, Climb, Cling, Push, SitLedge, Kick, Game, Bounce];
+        [Idle, Walk, Sit, Fall, Land, Held, Happy, Hang, Shimmy, IdleSad, Sleep, Eat, Climb, Cling, Push, SitLedge, Kick, Game, Bounce, Love];
 
     /// <summary>The animation with this id, or null.</summary>
     public static AnimationDef? Find(string id) => All.FirstOrDefault(a => a.Id == id);

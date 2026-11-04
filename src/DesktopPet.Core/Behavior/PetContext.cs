@@ -40,6 +40,9 @@ internal sealed class PetContext
     /// <summary>The pet was let go by the user and hasn't landed yet (landing in a pen shuts it in).</summary>
     public bool UserDropped { get; set; }
 
+    /// <summary>The courtship under way (walking up to its partner, then gazing at it), if any.</summary>
+    public Courtship? Courtship { get; set; }
+
     /// <summary>Furniture that couldn't be reached, by id, with the time it may be tried again.</summary>
     public Dictionary<int, double> Unreachable { get; } = [];
 

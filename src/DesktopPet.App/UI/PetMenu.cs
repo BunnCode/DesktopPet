@@ -31,6 +31,8 @@ internal sealed class PetMenu : IDisposable
     private readonly ToolStripLabel _neediness;
     private readonly ToolStripLabel _behavior;
     private readonly ToolStripLabel _chat;
+    private readonly ToolStripLabel _family;
+    private readonly ToolStripMenuItem _fixed;
     private readonly ToolStripMenuItem _editTraits;
     private readonly ToolStripMenuItem _openFolder;
     private readonly ToolStripMenuItem _sleep;
@@ -47,6 +49,7 @@ internal sealed class PetMenu : IDisposable
     /// <param name="onAdd">"Add a pet" chosen.</param>
     /// <param name="onRemove">"Remove this pet" chosen for the target.</param>
     /// <param name="petFiles">About submenu actions for the target: edit its traits.json, open its folder.</param>
+    /// <param name="onFixed">"Fixed" toggled for the target: it can't have babies (saved in its traits.json).</param>
     /// <param name="furniture">Furniture submenu: the kinds, adding one beside the target, removing all, the folder.</param>
     /// <param name="pushingEnabled">Initial state of "Let it push windows".</param>
     /// <param name="onPushing">"Let it push windows" toggled (applies to all pets).</param>
@@ -58,7 +61,7 @@ internal sealed class PetMenu : IDisposable
     /// <param name="onExit">Exit chosen.</param>
     public PetMenu(
         Func<IPetControls> defaultTarget, Func<bool> canAdd, Func<bool> canRemove, Action onAdd, Action<IPetControls> onRemove,
-        (Action<IPetControls> EditTraits, Action<IPetControls> OpenFolder) petFiles, FurnitureActions furniture, bool pushingEnabled, Action<bool> onPushing, (bool Enabled, Action<bool> OnChanged) chat,
+        (Action<IPetControls> EditTraits, Action<IPetControls> OpenFolder) petFiles, Action<IPetControls, bool> onFixed, FurnitureActions furniture, bool pushingEnabled, Action<bool> onPushing, (bool Enabled, Action<bool> OnChanged) chat,
         (bool Enabled, Action<bool> OnChanged) notes, (bool Enabled, Action<bool> OnChanged) reading,
         (Action EditSettings, Action OpenDataFolder, Action ExportSpriteTemplate) customize,
         Action<bool> onDebugOverlay, Action onExit)
@@ -79,6 +82,7 @@ internal sealed class PetMenu : IDisposable
         _neediness = new ToolStripLabel { TextAlign = ContentAlignment.MiddleLeft };
         _behavior = new ToolStripLabel { TextAlign = ContentAlignment.MiddleLeft };
         _chat = new ToolStripLabel { TextAlign = ContentAlignment.MiddleLeft };
+        _family = new ToolStripLabel { TextAlign = ContentAlignment.MiddleLeft };
         _editTraits = new ToolStripMenuItem("Edit traits…", null, (_, _) => petFiles.EditTraits(Target));
         _openFolder = new ToolStripMenuItem("Open its folder", null, (_, _) => petFiles.OpenFolder(Target));
         _about = new ToolStripMenuItem("About");
@@ -89,10 +93,14 @@ internal sealed class PetMenu : IDisposable
             _neediness,
             _behavior,
             _chat,
+            _family,
             new ToolStripSeparator(),
             _editTraits,
             _openFolder,
         ]);
+
+        // Not CheckOnClick: the click handler decides from the pet's traits, so the tick always shows the file's state.
+        _fixed = new ToolStripMenuItem("Fixed (no babies)", null, (_, _) => onFixed(Target, !Target.Traits.Fixed));
 
         var feed = new ToolStripMenuItem("Feed", null, (_, _) => Target.Apply(PetAction.Feed));
         var play = new ToolStripMenuItem("Play", null, (_, _) => Target.Apply(PetAction.Play));
@@ -127,7 +135,7 @@ internal sealed class PetMenu : IDisposable
         [
             _header, _hunger, _happiness, _energy, _about,
             new ToolStripSeparator(),
-            feed, play, _sleep,
+            feed, play, _sleep, _fixed,
             new ToolStripSeparator(),
             _furnitureMenu,
             _add, _remove,
@@ -187,6 +195,11 @@ internal sealed class PetMenu : IDisposable
             $"climbing {X(b.Climb)}, pushing windows {X(b.Push)}");
         var c = pet.Traits.Chat;
         _chat.Text = Wrap($"Talks: about its needs {X(c.Needy)}, with friends {X(c.Banter)}, jokes {X(c.Jokes)}. Leaves sticky notes {X(c.Notes)}. Curious about what's on screen {X(c.Curiosity)}");
+        var t = pet.Traits;
+        var parents = t.Parents is { Count: > 0 } p ? $"Child of {string.Join(" and ", p)}. " : string.Empty;
+        _family.Text = Wrap(parents + (t.Fixed ? "Fixed: it won't have babies." : $"Keen on mating {X(b.Mating)}."));
+        _fixed.Checked = t.Fixed;
+        _fixed.Text = $"{pet.Name} is fixed (no babies)";
         RefreshFurniture(pet);
         _add.Enabled = _canAdd();
         _remove.Enabled = _canRemove();

@@ -50,6 +50,10 @@ PAL = {
     'U': (0x5C, 0x8E, 0xD6),  # blanket
     'u': (0x41, 0x6A, 0xAE),  # blanket shade
     'Y': (0xF2, 0xC8, 0x4A),  # yellow (game pixels)
+    'Q': (0xE8, 0x4A, 0x6A),  # hearts
+    'q': (0xFF, 0x9E, 0xB4),  # heart shine
+    'A': (0xF4, 0xEC, 0xD8),  # egg shell
+    'a': (0xD8, 0xCC, 0xB0),  # egg shell shade
 }
 
 
@@ -368,6 +372,20 @@ Z_BIG = grid([
     ".Z..",
     "ZZZZ",
 ])
+HEART = grid([
+    ".KK.KK.",
+    "KQqKQQK",
+    "KQQQQQK",
+    ".KQQQK.",
+    "..KQK..",
+    "...K...",
+])
+HEART_SMALL = grid([
+    "KK.KK",
+    "KQKQK",
+    ".KQK.",
+    "..K..",
+])
 PAD = grid([  # game controller
     ".KKKKKK.",
     "KGRGGLGK",
@@ -587,6 +605,17 @@ def frames():
         return f.grid()
 
     a['bounce'] = [bounce(0), bounce(1)]
+
+    # Courting: gazing ahead (at its partner, on the right), blushing, hearts floating up in front of its face.
+    def love(i):
+        f = standing(head(eye='happy', mouth_kind='smile', blush=True, look=1), head_dy=i)
+        if i == 0:
+            f.part(HEART, 25, 6).part(HEART_SMALL, 27, 0)
+        else:
+            f.part(HEART, 25, 3).part(HEART_SMALL, 26, 11)
+        return f.grid()
+
+    a['love'] = [love(0), love(1)]
     return a
 
 
@@ -739,8 +768,33 @@ def trough():
     return [c]
 
 
+def egg():
+    """12x13, 4 frames: a speckled egg standing still, then wobbling left and right (its top half shifted)."""
+    rows = [(5, 6), (4, 7), (3, 8), (3, 8), (2, 9), (2, 9), (2, 9), (2, 9), (2, 9), (3, 8), (4, 7)]  # rows 1-11
+    out = []
+    for i in range(4):
+        tilt = [0, 0, -1, 1][i]
+        c = canvas(12, 13)
+
+        def shift(y):
+            return tilt if y <= 5 else 0
+
+        for y, (x0, x1) in enumerate(rows, start=1):
+            fill(c, x0 + shift(y), y, x1 + shift(y), y, 'A')
+        for y, (x0, x1) in enumerate(rows, start=1):
+            if y >= 6:
+                c[y][x1] = 'a'                   # shade on the right
+        for (x, y) in ((6, 4), (4, 6), (7, 8), (5, 10)):
+            c[y][x + shift(y)] = 'a'             # speckles
+        outlined(c)
+        c[3][5 + tilt] = 'w'                     # shine
+        out.append(c)
+    return out
+
+
 FURNITURE = {
     'ball': ball, 'tv': tv, 'couch': couch, 'trampoline': trampoline, 'bed': bed, 'playpen': playpen, 'trough': trough,
+    'egg': egg,
 }
 
 
@@ -757,7 +811,7 @@ def render_strip(frames_):
 
 
 ORDER = ['idle', 'walk', 'sit', 'fall', 'land', 'held', 'happy', 'hang', 'shimmy',
-         'idle_sad', 'sleep', 'eat', 'climb', 'cling', 'push', 'sit_ledge', 'kick', 'game', 'bounce']
+         'idle_sad', 'sleep', 'eat', 'climb', 'cling', 'push', 'sit_ledge', 'kick', 'game', 'bounce', 'love']
 
 
 def render(anims):

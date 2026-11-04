@@ -1,4 +1,5 @@
 using DesktopPet.Core.Abstractions;
+using DesktopPet.Core.Breeding;
 using DesktopPet.Core.Input;
 using DesktopPet.Core.Math;
 using DesktopPet.Core.Physics;
@@ -44,8 +45,11 @@ public sealed class FurnitureWorld
     /// <summary>The furniture in the world, oldest first.</summary>
     public IReadOnlyList<FurnitureItem> Items => _items;
 
-    /// <summary>The kinds that can be placed, in menu order.</summary>
-    public IReadOnlyList<FurnitureSpec> Specs => [.. _specs.Values];
+    /// <summary>The kinds that can be placed, in menu order (not the egg).</summary>
+    public IReadOnlyList<FurnitureSpec> Specs => [.. _specs.Values.Where(s => s.Kind != Eggs.Kind)];
+
+    /// <summary>The eggs in the world, oldest first.</summary>
+    public IEnumerable<FurnitureItem> EggItems => _items.Where(i => i.Egg is not null);
 
     /// <summary>Goes up whenever furniture is added, removed or put down somewhere new, so the host knows to save.</summary>
     public int Version { get; private set; }
@@ -67,7 +71,7 @@ public sealed class FurnitureWorld
 
     /// <summary>
     /// The current definitions (live reload). Furniture of a kind that's still defined takes the new definition;
-    /// furniture of a kind that's gone is removed.
+    /// furniture of a kind that's gone is removed. The egg is built in and always stays.
     /// </summary>
     public void SetSpecs(IEnumerable<FurnitureSpec> specs)
     {
@@ -77,6 +81,8 @@ public sealed class FurnitureWorld
         {
             _specs[spec.Kind] = spec;
         }
+
+        _specs[Eggs.Kind] = Eggs.Spec;
 
         foreach (var item in _items.ToList())
         {
@@ -110,6 +116,16 @@ public sealed class FurnitureWorld
         item.UpdateFrame(snap: true);
         _items.Add(item);
         Version++;
+        return item;
+    }
+
+    /// <summary>Lays an egg at <paramref name="feet"/>; it drops onto whatever is below.</summary>
+    public FurnitureItem AddEgg(Vec2 feet, EggInfo egg)
+    {
+        ArgumentNullException.ThrowIfNull(egg);
+        _specs[Eggs.Kind] = Eggs.Spec;
+        var item = Add(Eggs.Kind, feet)!;
+        item.Egg = egg;
         return item;
     }
 
@@ -296,7 +312,7 @@ public sealed class FurnitureWorld
     // ---- Saving ----
 
     public RoomSave CreateSave() =>
-        new() { Items = [.. _items.Select(i => new RoomItem(i.Kind, System.Math.Round(i.Feet.X), System.Math.Round(i.Feet.Y)))] };
+        new() { Items = [.. _items.Select(i => new RoomItem(i.Kind, System.Math.Round(i.Feet.X), System.Math.Round(i.Feet.Y), i.Egg))] };
 
     /// <summary>Puts saved furniture back (dropped from where it was, so it settles on whatever is there now).</summary>
     public void Load(RoomSave save)
@@ -304,9 +320,22 @@ public sealed class FurnitureWorld
         ArgumentNullException.ThrowIfNull(save);
         foreach (var saved in save.Items ?? [])
         {
-            if (saved?.Kind is { } kind && double.IsFinite(saved.X) && double.IsFinite(saved.Y))
+            if (saved?.Kind is not { } kind || !double.IsFinite(saved.X) || !double.IsFinite(saved.Y))
             {
-                Add(kind, new Vec2(saved.X, saved.Y - 1));
+                continue;
+            }
+
+            var feet = new Vec2(saved.X, saved.Y - 1);
+            if (string.Equals(kind, Eggs.Kind, StringComparison.OrdinalIgnoreCase))
+            {
+                if (saved.Egg is { Child: not null, Parents: not null } egg)
+                {
+                    AddEgg(feet, egg);
+                }
+            }
+            else
+            {
+                Add(kind, feet);
             }
         }
 

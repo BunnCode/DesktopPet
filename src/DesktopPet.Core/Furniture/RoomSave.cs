@@ -1,9 +1,12 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using DesktopPet.Core.Breeding;
 
 namespace DesktopPet.Core.Furniture;
 
-/// <summary>Where one piece of furniture was: its kind and feet point (physical pixels).</summary>
-public sealed record RoomItem(string Kind, double X, double Y);
+/// <summary>Where one piece of furniture was: its kind and feet point (physical pixels), and for an egg what it holds.</summary>
+public sealed record RoomItem(
+    string Kind, double X, double Y, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] EggInfo? Egg = null);
 
 /// <summary>The furniture that survives a restart (<c>room.json</c>). Versioned for future migrations.</summary>
 public sealed record RoomSave

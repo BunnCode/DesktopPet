@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using DesktopPet.Core.Animation;
+using DesktopPet.Core.Traits;
 using DesktopPet.Core.Rendering;
 
 namespace DesktopPet.App.SpriteSheet;
@@ -36,8 +37,8 @@ internal sealed class SpriteAtlas
     /// <summary>How many animations use custom art.</summary>
     public int CustomCount { get; }
 
-    public static SpriteAtlas CreateDefault(IEnumerable<AnimationDef> animations, int variant = 0) =>
-        new(animations.ToDictionary(a => a.Id, a => BuiltIn(a, variant)), customCount: 0);
+    public static SpriteAtlas CreateDefault(IEnumerable<AnimationDef> animations, JacketShades? jacket = null) =>
+        new(animations.ToDictionary(a => a.Id, a => BuiltIn(a, jacket)), customCount: 0);
 
     /// <summary>
     /// Loads <c>atlas.json</c> and its PNGs from each folder, earlier folders winning per animation. Animations no folder
@@ -45,9 +46,9 @@ internal sealed class SpriteAtlas
     /// </summary>
     /// <param name="folders">Sprite folders, most specific first (the pet's own, then the shared one).</param>
     /// <param name="animations">The game's animations.</param>
-    /// <param name="variant">Built-in art colour scheme for animations without custom art (one per pet).</param>
+    /// <param name="jacket">The built-in rabbit's jacket colours for animations without custom art (one per pet).</param>
     public static (SpriteAtlas Atlas, IReadOnlyList<SpriteLayer> Layers) Load(
-        IReadOnlyList<string> folders, IReadOnlyList<AnimationDef> animations, int variant = 0)
+        IReadOnlyList<string> folders, IReadOnlyList<AnimationDef> animations, JacketShades? jacket = null)
     {
         var layers = new List<(SpriteLayer Layer, Func<string, BitmapSource?> Image)>();
         foreach (var folder in folders)
@@ -67,7 +68,7 @@ internal sealed class SpriteAtlas
             }
             else
             {
-                frames[a.Id] = BuiltIn(a, variant);
+                frames[a.Id] = BuiltIn(a, jacket);
             }
         }
 
@@ -114,9 +115,9 @@ internal sealed class SpriteAtlas
         return (new SpriteLayer(folder, spec), Image);
     }
 
-    private static AtlasFrame[] BuiltIn(AnimationDef animation, int variant) =>
+    private static AtlasFrame[] BuiltIn(AnimationDef animation, JacketShades? jacket) =>
         [.. Enumerable.Range(0, animation.FrameCount)
-            .Select(i => new AtlasFrame(ToBitmap(DefaultArt.Frame(animation.Id, i, variant), DefaultArt.FrameSize), FacesLeft: false, Smooth: false))];
+            .Select(i => new AtlasFrame(ToBitmap(DefaultArt.Frame(animation.Id, i, jacket), DefaultArt.FrameSize), FacesLeft: false, Smooth: false))];
 
     internal static BitmapFrame? TryDecode(string path)
     {

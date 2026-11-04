@@ -62,6 +62,8 @@ public static class PetTraitsFile
             Neediness = traits.Neediness ?? new Neediness(),
             Behavior = traits.Behavior ?? new BehaviorTraits(),
             Chat = traits.Chat ?? new ChatTraits(),
+            Jacket = string.IsNullOrWhiteSpace(traits.Jacket) ? null : traits.Jacket.Trim(),
+            Parents = traits.Parents is { Count: > 0 } parents ? new Chat.TextList(parents.Where(p => !string.IsNullOrWhiteSpace(p)).Select(p => p.Trim())) : null,
         };
         var errors = Validate(traits);
         return new TraitsParseResult(errors.Count == 0 ? traits : null, errors);
@@ -102,6 +104,7 @@ public static class PetTraitsFile
         Range("Behavior.Sleep", b.Sleep);
         Range("Behavior.Climb", b.Climb);
         Range("Behavior.Push", b.Push);
+        Range("Behavior.Mating", b.Mating);
         if (b.Idle + b.Walk + b.Sit <= 0)
         {
             errors.Add("Behavior.Idle, Behavior.Walk and Behavior.Sit can't all be 0.");
@@ -113,6 +116,11 @@ public static class PetTraitsFile
         Range("Chat.Jokes", c.Jokes);
         Range("Chat.Notes", c.Notes);
         Range("Chat.Curiosity", c.Curiosity);
+
+        if (traits.Jacket is { } jacket && !JacketColors.TryParse(jacket, out _))
+        {
+            errors.Add($"Jacket must be a colour like \"#3E455A\" (it is \"{jacket}\").");
+        }
 
         return errors;
     }

@@ -31,10 +31,10 @@ This document describes the design **as built**, the status of each milestone, a
 | M11 | Furniture, defined in user-editable files | Done | `0bcd1d0` |
 | M12 | Speech bubbles and sticky notes (two behaviors) from a shared local LLM (Qwen3.5-2B) | Done | `1045cdf` |
 | M12b | Reading on-screen text (Windows OCR) and referring to it when talking or writing notes | Done | `630c904` |
-| M13 | Breeding: eggs that hatch into mixed children | Planned | |
+| M13 | Breeding: courtship, eggs that hatch into mixed children, fixing pets, personality traits list | Done | |
 | M14 | Death and gravestones | Planned | |
 
-467 unit tests, all in `DesktopPet.Core.Tests`.
+490 unit tests, all in `DesktopPet.Core.Tests`.
 
 ### Changes from the original plan
 
@@ -83,6 +83,14 @@ This document describes the design **as built**, the status of each milestone, a
 - **M12 prompts:** the pet's mood only goes into lines about its needs (with it everywhere, a 2B model turned every
   joke into a complaint), and each note gets one concrete topic (given "a reminder, a kind word or a silly thought",
   it wrote that phrase back).
+- **M13 fixing pets** (requested 2026-11-04): the menu's "*name* is fixed (no babies)" toggle writes `Fixed` to the
+  pet's `traits.json`; hand-editing it works too. Not in the original plan. It's a toggle, so a mistake can be undone.
+- **M13 personality traits for every new pet:** *Add a pet* uses the same generator as hatching (the user chose the
+  proposal). Old pets keep their `personality.txt`.
+- **M13 jackets:** `traits.json` has an optional `Jacket` colour; without it the pet wears its number's colour as
+  before. Hatchlings get a blend of their parents' (half and half, ±14 per channel).
+- **M13 courtship** brings the pair together: both walk to a point beside each other on their surface and face each
+  other before the hearts.
 
 ---
 
@@ -345,6 +353,9 @@ push a window off screen.
 - **Reading the screen:** private browser windows are only excluded when their title says so (Edge and Firefox do;
   Chrome may not). Text in images and games is read too (it's OCR). Text drawn with very low contrast, or tiny text,
   is missed. The exe is larger, because the Windows SDK projection (`Microsoft.Windows.SDK.NET`) comes with it.
+- **Eggs are drawn behind the pets** (they're furniture windows), so an egg laid between two pets is half hidden until
+  they move away.
+- **Only one courtship at a time,** and only between pets on the same surface.
 - **Pets beside furniture face it from the side** (the art is a side view), so TV watchers stand left and right of the
   TV rather than in front of it.
 
@@ -416,7 +427,7 @@ jacket colour.
 - The old procedural `PlaceholderArt` was removed. In Core, `SpriteSheetSpec.UsingPlaceholder` became `UsingDefault`.
 
 ## Planned: M10–M14
-Requested 2026-11-03. M10, M11, M12 and M12b are done; the rest aren't started. **Suggested order:** M10 first, because M12 and M13 build on per-pet traits. M11
+Requested 2026-11-03. M10, M11, M12, M12b and M13 are done; M14 isn't started. **Suggested order:** M10 first, because M12 and M13 build on per-pet traits. M11
 and M12 don't depend on each other. M13 reuses M11's world objects for the egg. M14 goes last, because its warnings use
 M12's needy chat.
 
@@ -590,22 +601,41 @@ every line correct at 125%, and the real model's remarks and notes were about th
   it's not logged or saved. The line the pet says or writes is remembered like any other (last 5) for the session.
 - **Settings lists** are `TextList`, a list that compares by its items, so `PetConfig` stays equal after a round trip
   through `settings.json`.
-### M13: breeding (planned)
-For now, a rare, automatic mating routine. This will be expanded later.
-- **Mating:** two pets close together, both with good stats, past a cooldown, with a small chance per hour. A short
-  courtship (hearts), then an egg appears between them. It needs no approval from the user. Rarity and an off switch
-  are in `settings.json`.
-- **Egg:** a world object (like furniture) that can be dragged and is saved. It hatches after a set time from
-  `settings.json` into a new pet with its own folder and a new random name. **Children hatch fully grown;** growing up
-  comes later.
-- **The child:** each number (neediness, behaviour traits, chat frequencies) comes from one parent or the average,
-  with a little random variation. With the built-in rabbit, the child's colours blend the parents'. With custom art,
-  the child takes one parent's sheet.
-- **Personality:** the child's prompt starts out random, built from a few traits drawn from a list (easily content,
-  voracious, lazy, extremely interested in mating, and similar). The list is a user-editable file. Each trait also
-  nudges the matching numbers: voracious raises hunger decay, lazy raises Sit and Sleep weights, interested in mating
-  raises the mating chance. Proposed: new pets from *Add a pet* use the same generator.
-- **Pet cap:** eggs count toward the cap of 8, and there's no mating at the cap.
+### M13: breeding (done)
+Built 2026-11-04. A rare, automatic mating routine (to be expanded later). Checked live with the rates turned up: two
+pairs courted and laid eggs within 30 s, the cap stopped a third, both eggs hatched on time into pets with blended
+jackets, their parents' names and drawn personality traits, and the user's data folder was restored afterwards. The
+live check found furniture windows being doubled when an egg was added from a timer (a nested render); fixed.
+- **Mating** (Core `BreedingDirector`, ticked by the App's `BreedingHost` every 100 ms): two pets on the same surface
+  with their feet within `ReachDip` (160), both idling, walking or sitting (not penned, not on a furniture trip, not
+  held), every stat at least `MinStat` (60), neither fixed, both past `CooldownHours` (24, saved as `LastMatedUtc` in
+  `save.json`, which is now version 2), the user not away, and room under the cap. Each such pair has a chance of
+  `MatesPerHour` (0.5) × the geometric mean of their `Mating` traits per hour. No approval from the user.
+- **Courtship:** one at a time. Both walk to points beside each other, face each other and play `love` (gazing,
+  blushing, hearts). Once both are there, after `CourtshipSeconds` (6) the egg drops in between them and they hop
+  with joy. Picking one up, it falling, or not meeting within `ApproachSeconds` (15) calls it off with no egg and no
+  cooldown.
+- **Egg:** built-in furniture (`Eggs.Spec`, 24×26 DIP, wobbling; not offered in the Furniture menu, never removed by
+  "Remove all furniture" or by deleting furniture files). It can be dragged and thrown, is saved in `room.json` with
+  what it holds, and hatches after `HatchMinutes` (60), counted in real time, so an egg due while the app was closed
+  hatches at startup. Right-click: who laid it, when it hatches, Remove.
+- **The child** (`Inheritance`): each number (neediness, behaviour including `Mating`, chat) comes from one parent or
+  their average (a third each), times a factor within ÷/× (1 + `Variation`) (0.15). The jacket colour blends the
+  parents'. The art comes from one parent at random: if that one has its own sprite sheet, it's copied into the
+  child's folder; otherwise the child uses the shared or built-in art. `traits.json` records its `Parents`.
+- **Hatching:** a new pet folder with a free id and a new name (avoiding all pets), its traits, a personality from the
+  trait list, a fresh save already on the mating cooldown, then it drops in where the egg was. Children hatch fully
+  grown; growing up comes later.
+- **Personality traits** (`PersonalityTraits`, user-editable `personality-traits.json`, written with 22 defaults when
+  missing; a broken file falls back to the defaults and is reported): each has words ("is voracious", "is a bit
+  lazy", "is extremely interested in mating", "is easily content", …) and nudges (factors on named numbers: voracious
+  Hunger ×1.6, lazy Sit and Sleep ×1.6 and Walk ×0.7, interested in mating Mating ×2.5). A new pet gets 2 or 3, never
+  two that pull a number opposite ways; they nudge its numbers and make its personality sentence ("Kit is a little
+  grey rabbit who is voracious and loves climbing."). Used for hatched pets and for *Add a pet*.
+- **Fixing:** the menu item "*name* is fixed (no babies)" sets `Fixed` in the pet's `traits.json` (or clears it).
+  About shows the parents, and whether it's fixed or how keen it is on mating.
+- **Pet cap:** pets plus eggs are at most 8: no mating and no *Add a pet* at the cap.
+- **Off switch and tuning:** `settings.json` under `Breeding` (`Enabled` and the numbers above).
 
 ### M14: death (planned)
 Pets whose needs go unmet for long enough die, leaving a gravestone.
