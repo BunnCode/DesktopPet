@@ -239,7 +239,7 @@ the Recycle Bin.
 
 ## Gotchas
 
-- A running pet locks `bin/` and the build fails: ask before closing the user's instance.
+- A running pet locks `bin/` and the build fails: closing it to rebuild is fine (allowed for testing; see PLAN.md, Testing).
 - Starting the app migrates old saves in the real data folder for good; back the folder up before live checks that
   could change it.
 - `DesktopSource` ignores its own process's windows, so live checks need test windows from another process.

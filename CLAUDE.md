@@ -14,7 +14,8 @@ change. The built-in sprite generator (`tools/sprites/make_rabbit.py`) is docume
 - `DesktopPet.Core` stays free of WPF/Win32 references. Game logic goes there, with unit tests against `FakeDesktop`.
   The Windows layer and App stay thin glue.
 - Build and test: `dotnet build DesktopPet.slnx` and `dotnet test DesktopPet.slnx` (warnings are errors).
-- A running pet locks `src/DesktopPet.App/bin`; ask before closing the user's instance.
+- A running pet locks `src/DesktopPet.App/bin`. Starting and stopping the pet app for testing (including closing the
+  user's running instance to rebuild) is allowed without asking; back up the data folder first if a check could change it.
 - Don't drive the user's real mouse (synthetic input) without asking first.
 - Live checks against the real desktop need test windows from a separate process: `DesktopSource` ignores its own
   process's windows.
