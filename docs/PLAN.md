@@ -325,7 +325,7 @@ push a window off screen.
   settings, Open data folder, Export sprite template), Debug overlay, Exit. Right-clicking furniture offers Remove.
 - **Debug overlay:** click-through, one per monitor. Floors green, window tops orange, walls blue (screen edges dotted),
   hang bars dashed magenta, the current surface yellow, plus the pet box, state and a summary line.
-- **Data folder** `%LOCALAPPDATA%\DesktopPet\`: `settings.json`, `sprites\` (shared), `sprite-template\`,
+- **Data folder** `data\`: `settings.json`, `sprites\` (shared), `sprite-template\`,
   `problems.txt`, `furniture\` (a `.json` and image per kind), `room.json` (where the furniture stands), `models\`
   (optional second place for the chat model), and
   `pets\<n>\` per pet: `save.json` (stats, dates and its traits), `personality.txt`, `sprites\`.
@@ -388,7 +388,7 @@ push a window off screen.
 
 ## M8: settings file and real sprite sheets (done)
 Chosen and built 2026-11-03. Checked live: a dropped-in sprite sheet and edited settings applied within about a second,
-and an invalid value was rejected while the pet kept running. Everything customizable lives in the data folder `%LOCALAPPDATA%\DesktopPet\` next to `save.json`.
+and an invalid value was rejected while the pet kept running. Everything customizable lives in the data folder `data\` next to `save.json`.
 
 **Settings (`settings.json`)**
 - The whole `PetConfig` (with `StatRules` nested) as JSON. Written with the defaults on first run.

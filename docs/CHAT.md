@@ -96,7 +96,7 @@ the pets carry on without words and a notification says where it was looked for.
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `ModelFile` | `Qwen3.5-2B-Q6_K.gguf` | A file name (looked for in `models\` next to the app, then in `%LOCALAPPDATA%\DesktopPet\models\`) or a full path. Any GGUF chat model in the Qwen (ChatML) format works. Applies on restart |
+| `ModelFile` | `Qwen3.5-2B-Q6_K.gguf` | A file name (looked for in `models\` next to the app, then in `data\models\`) or a full path. Any GGUF chat model in the Qwen (ChatML) format works. Applies on restart |
 | `UseGpu` | `true` | Run on the graphics card through Vulkan (any recent NVIDIA, AMD or Intel card). Without a usable card it runs on the processor and says so. Applies on restart |
 | `MaxTokens`, `Temperature` | 60, 0.8 | Longest reply, and how wild the wording is |
 | `ReplyTimeoutSeconds` | 25 | A reply that takes longer is dropped |

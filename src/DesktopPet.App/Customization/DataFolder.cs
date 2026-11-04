@@ -10,14 +10,53 @@ using Microsoft.VisualBasic.FileIO;
 namespace DesktopPet.App.Customization;
 
 /// <summary>
-/// <c>%LOCALAPPDATA%\DesktopPet</c>: settings.json, the shared sprites folder, the exported sprite template,
+/// The <c>data</c> folder next to the executable (or, when run from a build inside the repo, the repo's <c>data</c>
+/// folder, so cleaning the build output keeps it): settings.json, the shared sprites folder, the exported sprite template,
 /// <c>pets\n\</c>, one folder per pet with its save.json (stats and traits), personality.txt and own sprites, the furniture
 /// definitions and art in <c>furniture\</c>, and where the furniture stands in room.json.
 /// </summary>
 internal sealed class DataFolder(string root)
 {
-    public static DataFolder Default { get; } =
-        new(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DesktopPet"));
+    public static DataFolder Default { get; } = new(DefaultRoot());
+
+    private static string DefaultRoot()
+    {
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "DesktopPet.slnx")))
+            {
+                return Path.Combine(dir.FullName, "data");
+            }
+        }
+
+        return Path.Combine(AppContext.BaseDirectory, "data");
+    }
+
+    /// <summary>One-time move of the old <c>%LOCALAPPDATA%\DesktopPet</c> data into this folder, if this one doesn't exist yet.</summary>
+    public void MigrateFromAppData()
+    {
+        var old = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DesktopPet");
+        if (Directory.Exists(Root) || !Directory.Exists(old))
+        {
+            return;
+        }
+
+        CopyDirectory(old, Root);
+    }
+
+    private static void CopyDirectory(string from, string to)
+    {
+        Directory.CreateDirectory(to);
+        foreach (var file in Directory.GetFiles(from))
+        {
+            File.Copy(file, Path.Combine(to, Path.GetFileName(file)));
+        }
+
+        foreach (var dir in Directory.GetDirectories(from))
+        {
+            CopyDirectory(dir, Path.Combine(to, Path.GetFileName(dir)));
+        }
+    }
 
     public string Root { get; } = root;
 

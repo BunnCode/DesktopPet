@@ -1,7 +1,7 @@
 # Custom sprites
 
 DesktopPet draws every animation with its built-in chibi rabbit unless you give it your own. Custom art lives in
-`%LOCALAPPDATA%\DesktopPet\sprites\` (menu → Customize → Open data folder) and **reloads as soon as you save**.
+`data\sprites\` (menu → Customize → Open data folder) and **reloads as soon as you save**.
 
 ## Quick start
 1. Menu → Customize → **Export sprite template**. This writes `template.png` (the built-in rabbit art, one row per

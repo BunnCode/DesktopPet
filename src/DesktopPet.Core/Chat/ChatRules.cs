@@ -19,10 +19,10 @@ public sealed record ChatRules
     public bool UseGpu { get; init; } = true;
 
     /// <summary>Longest reply, in tokens (a token is about three quarters of a word).</summary>
-    public int MaxTokens { get; init; } = 60;
+    public int MaxTokens { get; init; } = 60*3;
 
     /// <summary>Randomness of the wording: 0 is always the likeliest words, 1 and above is wilder.</summary>
-    public double Temperature { get; init; } = 0.8;
+    public double Temperature { get; init; } = 1;
 
     /// <summary>A reply that takes longer than this is dropped.</summary>
     public double ReplyTimeoutSeconds { get; init; } = 25;
@@ -73,16 +73,16 @@ public sealed record ChatRules
     public bool NotesEnabled { get; init; } = true;
 
     /// <summary>Notes per hour while the pet stands on a window.</summary>
-    public double NotesPerHour { get; init; } = 2;
+    public double NotesPerHour { get; init; } = 8;
 
     /// <summary>At most this many sticky notes on screen at once.</summary>
-    public int MaxNotes { get; init; } = 3;
+    public int MaxNotes { get; init; } = 16;
 
     /// <summary>At least this long between two notes from any pets.</summary>
-    public double NoteGapSeconds { get; init; } = 120;
+    public double NoteGapSeconds { get; init; } = 30;
 
     /// <summary>At least this long between two notes from the same pet.</summary>
-    public double PetNoteGapSeconds { get; init; } = 600;
+    public double PetNoteGapSeconds { get; init; } = 120;
 
     // ---- Reading the screen (used by both behaviors) ----
 
@@ -96,7 +96,7 @@ public sealed record ChatRules
     public double RemarksPerHour { get; init; } = 4;
 
     /// <summary>Chance that a note written on a window is about what the pet reads there (otherwise a usual topic).</summary>
-    public double NoteReadChance { get; init; } = 0.4;
+    public double NoteReadChance { get; init; } = 1;
 
     /// <summary>A pet this close (DIP) to a window's side counts as beside it, and reads it.</summary>
     public double ReadReachDip { get; init; } = 40;

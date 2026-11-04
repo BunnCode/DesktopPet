@@ -489,3 +489,6 @@ $RECYCLE.BIN/
 
 # Chat model (M12): downloaded by tools/models/get-model.ps1, too big for git
 /models/
+
+# Pet data (saves, settings, sprites)
+/data/

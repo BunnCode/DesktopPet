@@ -68,7 +68,7 @@ public static class ChatPrompts
 
         text.Append('\n')
             .Append("Reply with only the words ").Append(name).Append(" says out loud: one or two short, casual sentences, ")
-            .Append("under 25 words. No emojis, no hashtags, no quotation marks, no actions between asterisks.");
+            .Append("under 75 words.");
         return text.ToString();
     }
 
@@ -97,7 +97,7 @@ public static class ChatPrompts
     public static string Answer(string other, string line) =>
         $"Your friend {other} just said to you: \"{line}\" Answer {other}.";
 
-    public const string Joke = "Tell the user a short, silly joke about rabbits, carrots or computers. Say the joke itself, with its punchline.";
+    public const string Joke = "Tell the user a short, silly joke about whatever the other pets have been talking about recently.";
 
     /// <summary>
     /// For a sticky note, which is written, not spoken: who the pet is, and that the answer is the note's text alone.

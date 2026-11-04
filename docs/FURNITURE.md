@@ -26,7 +26,7 @@ New defaults in later versions (like the breeding pill) are added to your furnit
 
 ## Making your own
 
-Each kind is a JSON file in `%LOCALAPPDATA%\DesktopPet\furniture\` with its image next to it. The file name is the
+Each kind is a JSON file in `data\furniture\` with its image next to it. The file name is the
 kind (`ball.json` is the ball). Edits apply as soon as you save; problems show in a notification and in
 `problems.txt`, and a broken file keeps its last good version. Delete a file to remove that kind (and all of it from the
 room); delete the whole folder to get the defaults back on the next start.

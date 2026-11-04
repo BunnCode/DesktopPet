@@ -68,6 +68,7 @@ public partial class App : Application
             return;
         }
 
+        _data.MigrateFromAppData();
         _data.EnsureExists();
         var problems = new List<string>(_data.MigrateLegacySaves());
         problems.AddRange(_data.MigrateTraitsFiles());

@@ -4,6 +4,8 @@ variants: base (4 pets, furniture, egg, grave), needy (stats low so they use fur
 """
 import json
 import os
+import re
+import shutil
 import sys
 from datetime import datetime, timedelta, timezone
 
@@ -12,14 +14,6 @@ now = datetime.now(timezone.utc)
 iso = lambda t: t.isoformat()  # noqa: E731
 FLOOR = 1380
 
-pets = {
-    1: ("Mabel", "Cheerful and nosy; loves carrots and naps in sunbeams."),
-    2: ("Otis", "A grumpy old soul who secretly loves cuddles."),
-    3: ("Juniper", "Bouncy, curious and always up to something."),
-    4: ("Biscuit", "Sleepy and sweet; tells terrible jokes."),
-}
-
-
 def write(path, data):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
@@ -27,22 +21,28 @@ def write(path, data):
 
 
 stats = {"base": (88, 90, 92), "needy": (40, 35, 30), "court": (95, 97, 95)}[variant]
-for pid, (name, personality) in pets.items():
-    folder = os.path.join(root, "pets", str(pid))
+# The pets are the ones in publish/data/pets (their traits, personalities and sprites), with the stats reset.
+SRC = os.path.join(os.path.dirname(__file__), "..", "..", "publish", "data", "pets")
+for n, pid in enumerate(sorted(os.listdir(SRC), key=int)):
+    folder = os.path.join(root, "pets", pid)
+    shutil.copytree(os.path.join(SRC, pid), folder, dirs_exist_ok=True)
+    path = os.path.join(folder, "save.json")
+    text = open(path, encoding="utf-8").read()
     h, hap, e = stats
-    write(os.path.join(folder, "traits.json"), {"Name": name, "Fixed": False})
-    write(os.path.join(folder, "personality.txt"), personality)
-    write(os.path.join(folder, "save.json"), {
-        "Version": 3, "Hunger": h + pid, "Happiness": hap - pid, "Energy": e - pid * 2,
-        "SavedAtUtc": iso(now), "BornUtc": iso(now - timedelta(days=12 + pid)),
-    })
+    for key, val in (("Hunger", h - n), ("Happiness", hap - n), ("Energy", e - n * 2)):
+        text = re.sub(rf'^  "{key}": .*,', f'  "{key}": {val},', text, flags=re.M)
+    text = re.sub(r'^  "SavedAtUtc": .*,', f'  "SavedAtUtc": "{iso(now)}",', text, flags=re.M)
+    text = re.sub(r'^  "(LastMatedUtc|DiedUtc|DiedOf)": .*\n', "", text, flags=re.M)
+    text = re.sub(r'("Hunger": )1000,', r"\g<1>1,", text)  # no pet starves during the shoot
+    write(path, text)
 
 # A pet that died, for the gravestone.
-dead = os.path.join(root, "pets", "5")
-write(os.path.join(dead, "traits.json"), {"Name": "Clover"})
+DEAD = 9
+dead = os.path.join(root, "pets", str(DEAD))
 write(os.path.join(dead, "personality.txt"), "A gentle soul.")
 write(os.path.join(dead, "save.json"), {
-    "Version": 3, "Hunger": 0, "Happiness": 40, "Energy": 50, "SavedAtUtc": iso(now - timedelta(days=2)),
+    "Version": 4, "Traits": {"Name": "Clover"}, "Hunger": 0, "Happiness": 40, "Energy": 50,
+    "SavedAtUtc": iso(now - timedelta(days=2)),
     "BornUtc": "2026-03-14T12:00:00+00:00", "DiedUtc": iso(now - timedelta(days=2)), "DiedOf": "Hunger",
 })
 
@@ -55,14 +55,14 @@ items = [
     {"Kind": "trampoline", "X": 700, "Y": FLOOR},
     {"Kind": "egg", "X": 1720, "Y": FLOOR, "Egg": {
         "LaidAtUtc": iso(now), "HatchAtUtc": iso(now + timedelta(days=3)),
-        "Parents": ["Mabel", "Otis"],
+        "Parents": ["Josiah", "Mia"],
         "Child": {"Name": "", "Neediness": {"Hunger": 1, "Happiness": 1, "Energy": 1},
                   "Behavior": {"Idle": 1, "Walk": 1, "Sit": 1, "Sleep": 1, "Climb": 1, "Push": 1, "Mating": 1},
                   "Chat": {"Needy": 1, "Banter": 1, "Jokes": 1, "Notes": 1, "Curiosity": 1},
-                  "Fixed": False, "Jacket": "#B25A9E", "Parents": ["Mabel", "Otis"]},
+                  "Fixed": False, "Jacket": "#B25A9E", "Parents": ["Josiah", "Mia"]},
         "SpritesFrom": None}},
     {"Kind": "grave", "X": 2420, "Y": FLOOR, "Grave": {
-        "PetId": 5, "Name": "Clover", "BornUtc": "2026-03-14T12:00:00+00:00",
+        "PetId": DEAD, "Name": "Clover", "BornUtc": "2026-03-14T12:00:00+00:00",
         "DiedUtc": iso(now - timedelta(days=2)), "Cause": "Hunger"}},
 ]
 write(os.path.join(root, "room.json"), {"Version": 1, "Items": items})

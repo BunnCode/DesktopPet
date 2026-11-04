@@ -64,7 +64,7 @@ Windows-style `C:/...` paths):
    (feet on row 63, climb/cling/push hands at column 63, hang/shimmy hands at row 0, nothing clipped at row 0), and
    check by eye that the `sit_ledge` seat is on row 46.
 7. **Show the user** the overview and a zoom, and iterate on their notes.
-8. **Use it:** copy `out/<name>/sheet.png` and `atlas.json` into `%LOCALAPPDATA%\DesktopPet\pets\<n>\sprites\`
+8. **Use it:** copy `out/<name>/sheet.png` and `atlas.json` into `data\pets\<n>\sprites\`
    (that pet only) or `...\sprites\` (every pet). The pet reloads them within a second. Custom sheets aren't
    recoloured per pet (only the built-in rabbit's hoodie is), so the colours in the file are what shows.
    To make a character the new **built-in** art instead, put its changes into `make_rabbit.py` itself and follow

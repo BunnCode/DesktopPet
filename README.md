@@ -104,7 +104,7 @@ Right-click a pet, or the tray icon, to open the menu. It shows the pet's name, 
 - **Customize:** edit settings, open the data folder, export a sprite template
 - **Debug overlay:** shows the floors, platforms and walls the pets see
 
-Settings, saves, sprites, furniture and per-pet files live in `%LOCALAPPDATA%\DesktopPet\`. Edits there apply as soon
+Settings, saves, sprites, furniture and per-pet files live in the `data` folder (the repo root when run from a build inside the repo, otherwise next to the exe; old AppData data is copied over on first run). Edits there apply as soon
 as you save the file. Any problems show up in a notification and in `problems.txt`.
 
 ## Project layout
