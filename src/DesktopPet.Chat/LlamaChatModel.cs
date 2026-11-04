@@ -19,7 +19,7 @@ public sealed class LlamaChatModel : IChatModel, IDisposable
     private const uint ContextSize = 1024;
 
     private static readonly object ConfigureLock = new();
-    private static bool _configured;
+    private static bool s_configured;
 
     private readonly LLamaWeights _weights;
     private readonly ModelParams _parameters;
@@ -102,12 +102,12 @@ public sealed class LlamaChatModel : IChatModel, IDisposable
     {
         lock (ConfigureLock)
         {
-            if (_configured)
+            if (s_configured)
             {
                 return;
             }
 
-            _configured = true;
+            s_configured = true;
             NativeLibraryConfig.All
                 .WithVulkan(useGpu)
                 .WithCuda(false)

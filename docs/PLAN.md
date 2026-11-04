@@ -35,8 +35,9 @@ This document describes the design **as built**, the status of each milestone, a
 | M14 | Death and gravestones: neglect timers, warnings, gravestones with name and dates, revive or delete | Done | `a9be018` |
 | M15 | Breeding pill: consumable furniture; the pet that swallows it asks every other pet to mate | Done | `98577cc` |
 | — | Combined save file: traits.json folded into save.json (version 4), hand edits of the traits kept by autosaves | Done | `4d9c7a6` |
+| — | Coding standards written down (see "Coding standards") and enforced in the build | Done | |
 
-553 unit tests, all in `DesktopPet.Core.Tests`.
+569 unit tests, all in `DesktopPet.Core.Tests`.
 
 ### Changes from the original plan
 
@@ -133,7 +134,8 @@ before rebuilding.
 
 ```
 DesktopPet.slnx
-Directory.Build.props        nullable, latest analyzers, warnings as errors
+Directory.Build.props        nullable, latest analyzers, warnings as errors, code style enforced in the build
+.editorconfig                formatting and naming rules (see "Coding standards")
 global.json                  pins the .NET 10 SDK
 src/
   DesktopPet.Core/           net10.0, no Windows references: the whole game
@@ -361,6 +363,83 @@ push a window off screen.
 - Don't drive the user's real mouse in automated checks without asking.
 - **Starting and stopping the pet app for testing is allowed without asking** (granted by the user 2026-11-03),
   including closing a running instance to rebuild. Back up the data folder first when a check could change it.
+
+---
+
+## Coding standards
+Written down 2026-11-04 from what the code already did (the old `.editorconfig` was Visual Studio's template, and it
+disagreed with the code on `var`, using groups, final newlines and object initializers; it now matches the code).
+**Enforced** means the build fails (`EnforceCodeStyleInBuild` plus warnings as errors); the rest is the house style
+to follow by hand. The rules live in `.editorconfig` and `Directory.Build.props`.
+
+**Build and language**
+- C# `latest` on .NET 10, nullable reference types on, implicit usings on, `AnalysisLevel` `latest-recommended`,
+  warnings are errors, deterministic builds. **Enforced.**
+- XML doc files are generated (needed for the unused-using check). A missing doc comment isn't an error; a broken one
+  (bad `cref`, `param` tag for a parameter that doesn't exist, some parameters documented and others not) is.
+  **Enforced.** The XML files aren't published.
+
+**Layout and formatting**
+- Files are UTF-8 with CRLF line endings, 4-space indents (2 for XML, project and JSON files) and end with a newline.
+  Git stores LF (`.gitattributes`).
+- File-scoped namespaces, and the namespace is the project name plus the folder path
+  (`DesktopPet.Core.Behavior` in `src/DesktopPet.Core/Behavior/`). **Enforced** (IDE0161, IDE0130).
+- Usings go above the namespace, `System.*` first, in one group with no blank lines, and none unused. **Enforced**
+  (IDE0005, IDE0055).
+- Allman braces (each `{` on its own line), and braces on every `if`, `else`, `for`, `foreach` and `while` body,
+  including one-liners. Spaces around binary operators and after commas and keywords. **Formatting is enforced**
+  (IDE0055); braces on one-liners are house style.
+- Several members can share a line in an object initializer when they're short (the furniture specs); a `with`
+  expression puts each member on its own line (the formatter insists).
+- Parentheses for clarity in arithmetic and mixed operators: `a + (b * c)`, not `a + b * c`.
+- Aim for 120 columns (97% of lines fit; some spec initializers, test setups and long strings run over, which is
+  fine when wrapping would make them harder to read). Not enforced.
+- One main type per file, named after it. Small types that only make sense together may share a file named after the
+  concept: `States.cs` (every simple state), `FurnitureStates.cs`, `Egg.cs` (`EggInfo`, `Eggs`), `Grave.cs`,
+  `ScreenText.cs`, `AssemblyInfo.cs`.
+
+**Naming** (**enforced**, IDE1006)
+
+| What | Style | Example |
+|---|---|---|
+| Namespaces, classes, records, structs, enums, enum members | PascalCase | `PetSimulation`, `BodyMode.Airborne` |
+| Interfaces | `I` + PascalCase | `IChatModel`, `IRandom` |
+| Type parameters | `T`, or `T` + PascalCase | `T`, `TItem` |
+| Methods, properties, events, local functions | PascalCase | `Tick`, `GroundKey`, `Died` |
+| Constants (any visibility) and static readonly fields | PascalCase | `MaxPets`, `ConfigureLock` |
+| Public and internal fields | PascalCase | |
+| Private and protected instance fields | `_camelCase` | `_weights` |
+| Private and protected static fields (not readonly, not const) | `s_camelCase` | `s_configured` |
+| Parameters, locals, local constants | camelCase | `snapshot`, `dt` |
+
+House naming, beyond the analyzer:
+- **Async methods end in `Async`** (`CompleteAsync`, `LoadAsync`).
+- **Units in names:** settings and other numbers in a unit other than physical pixels say so: `Dip`, `Px` (when it
+  could be confused with DIPs), `Seconds`, `Minutes`, `Hours`, `PerHour`, and `Utc` for timestamps (`ReachDip`,
+  `HatchMinutes`, `RatePerHour`, `DiedUtc`). Core positions without a suffix are physical pixels.
+- **Plain words over abbreviations** (`Happiness`, `Furniture`), except the usual ones (`Id`, `Dip`, `Px`, `Dt`,
+  `Fps`, `Utc`, `Json`).
+- **Test methods are sentences with underscores** saying what happens (`Climbs_up_a_window_side_and_over_onto_its_title_bar`);
+  test classes are the class under test plus `Tests`, or the feature plus `Tests` for scenarios (`ClimbingTests`).
+  The analyzer accepts these.
+
+**Code style**
+- `var` for locals (explicit types where `var` would hide something important).
+- Explicit accessibility on every member (IDE0040), modifiers in the standard order (IDE0036), fields `readonly`
+  whenever possible (IDE0044). **Enforced.**
+- Classes are `sealed`, `static` or `abstract` (test classes excepted). Types not needed outside their assembly are
+  `internal`; Core's tests see them through `InternalsVisibleTo`.
+- Records for data (`PetFrame`, `SaveData`, `FurnitureSpec`), with `init` properties and defaults for settings.
+- Prefer pattern matching, switch expressions, collection expressions and target-typed `new()`.
+- XML doc comments on public and internal types and on members whose name doesn't say it all.
+- Comments say why, not what.
+
+**Architecture rules** (from "The one hard rule" above and CLAUDE.md)
+- `DesktopPet.Core` has no WPF, WinForms or Win32 references; game logic goes there, with unit tests against
+  `FakeDesktop`. Platform.Windows and App stay thin glue.
+- Randomness only from `IRandom`, wall-clock time only from `IClock`, so tests are exact and instant.
+- Win32 only through CsWin32 (`Interop/NativeMethods.txt`), never hand-written `DllImport`s.
+- Test folders mirror Core's folders; fakes live in `tests/.../Fakes/`.
 
 ---
 

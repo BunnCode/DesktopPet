@@ -48,7 +48,8 @@ tools/publish/publish.ps1    Stops running pets, builds, tests, publishes, then 
 - **Window ids** are HWND values as `long`.
 - **Time:** simulation steps are fixed `dt` (1/60 s by default); stats use wall-clock time from `IClock`;
   randomness comes only from `IRandom` (tests inject fakes).
-- **Style:** nullable on, analyzers at latest, file-scoped namespaces, XML doc comments on most members.
+- **Style:** see `docs/PLAN.md`, "Coding standards" (naming, formatting, layout). Naming, formatting, unused usings,
+  namespaces and readonly fields are checked by the build (`.editorconfig`), so a violation fails it.
 
 ---
 

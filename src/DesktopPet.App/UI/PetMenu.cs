@@ -2,7 +2,6 @@ using System.Drawing;
 using System.Text;
 using System.Windows.Forms;
 using DesktopPet.Core.Stats;
-using DesktopPet.Core.Traits;
 
 namespace DesktopPet.App.UI;
 
@@ -242,13 +241,15 @@ internal sealed class PetMenu : IDisposable
         var canAdd = _furniture.CanAdd() && pet is not null; // it's placed beside the pet
         foreach (var (kind, name) in _furniture.Kinds())
         {
-            items.Add(new ToolStripMenuItem($"Add {name}", null, (_, _) =>
+            void Add(object? sender, EventArgs e)
             {
                 if (pet is not null)
                 {
                     _furniture.Add(pet, kind);
                 }
-            }) { Enabled = canAdd });
+            }
+
+            items.Add(new ToolStripMenuItem($"Add {name}", null, Add) { Enabled = canAdd });
         }
 
         if (items.Count == 0)

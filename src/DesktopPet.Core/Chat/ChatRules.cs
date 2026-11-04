@@ -19,7 +19,7 @@ public sealed record ChatRules
     public bool UseGpu { get; init; } = true;
 
     /// <summary>Longest reply, in tokens (a token is about three quarters of a word).</summary>
-    public int MaxTokens { get; init; } = 60*3;
+    public int MaxTokens { get; init; } = 60 * 3;
 
     /// <summary>Randomness of the wording: 0 is always the likeliest words, 1 and above is wilder.</summary>
     public double Temperature { get; init; } = 1;

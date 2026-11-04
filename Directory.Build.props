@@ -6,5 +6,12 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <Deterministic>true</Deterministic>
+    <!-- Check the .editorconfig code-style rules marked "Enforced in the build" on every build. -->
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <!-- Needed for the unused-using check (IDE0005) to run in the build. Missing doc comments aren't errors, but
+         broken ones (bad cref, wrong param name) are. The XML files aren't shipped. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <PublishDocumentationFiles>false</PublishDocumentationFiles>
   </PropertyGroup>
 </Project>

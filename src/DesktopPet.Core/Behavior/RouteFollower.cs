@@ -29,6 +29,9 @@ internal enum RouteProgress
 /// </summary>
 internal static class RouteFollower
 {
+    /// <param name="context">The pet that's walking.</param>
+    /// <param name="step">The route's first step.</param>
+    /// <param name="dt">The tick length, in seconds.</param>
     /// <param name="snapToEnd">
     /// False to keep walking past the route's end rather than arrive there (chasing a ball, which decides for itself
     /// when it's close enough).

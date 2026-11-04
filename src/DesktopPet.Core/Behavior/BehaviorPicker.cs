@@ -31,6 +31,9 @@ internal static class BehaviorPicker
         return Pick(context.Config, context.Random, context.Stats, penned: context.Pen is not null);
     }
 
+    /// <param name="config">The tuning (picker weights and stat thresholds).</param>
+    /// <param name="random">The source of the roll.</param>
+    /// <param name="stats">The pet's needs, which shift the weights.</param>
     /// <param name="penned">Shut in a play pen: it mostly sits (<see cref="FurnitureRules.PenSitWeight"/>).</param>
     public static PetStateId Pick(PetConfig config, IRandom random, PetStats stats, bool penned = false)
     {

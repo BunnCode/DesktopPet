@@ -4,7 +4,6 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using DesktopPet.Core.Math;
 using DesktopPet.Core.Physics;
-using DesktopPet.Core.Simulation;
 using DesktopPet.Core.World;
 using DesktopPet.Platform.Windows;
 

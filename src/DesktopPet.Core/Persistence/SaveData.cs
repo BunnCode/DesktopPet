@@ -67,8 +67,14 @@ public sealed record SaveData
         var stat = rules.ReviveStat;
         return this with
         {
-            Version = CurrentVersion, Hunger = stat, Happiness = stat, Energy = stat, SavedAtUtc = now,
-            Neglect = null, DiedUtc = null, DiedOf = null,
+            Version = CurrentVersion,
+            Hunger = stat,
+            Happiness = stat,
+            Energy = stat,
+            SavedAtUtc = now,
+            Neglect = null,
+            DiedUtc = null,
+            DiedOf = null,
         };
     }
 }

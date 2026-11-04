@@ -1,4 +1,3 @@
-using DesktopPet.Core.Abstractions;
 using DesktopPet.Core.Breeding;
 using DesktopPet.Core.Death;
 using DesktopPet.Core.Input;

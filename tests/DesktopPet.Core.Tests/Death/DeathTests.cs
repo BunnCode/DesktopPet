@@ -155,7 +155,10 @@ public class DeathTests
         var born = new DateTimeOffset(2026, 10, 1, 0, 0, 0, TimeSpan.Zero);
         var dead = SaveData.From(new PetStats(0, 30, 40), born.AddDays(3), lastMated: born.AddDays(1)) with
         {
-            BornUtc = born, DiedUtc = born.AddDays(3), DiedOf = DeathCause.Hunger, Neglect = new NeglectTimers { HungerAtZero = 7200 },
+            BornUtc = born,
+            DiedUtc = born.AddDays(3),
+            DiedOf = DeathCause.Hunger,
+            Neglect = new NeglectTimers { HungerAtZero = 7200 },
         };
         var now = born.AddDays(4);
         var revived = dead.Revived(new DeathRules { ReviveStat = 60 }, now);
@@ -178,7 +181,10 @@ public class DeathTests
             var died = new DateTimeOffset(2026, 11, 4, 9, 0, 0, TimeSpan.Zero);
             var save = SaveData.From(new PetStats(0, 10, 10), died) with
             {
-                BornUtc = died.AddDays(-2), DiedUtc = died, DiedOf = DeathCause.Exhaustion, Neglect = new NeglectTimers { EnergyAtZero = 7200 },
+                BornUtc = died.AddDays(-2),
+                DiedUtc = died,
+                DiedOf = DeathCause.Exhaustion,
+                Neglect = new NeglectTimers { EnergyAtZero = 7200 },
             };
             store.Save(save);
             Assert.Contains("\"Exhaustion\"", File.ReadAllText(path), StringComparison.Ordinal);
