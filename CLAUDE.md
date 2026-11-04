@@ -8,7 +8,8 @@ Update it (status table, changes from plan, limitations, next steps) when a mile
 
 **`docs/CODEMAP.md` maps the code** (every file's purpose, key types, frame flow, recipes for common changes). Read it
 before exploring the source, and open only the files it points to. Keep it current when files, public types or flows
-change. The built-in sprite generator (`tools/sprites/make_rabbit.py`) is documented in `docs/SPRITE_GENERATOR.md`.
+change. The built-in sprite generator (`tools/sprites/make_rabbit.py`) is documented in `docs/SPRITE_GENERATOR.md`;
+sprites for new characters in the same style follow `docs/CHARACTER_SPRITES.md`.
 
 ## Rules
 - `DesktopPet.Core` stays free of WPF/Win32 references. Game logic goes there, with unit tests against `FakeDesktop`.

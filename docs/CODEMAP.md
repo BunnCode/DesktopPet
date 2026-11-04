@@ -27,7 +27,10 @@ DesktopPet.App               net10.0-windows10.0.19041.0 WPF exe (+WinForms for 
   │    └─ DesktopPet.Core
   └─ DesktopPet.Core         net10.0, NO WPF/Win32. All game logic. InternalsVisibleTo the tests.
 tests/DesktopPet.Core.Tests  xUnit, Core only (no App/Platform tests).
-tools/sprites/make_rabbit.py Python generator for the built-in sprite sheet and furniture art (not part of the build)./models/get-model.ps1   Downloads the chat model into models/ at the repo root (gitignored); the build copies it.
+tools/sprites/make_rabbit.py Python generator for the built-in sprite sheet and furniture art (not part of the build).
+tools/sprites/make_character.py  Renders characters/<name>.py (overrides on the rabbit's rig) to a drop-in sheet + atlas.json.
+tools/sprites/sprite_preview.py  overview / zoom / check (pose conventions) for any generated sheet.
+tools/models/get-model.ps1   Downloads the chat model into models/ at the repo root (gitignored); the build copies it.
 ```
 
 ## Conventions you need everywhere
@@ -188,7 +191,7 @@ Win32 through CsWin32: add API names to `Interop/NativeMethods.txt` (one per lin
 | `Furniture/GraveArt.cs` | M14: `Render(grave, stone, size, scale)`: the stone art scaled to the exact pixel size with the name and dates engraved on its face (FurnitureHost caches one per gravestone and size) |
 | `Furniture/FurnitureArt.cs` | A kind's frames from its PNG (cut into `Frames`), else the embedded default for that kind, else a plain box; `DefaultPng(kind)` |
 | `Furniture/Art/*.png` | The default furniture art (EmbeddedResource `DesktopPet.App.Furniture.<kind>.png`). Generated; don't hand-edit |
-| `SpriteSheet/DefaultArt.cs` | Built-in art: crops 32×32 frames from embedded `rabbit.png`, recolours the jacket to the pet's `JacketShades`, `TrayIconPixels()` |
+| `SpriteSheet/DefaultArt.cs` | Built-in art: crops 64×64 frames (`FrameSize`) from embedded `rabbit.png`, recolours the jacket to the pet's `JacketShades`, `TrayIconPixels()` |
 | `SpriteSheet/rabbit.png` | The built-in sheet (EmbeddedResource `DesktopPet.App.rabbit.png`). Generated; don't hand-edit (see `docs/SPRITE_GENERATOR.md`) |
 | `SpriteSheet/SpriteAtlas.cs` | (animation id, frame) → `AtlasFrame(Bitmap, FacesLeft, Smooth)`. `Load(folders, animations, jacket)` → `(atlas, SpriteLayer[])`: per animation the first folder whose `atlas.json` defines it (pet's own, then shared), built-in art elsewhere; `CustomCount` |
 | `SpriteSheet/SpriteTemplateExporter.cs` | Menu → Export sprite template: the built-in art as `template.png` + `atlas.json` + README |
@@ -262,6 +265,7 @@ the Recycle Bin.
 | Add a behavior state | `PetStateId` enum, a class in `States.cs` (`TimedState` for voluntary ones), register it in `StateMachine`'s array, pick it from `BehaviorPicker` or another state, decide its `StatActivity` in `PetSimulation.UpdateStats`, add tests under `tests/.../Behavior/` |
 | Add an animation | `Animations.cs` (def + append to `All`; the order is the sheet row order), then the generator (`ORDER` + `frames()`), regenerate `rabbit.png`, play it from a state, add it to the table in `docs/SPRITES.md` |
 | Change the built-in art | `tools/sprites/make_rabbit.py`, regenerate; see `docs/SPRITE_GENERATOR.md` |
+| Sprites for a new character | `tools/sprites/characters/<name>.py` from `template.py`; see `docs/CHARACTER_SPRITES.md` (or the `character-sprites` skill) |
 | Change per-pet colours | `DefaultArt.Jackets` (and the jacket colours in the generator's palette must stay unique) |
 | Add a per-pet trait | `Neediness`/`BehaviorTraits` (parameter default 1), `PetTraits.ApplyTo`, `PetTraitsFile.Validate`, `TraitRoller.Roll`, maybe `Personality.Describe` and the About lines in `PetMenu`; tests in `Traits/PetTraitsTests` |
 | Add a menu item | `UI/PetMenu.cs`; pet-specific actions go through `IPetControls` (implemented by `PetHost`), app-wide ones are constructor callbacks wired in `App.OnStartup` |

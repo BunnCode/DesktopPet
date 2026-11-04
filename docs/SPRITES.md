@@ -5,7 +5,7 @@ DesktopPet draws every animation with its built-in chibi rabbit unless you give 
 
 ## Quick start
 1. Menu → Customize → **Export sprite template**. This writes `template.png` (the built-in rabbit art, one row per
-   animation, 32×32 cells) and a matching `atlas.json` to `sprite-template\`.
+   animation, 64×64 cells) and a matching `atlas.json` to `sprite-template\`.
 2. Copy both files into `sprites\`.
 3. Paint over the frames and save. The pet updates within a second.
 
@@ -68,7 +68,7 @@ list goes to `problems.txt` in the data folder, and the affected animations use 
 - **climb, cling, push:** the hands (and feet, for climbing) touch the side of the cell the art faces. That's where the
   wall is.
 - **hang, shimmy:** the hands grip the top edge of the cell.
-- **sit_ledge:** the seat is 9/32 of the cell height above the bottom (row 23 of 32). The legs hang into the bottom
+- **sit_ledge:** the seat is 9/32 of the cell height above the bottom (row 23 of 32, row 46 of 64). The legs hang into the bottom
   part.
 - **Transparency:** pixels that are fully transparent are click-through; anything else catches the mouse. Keep the
   background fully transparent, not "almost" transparent.

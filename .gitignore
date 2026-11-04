@@ -333,6 +333,9 @@ paket-files/
 
 # Python Tools for Visual Studio (PTVS)
 __pycache__/
+
+# Generated character sprite sheets (tools/sprites/make_character.py)
+tools/sprites/out/
 *.pyc
 
 # Cake - Uncomment if you are using it

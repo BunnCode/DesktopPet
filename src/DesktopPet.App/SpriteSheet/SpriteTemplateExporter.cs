@@ -19,7 +19,7 @@ internal static class SpriteTemplateExporter
         DesktopPet sprite template
         ==========================
 
-        template.png holds the built-in rabbit art, one row per animation (32x32 cells), and atlas.json says which row
+        template.png holds the built-in rabbit art, one row per animation (64x64 cells), and atlas.json says which row
         is which. To use your own art:
 
           1. Copy template.png and atlas.json into the "sprites" folder next to this one.
