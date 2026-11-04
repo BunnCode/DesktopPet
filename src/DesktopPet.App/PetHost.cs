@@ -129,7 +129,8 @@ internal sealed class PetHost : IPetControls, IDisposable
             var asleep = _simulation.State == PetStateId.Sleep || current.AnimationId == Animations.Sleep.Id;
             var window = _simulation.Mode == BodyMode.Grounded ? PlatformBuilder.WindowIdFromKey(_simulation.GroundKey) : null;
             var scale = current.Size.Y / System.Math.Max(1, _simulation.Config.SizeDip);
-            return new ChatPet(Id, Name, Personality, Stats, current.FeetPos, scale, !asleep, window, Traits.Chat);
+            var readable = _simulation.ReadableWindow(_simulation.Config.Chat.ReadReachDip);
+            return new ChatPet(Id, Name, Personality, Stats, current.FeetPos, scale, !asleep, window, Traits.Chat, readable);
         }
     }
 

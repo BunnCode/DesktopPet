@@ -30,11 +30,11 @@ This document describes the design **as built**, the status of each milestone, a
 | M10 | Per-pet traits: own folder and sprites, names, neediness, personality | Done | `976c95a` |
 | M11 | Furniture, defined in user-editable files | Done | `0bcd1d0` |
 | M12 | Speech bubbles and sticky notes (two behaviors) from a shared local LLM (Qwen3.5-2B) | Done | `1045cdf` |
-| M12b | Reading on-screen text and referring to it when talking or writing notes | Planned | |
+| M12b | Reading on-screen text (Windows OCR) and referring to it when talking or writing notes | Done | |
 | M13 | Breeding: eggs that hatch into mixed children | Planned | |
 | M14 | Death and gravestones | Planned | |
 
-424 unit tests, all in `DesktopPet.Core.Tests`.
+467 unit tests, all in `DesktopPet.Core.Tests`.
 
 ### Changes from the original plan
 
@@ -125,15 +125,17 @@ src/
     Persistence/             SaveData, ISaveStore, JsonFileSaveStore
     Simulation/              PetSimulation, PetFrame, PetConfig, FixedStepper, WindowCommand
     Furniture/               FurnitureSpec (+File, Defaults), FurnitureItem, FurnitureWorld, RoutePlanner, RoomSave
-    Chat/                    ChatRules, ChatDirector (speech and notes), ChatPrompts, ChatText (+ChatMl), IChatModel
+    Chat/                    ChatRules, ChatDirector (speech and notes), ChatPrompts, ChatText (+ChatMl), IChatModel,
+                             ScreenReading (+IScreenReader), TextList
     Abstractions/            IRandom/SeededRandom, IClock/SystemClock
-  DesktopPet.Platform.Windows/   net10.0-windows: thin Win32 adapter, no game rules
+  DesktopPet.Platform.Windows/   net10.0-windows10.0.19041.0: thin Win32 adapter (and Windows OCR), no game rules
     Interop/NativeMethods.txt    CsWin32 source generator input (no hand-written DllImports)
     MonitorSource, WindowSource, DesktopSource    the desktop -> DesktopSnapshot
     CursorSource, PetWindowInterop, NativeIcon    our own window and cursor
     WindowManipulator                             moves other windows (pushing), guarded
+    ScreenText (ScreenCapture, TextRecognizer, WindowIdentity)   reading the screen (M12b)
   DesktopPet.Chat/           net10.0: LlamaChatModel (LLamaSharp, Vulkan + CPU backends), behind Core's IChatModel
-  DesktopPet.App/            net10.0-windows WPF exe: composition root
+  DesktopPet.App/            net10.0-windows10.0.19041.0 WPF exe: composition root
     App.xaml(.cs)            startup, single instance, menu + tray wiring, save path
     PetHost                  owns one pet: simulation, window, loop, saving, lock detection
     GameLoop                 CompositionTarget.Rendering -> FixedStepper, re-entrancy guarded
@@ -141,7 +143,7 @@ src/
     SpriteSheet/             DefaultArt (built-in rabbit, embedded rabbit.png), SpriteAtlas
     Furniture/               FurnitureHost (world, loop, windows, room.json), FurnitureArt, Art/*.png (defaults)
     UI/                      PetMenu (shared menu), TrayIcon, DebugOverlay
-    Chat/                    ChatHost (model, director, bubbles, notes), SpeechBubble, StickyNote
+    Chat/                    ChatHost (model, director, bubbles, notes), SpeechBubble, StickyNote, ScreenReader
     app.manifest             PerMonitorV2 DPI awareness
 tests/
   DesktopPet.Core.Tests/     xUnit; Fakes/ has FakeDesktop, FakeRandom, ScriptedRandom, FakeClock
@@ -295,7 +297,7 @@ push a window off screen.
 - **Menu** (right-click the pet or the tray icon): the pet's name and mood, stat bars, About *name* (personality,
   neediness and behavior, read-only; Edit traits, Open its folder), Feed / Play / Sleep or Wake up, Add / Remove pet,
   Furniture (Add each kind beside the pet, Remove all, Open furniture folder), "Let it push windows", "Let them talk",
-  "Let them leave notes", Customize (Edit
+  "Let them leave notes", "Let them read the screen", Customize (Edit
   settings, Open data folder, Export sprite template), Debug overlay, Exit. Right-clicking furniture offers Remove.
 - **Debug overlay:** click-through, one per monitor. Floors green, window tops orange, walls blue (screen edges dotted),
   hang bars dashed magenta, the current surface yellow, plus the pet box, state and a summary line.
@@ -340,6 +342,9 @@ push a window off screen.
 - **Memory with chat:** the process is about 750 MB to 1 GB (the model's weights are memory-mapped, plus the GPU
   backend), up from 127 MB. With chat's model missing it stays as before.
 - **Sticky notes don't survive a restart**, and notes on a window only follow it while the app runs.
+- **Reading the screen:** private browser windows are only excluded when their title says so (Edge and Firefox do;
+  Chrome may not). Text in images and games is read too (it's OCR). Text drawn with very low contrast, or tiny text,
+  is missed. The exe is larger, because the Windows SDK projection (`Microsoft.Windows.SDK.NET`) comes with it.
 - **Pets beside furniture face it from the side** (the art is a side view), so TV watchers stand left and right of the
   TV rather than in front of it.
 
@@ -411,7 +416,7 @@ jacket colour.
 - The old procedural `PlaceholderArt` was removed. In Core, `SpriteSheetSpec.UsingPlaceholder` became `UsingDefault`.
 
 ## Planned: M10–M14
-Requested 2026-11-03. M10, M11 and M12 are done; M12b is next; the rest aren't started. **Suggested order:** M10 first, because M12 and M13 build on per-pet traits. M11
+Requested 2026-11-03. M10, M11, M12 and M12b are done; the rest aren't started. **Suggested order:** M10 first, because M12 and M13 build on per-pet traits. M11
 and M12 don't depend on each other. M13 reuses M11's world objects for the egg. M14 goes last, because its warnings use
 M12's needy chat.
 
@@ -548,9 +553,43 @@ loads the model too. User-facing guide: `docs/CHAT.md`.
   `personality.txt` (M10).
 - **Later:** unloading the model when idle (see Leftovers).
 
-### M12b: reading the screen (planned)
-Requested 2026-11-03: pets can read text shown in applications and refer to it when talking or writing notes, if they
-want to. To be designed and built next.
+### M12b: reading the screen (done)
+Requested and built 2026-11-03: pets read the text on the window they're on, in front of or beside and may talk or write about it.
+Design choices made by the user (all four were the recommended options): OCR rather than UI Automation, the window the
+pet is on or beside rather than the active window, on by default with exclusions, and a new speech kind plus a note
+topic. Checked live: Windows' OCR read a test window from another process in about 15 ms (capture) + 80 ms (OCR),
+every line correct at 125%, and the real model's remarks and notes were about the text without reading it out
+("Did you find the carrots crunchy or soft?"). User-facing guide: `docs/CHAT.md`, "Reading the screen".
+- **Which window** (`PetSimulation.ReadableWindow`), in this order: the one the pet stands on, clings to or hangs
+  from; standing anywhere (the taskbar included), the frontmost window behind the middle of its body (it's in front of
+  it; added at the user's request); otherwise a window whose side is within `ReadReachDip` (40) of its box at its
+  middle height. Airborne and held pets read nothing.
+- **What it reads** (Core `ScreenReading`, pure and tested): a box around the pet (900 × 700 DIP: 450 to each side,
+  200 up, 500 down), slid to stay inside the window where it fits (on a window's top it reads further down; on the
+  taskbar in front of a window, further up), then clipped to it. Of the lines recognized there, only those whose centre is on the window and not under any
+  window in front of it (other processes' windows except click-through ones) or under our own pets, bubbles and notes.
+  The snippet is the lines nearest the pet (sideways distance at half weight) up to `ReadChars` (300), back in reading
+  order; lines that are mostly not letters and the window's own title bar line are left out.
+- **How** (Platform `ScreenCapture`, `TextRecognizer`, `WindowIdentity`; App `ScreenReader`): GDI `BitBlt` of that box
+  from the screen, then `Windows.Media.Ocr` for the user's profile languages, enlarged 2× first below 150% scaling.
+  This moved Platform.Windows and the App to `net10.0-windows10.0.19041.0` (Windows 10 2004 or later). No OCR language:
+  one notification, and pets carry on without reading.
+- **When:** only when a pet is about to make a remark or a reading note, never in between. The read runs as the first
+  half of that one model request (`ChatDirector` reads, then asks), so it shares the one-at-a-time queue and the reply
+  timeout. Nothing readable: a remark is skipped, a note falls back to a usual topic.
+- **Speech:** a new kind, `Remark` (`RemarksPerHour` 4 while on, in front of or beside a window). Told the window's title and the
+  snippet between `<<<` and `>>>`, asked to say something about one thing it read, in its own words, without reading
+  it out. No mood, like jokes.
+- **Notes:** with `NoteReadChance` (0.4) × curiosity, a note's topic is the text on its window instead of a usual one.
+- **Per pet:** `ChatTraits.Curiosity` (traits.json `Chat.Curiosity`, rolled 0.5–2 like the others, 1 for older
+  files) scales remarks and the reading chance of notes. Shown in About.
+- **Privacy:** the menu switch "Let them read the screen" (`ReadingEnabled`, default on); nothing is read while the
+  screen is locked; `ReadExcludedApps` (process names: KeePass, KeePassXC, 1Password, Bitwarden, LastPass, Dashlane,
+  Enpass, RoboForm, NordPass, ProtonPass, CredentialUIBroker) and `ReadExcludedTitleWords` (InPrivate, Incognito,
+  Private Browsing, Password, Sign in, Log in, Login) are never read. What a pet reads only goes into that one prompt;
+  it's not logged or saved. The line the pet says or writes is remembered like any other (last 5) for the session.
+- **Settings lists** are `TextList`, a list that compares by its items, so `PetConfig` stays equal after a round trip
+  through `settings.json`.
 ### M13: breeding (planned)
 For now, a rare, automatic mating routine. This will be expanded later.
 - **Mating:** two pets close together, both with good stats, past a cooldown, with a small chance per hour. A short

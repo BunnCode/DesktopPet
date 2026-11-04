@@ -64,8 +64,11 @@ public sealed record Neediness(double Hunger = 1, double Happiness = 1, double E
 /// <summary>How often the pet chooses each behavior compared with an average pet (2 = twice as likely).</summary>
 public sealed record BehaviorTraits(double Idle = 1, double Walk = 1, double Sit = 1, double Sleep = 1, double Climb = 1, double Push = 1);
 
-/// <summary>How often the pet says each kind of line compared with an average pet (0 = never, 2 = twice as often).</summary>
-public sealed record ChatTraits(double Needy = 1, double Banter = 1, double Jokes = 1, double Notes = 1);
+/// <summary>
+/// How often the pet says each kind of line compared with an average pet (0 = never, 2 = twice as often).
+/// <see cref="Curiosity"/> is how often it talks or writes about what it reads on screen.
+/// </summary>
+public sealed record ChatTraits(double Needy = 1, double Banter = 1, double Jokes = 1, double Notes = 1, double Curiosity = 1);
 
 /// <summary>A range for rolling a new pet's multipliers.</summary>
 public readonly record struct TraitRange(double Min, double Max);

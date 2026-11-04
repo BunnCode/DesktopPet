@@ -84,6 +84,39 @@ public sealed record ChatRules
     /// <summary>At least this long between two notes from the same pet.</summary>
     public double PetNoteGapSeconds { get; init; } = 600;
 
+    // ---- Reading the screen (used by both behaviors) ----
+
+    /// <summary>
+    /// Whether pets may read the text on the window they're on, in front of or beside and talk or write about it. The menu's "Let
+    /// them read the screen" starts from this. The text goes only to the local model; it's never saved.
+    /// </summary>
+    public bool ReadingEnabled { get; init; } = true;
+
+    /// <summary>Spoken remarks per hour about what a pet reads, while it's on, in front of or beside a window.</summary>
+    public double RemarksPerHour { get; init; } = 4;
+
+    /// <summary>Chance that a note written on a window is about what the pet reads there (otherwise a usual topic).</summary>
+    public double NoteReadChance { get; init; } = 0.4;
+
+    /// <summary>A pet this close (DIP) to a window's side counts as beside it, and reads it.</summary>
+    public double ReadReachDip { get; init; } = 40;
+
+    /// <summary>The most text (characters) a pet is given from what it reads: the lines nearest it.</summary>
+    public int ReadChars { get; init; } = 300;
+
+    /// <summary>Apps that are never read, by process name (".exe" optional, any case).</summary>
+    public TextList ReadExcludedApps { get; init; } =
+    [
+        "KeePass", "KeePassXC", "1Password", "Bitwarden", "LastPass", "Dashlane", "Enpass", "RoboForm", "NordPass", "ProtonPass",
+        "CredentialUIBroker",
+    ];
+
+    /// <summary>Windows whose title contains any of these (any case) are never read: private browsing, sign-in and password pages.</summary>
+    public TextList ReadExcludedTitleWords { get; init; } =
+    [
+        "InPrivate", "Incognito", "Private Browsing", "Password", "Sign in", "Log in", "Login",
+    ];
+
     /// <summary>How long a speech bubble with <paramref name="text"/> stays, in seconds.</summary>
     public double BubbleDuration(string text) =>
         BubbleSeconds + (BubbleSecondsPerChar * (text?.Length ?? 0));

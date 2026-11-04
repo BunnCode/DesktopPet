@@ -162,6 +162,61 @@ public sealed class PetSimulation
         set => _ctx.PushingEnabled = value;
     }
 
+    /// <summary>
+    /// The window the pet can read (M12b): the one it stands on, clings to or hangs from; otherwise, standing anywhere
+    /// (the taskbar too), the frontmost window behind the middle of its body (it's in front of it); otherwise a window
+    /// whose side is within <paramref name="reachDip"/> of its box at its middle height (the nearest). Null otherwise,
+    /// including while it's airborne or held.
+    /// </summary>
+    public long? ReadableWindow(double reachDip)
+    {
+        var body = _ctx.Body;
+        switch (body.Mode)
+        {
+            case BodyMode.Grounded when PlatformBuilder.WindowIdFromKey(body.GroundKey) is { } window:
+                return window;
+            case BodyMode.Clinging or BodyMode.Hanging:
+                return _ctx.Walls.FirstOrDefault(w => w.Key == body.GroundKey).WindowId ??
+                    PlatformBuilder.WindowIdFromKey(body.GroundKey?.Replace("hang:", "window:", StringComparison.Ordinal));
+            case BodyMode.Grounded:
+                break;
+            default:
+                return null;
+        }
+
+        var box = Current.Bounds;
+        var middle = (box.Top + box.Bottom) / 2.0;
+        var centre = new Vec2((box.Left + box.Right) / 2.0, middle);
+        foreach (var window in _snapshot.Windows) // front to back: the first one there is the one showing behind it
+        {
+            if (window.Bounds.Contains(centre))
+            {
+                return window.Id;
+            }
+        }
+
+        var reach = reachDip * _ctx.Scale;
+        long? best = null;
+        var bestGap = double.MaxValue;
+        foreach (var wall in _ctx.Walls)
+        {
+            if (wall.Kind != WallKind.WindowSide || wall.WindowId is null || !wall.SpansY(middle))
+            {
+                continue;
+            }
+
+            // Walls are a window's outside faces: the pet is beside one when it's on the wall's own side of it.
+            var gap = wall.Side == WallSide.PetOnLeft ? wall.X - box.Right : box.Left - wall.X;
+            if (gap >= -1 && gap <= reach && gap < bestGap)
+            {
+                bestGap = gap;
+                best = wall.WindowId;
+            }
+        }
+
+        return best;
+    }
+
     /// <summary>Climbable walls derived from the latest snapshot (for the debug overlay).</summary>
     public IReadOnlyList<Wall> Walls => _ctx.Walls;
 

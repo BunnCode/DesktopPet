@@ -24,7 +24,8 @@ public static class PetTraitsFile
         "// This pet's traits. Edit and save: changes apply right away.\n" +
         "// Neediness: how fast each need drops (1 = average, 2 = twice as fast, 0.5 = half as fast).\n" +
         "// Behavior: how often it idles, walks, sits, naps, climbs walls and pushes windows (1 = average).\n" +
-        "// Chat: how often it complains about its needs, chats with other pets, tells jokes and leaves sticky notes.\n" +
+        "// Chat: how often it complains about its needs, chats with other pets, tells jokes, leaves sticky notes,\n" +
+        "// and (Curiosity) talks or writes about what it reads on screen.\n" +
         "// Multipliers can be 0 to 10. Remove a line to set it back to 1.\n";
 
     private static readonly JsonSerializerOptions Options = new()
@@ -111,6 +112,7 @@ public static class PetTraitsFile
         Range("Chat.Banter", c.Banter);
         Range("Chat.Jokes", c.Jokes);
         Range("Chat.Notes", c.Notes);
+        Range("Chat.Curiosity", c.Curiosity);
 
         return errors;
     }

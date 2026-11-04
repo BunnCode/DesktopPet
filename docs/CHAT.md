@@ -20,6 +20,7 @@ goes into everything it says and writes, so editing it changes the very next lin
 | Banter | Another pet is close by: one says something to the other, and the other answers |
 | Jokes | Any time, rarely |
 | Clicked | Every time you click it (not when you drag or throw it): it reacts to being petted, woken up or poked |
+| Remarks | It's on, in front of or beside a window and reading the screen is on: it comments on something it reads there |
 
 Bubbles follow the pet and fade after a few seconds. When pets stand side by side, their bubbles stack.
 
@@ -30,12 +31,36 @@ thought) and sticks it on that window, where it's standing. The note moves with 
 and goes when it closes. Other windows in front cover it as they cover the window. Click a note to dismiss it. At most
 3 are on screen at once, and notes don't come back after a restart.
 
+## Reading the screen
+
+Pets can read the text on the window they're on (standing on it or climbing its side), in front of (it's behind
+them, for example while they walk along the taskbar), or right beside, and talk or write about it: a comment on a recipe, a question about an email's subject, a tip about what you're writing. Switch it
+in the menu (**Let them read the screen**) or with `ReadingEnabled` in `settings.json`. It's on by default.
+
+- **How:** the pet takes a picture of the part of the window around it (about 900 × 700 DIP) and reads it with the text
+  recognition (OCR) built into Windows. Only text that's really on that window counts: anything covered by other
+  windows, or by the pets, bubbles and notes themselves, is left out. The few lines nearest the pet (300 characters by
+  default) go to the model.
+- **When:** only at the moment a pet makes a remark, or writes a note that is about the window (about 4 in 10 notes
+  when there's something to read). It doesn't watch the screen in between.
+- **Private:** everything stays on your PC. What a pet reads goes into that one prompt and is never logged or saved.
+  Pets never read:
+  - apps in `ReadExcludedApps` (process names; by default the common password managers and Windows' sign-in prompts);
+  - windows whose title contains a word in `ReadExcludedTitleWords` (by default InPrivate, Incognito, Private
+    Browsing, Password, Sign in, Log in, Login).
+
+  Add your own, such as `"Outlook"` or `"Bank"`. Some browsers don't put "Incognito" in a private window's title, so
+  those windows can't be told apart; switch reading off while you use them if that matters to you.
+- **Needs** a Windows OCR language. Most installs have one for their display language; without one, a notification
+  says so and pets carry on without reading.
+
 ## How often
 
-Each pet has its own multipliers in its `traits.json` (1 = average, 2 = twice as often, 0 = never):
+Each pet has its own multipliers in its `traits.json` (1 = average, 2 = twice as often, 0 = never). `Curiosity` is how often it remarks on, or writes notes about, what it
+reads:
 
 ```jsonc
-"Chat": { "Needy": 1.2, "Banter": 0.8, "Jokes": 1.5, "Notes": 0.6 }
+"Chat": { "Needy": 1.2, "Banter": 0.8, "Jokes": 1.5, "Notes": 0.6, "Curiosity": 1.4 }
 ```
 
 New pets get random ones (between 0.5 and 2 by default, `NewPetChat` in `settings.json`). The shared timing is in
@@ -56,6 +81,12 @@ New pets get random ones (between 0.5 and 2 by default, `NewPetChat` in `setting
 | `NoteGapSeconds`, `PetNoteGapSeconds` | 120, 600 | Time between any two notes, and between two from the same pet |
 | `MaxNotes` | 3 | Notes on screen at once |
 | `RecentLines` | 5 | Lines (and, separately, notes) a pet is reminded of so it doesn't repeat itself |
+| `ReadingEnabled` | `true` | Pets read the window they're on, in front of or beside |
+| `RemarksPerHour` | 4 | Remarks per hour about what a pet reads, while it's on, in front of or beside a window |
+| `NoteReadChance` | 0.4 | Chance a note is about what the pet reads on that window (otherwise a usual topic) |
+| `ReadReachDip` | 40 | How close to a window's side counts as beside it |
+| `ReadChars` | 300 | The most text a pet is given from what it reads |
+| `ReadExcludedApps`, `ReadExcludedTitleWords` | see above | Never read these apps, or windows with these words in their title |
 
 ## The model
 

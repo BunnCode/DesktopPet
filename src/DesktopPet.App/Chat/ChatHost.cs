@@ -30,6 +30,7 @@ internal sealed class ChatHost : IDisposable
     private readonly List<int> _spoke = [];
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private readonly Stopwatch _sinceNotes = Stopwatch.StartNew();
+    private readonly ScreenReader _reader;
     private LlamaChatModel? _model;
     private TimeSpan _last;
     private bool _enabled;
@@ -43,9 +44,13 @@ internal sealed class ChatHost : IDisposable
         _pets = pets;
         _desktop = desktop;
         _notify = notify;
+        _reader = new ScreenReader(() => Rules, OwnWindows, notify);
     }
 
     public ChatRules Rules { get; set; } = new();
+
+    /// <summary>"Let them read the screen": pets may talk and write about the text on the window they're on, in front of or beside.</summary>
+    public bool ReadingEnabled { get; set; }
 
     /// <summary>"Let them leave notes": off stops new notes. Notes already up stay until dismissed.</summary>
     public bool NotesEnabled { get; set; }
@@ -165,6 +170,7 @@ internal sealed class ChatHost : IDisposable
         }
 
         var present = !pets.Any(p => p.UserAway); // nobody to read them while the screen is locked
+        _director.Reader = present && ReadingEnabled ? _reader : null;
         _director.Tick(dt, chatPets, Rules, speech: present && _enabled, notes: present && NotesEnabled, _notes.Count);
 
         foreach (var line in _director.TakeLines())
@@ -200,6 +206,28 @@ internal sealed class ChatHost : IDisposable
             _sinceNotes.Restart();
             TrackNotes();
         }
+    }
+
+    /// <summary>Our own windows with text or art in them (pets, bubbles, notes), so a pet doesn't read them as the window's.</summary>
+    private List<RectI> OwnWindows()
+    {
+        var rects = new List<RectI>();
+        foreach (var pet in _pets())
+        {
+            var size = (int)System.Math.Ceiling(pet.SizePx);
+            rects.Add(RectI.FromSize((int)(pet.Feet.X - (size / 2.0)), (int)pet.Feet.Y - size, size, size));
+        }
+
+        foreach (var window in _bubbles.Values.Cast<System.Windows.Window>().Concat(_notes))
+        {
+            var handle = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+            if (handle != 0 && window.IsVisible && WindowTracker.Query(handle) is (TrackedWindowState.Shown, var bounds))
+            {
+                rects.Add(bounds);
+            }
+        }
+
+        return rects;
     }
 
     private void Show(ChatLine line, IReadOnlyList<PetHost> pets)

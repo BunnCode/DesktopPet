@@ -114,6 +114,7 @@ public partial class App : Application
             onPushing: SetPushing,
             chat: (_config.Chat.Enabled, enabled => _chat!.Enabled = enabled),
             notes: (_config.Chat.NotesEnabled, enabled => _chat!.NotesEnabled = enabled),
+            reading: (_config.Chat.ReadingEnabled, enabled => _chat!.ReadingEnabled = enabled),
             customize: (EditSettings, () => DataFolder.Open(_data.Root), ExportSpriteTemplate),
             onDebugOverlay: SetDebugOverlay,
             onExit: Shutdown);
@@ -125,6 +126,7 @@ public partial class App : Application
             Rules = _config.Chat,
             Enabled = _config.Chat.Enabled,
             NotesEnabled = _config.Chat.NotesEnabled,
+            ReadingEnabled = _config.Chat.ReadingEnabled,
         };
         var (modelPath, searched) = _data.FindModel(_config.Chat.ModelFile);
         _chat.Start(modelPath, searched);

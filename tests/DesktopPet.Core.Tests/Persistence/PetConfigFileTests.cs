@@ -87,6 +87,9 @@ public class PetConfigFileTests
     [InlineData("""{ "Weights": { "Idle": 0, "Walk": 0, "Sit": 0 } }""", "Weights.Idle")]
     [InlineData("""{ "Stats": { "Critical": 30, "AwayFloor": 20 } }""", "Stats.AwayFloor")]
     [InlineData("""{ "Stats": { "AwayGap": "00:00:00" } }""", "Stats.AwayGap")]
+    [InlineData("""{ "Chat": { "NoteReadChance": 1.5 } }""", "Chat.NoteReadChance")]
+    [InlineData("""{ "Chat": { "ReadExcludedApps": null } }""", "Chat.ReadExcludedApps")]
+    [InlineData("""{ "Chat": { "ReadExcludedTitleWords": ["Bank", " "] } }""", "Chat.ReadExcludedTitleWords")]
     public void Out_of_range_values_are_rejected_by_key(string json, string key)
     {
         var result = PetConfigFile.Parse(json);

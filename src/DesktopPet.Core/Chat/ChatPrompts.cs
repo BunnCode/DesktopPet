@@ -20,6 +20,9 @@ public enum ChatKind
 
     Joke,
 
+    /// <summary>Remarks on something it reads on the window it's on, in front of or beside (M12b).</summary>
+    Remark,
+
     /// <summary>Not speech: the text of a sticky note left on a window (its own behavior, see <see cref="ChatDirector"/>).</summary>
     Note,
 }
@@ -143,6 +146,23 @@ public static class ChatPrompts
 
     /// <summary>The note to write, about one of <see cref="NoteTopics"/>.</summary>
     public static string Note(string topic) => $"Write a sticky note for the user that {topic}.";
+
+    /// <summary>A spoken remark about text the pet reads on the window it's on, in front of or beside.</summary>
+    public static string Remark(string title, string text) =>
+        Reading(title, text) +
+        "Say something to the user about one thing you read there, in your own words. Don't read it out.";
+
+    /// <summary>A sticky note about text the pet reads on the window it's on.</summary>
+    public static string NoteAbout(string title, string text) =>
+        Reading(title, text) +
+        "Write a sticky note for the user about one thing you read there: a friendly comment, tip or question, in your own words.";
+
+    /// <summary>Where the pet is and what it reads, the text set apart so the model sees where it starts and ends.</summary>
+    private static string Reading(string title, string text)
+    {
+        var where = string.IsNullOrWhiteSpace(title) ? "on one of the user's windows" : $"on the user's window \"{title.Trim()}\"";
+        return $"You're {where}. Near you, you can read this text on it:\n<<<\n{text.Trim()}\n>>>\n";
+    }
 
     /// <summary>How the pet feels, in words: its low needs, or "fine" / "great".</summary>
     internal static string Mood(PetStats stats)

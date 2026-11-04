@@ -16,8 +16,10 @@ namespace DesktopPet.Core.Chat;
 /// <param name="CanTalk">False while it's asleep (it neither talks nor writes notes).</param>
 /// <param name="WindowId">The window it stands on, if any (sticky notes go there).</param>
 /// <param name="Traits">How often it talks and writes notes.</param>
+/// <param name="ReadWindowId">The window it's on, in front of or beside, which it can read (M12b), if any.</param>
 public sealed record ChatPet(
-    int Id, string Name, string Personality, PetStats Stats, Vec2 Feet, double Scale, bool CanTalk, long? WindowId, ChatTraits Traits);
+    int Id, string Name, string Personality, PetStats Stats, Vec2 Feet, double Scale, bool CanTalk, long? WindowId, ChatTraits Traits,
+    long? ReadWindowId = null);
 
 /// <summary>
 /// What came of a request: a spoken line for a speech bubble, or (<see cref="ChatKind.Note"/>) the text of a sticky
@@ -53,6 +55,12 @@ public sealed class ChatDirector : IDisposable
 
     /// <summary>The model; null until it has loaded (nothing happens until then).</summary>
     public IChatModel? Model { get; set; }
+
+    /// <summary>
+    /// Reads the screen for remarks and notes about what a pet sees (M12b); null while reading is off. A read that
+    /// already started finishes.
+    /// </summary>
+    public IScreenReader? Reader { get; set; }
 
     /// <summary>A request is in flight.</summary>
     public bool Busy => _job is not null;
@@ -257,6 +265,7 @@ public sealed class ChatDirector : IDisposable
             (ChatKind.Needy, needy is null ? 0 : rules.NeedyPerHour * t.Needy),
             (ChatKind.Banter, friend is null ? 0 : rules.BanterPerHour * t.Banter),
             (ChatKind.Joke, rules.JokesPerHour * t.Jokes),
+            (ChatKind.Remark, Reader is null || pet.ReadWindowId is null ? 0 : rules.RemarksPerHour * t.Curiosity),
         };
 
         var total = rates.Sum(r => System.Math.Max(0, r.PerHour));
@@ -291,6 +300,9 @@ public sealed class ChatDirector : IDisposable
             case ChatKind.Banter:
                 Start(pet, kind, ChatPrompts.Banter(friend!.Name), rules, listener: friend);
                 break;
+            case ChatKind.Remark:
+                Start(pet, kind, user: null, rules, read: new Reading(pet.ReadWindowId!.Value, ChatPrompts.Remark));
+                break;
             default:
                 Start(pet, ChatKind.Joke, ChatPrompts.Joke, rules);
                 break;
@@ -315,13 +327,26 @@ public sealed class ChatDirector : IDisposable
 
         var topics = ChatPrompts.NoteTopics;
         var topic = topics[System.Math.Min(topics.Count - 1, (int)(_random.NextDouble() * topics.Count))];
-        Start(pet, ChatKind.Note, ChatPrompts.Note(topic), rules, noteWindow: window, noteX: pet.Feet.X);
+        var usual = ChatPrompts.Note(topic);
+        var read = Reader is not null && _random.Chance(System.Math.Clamp(rules.NoteReadChance * pet.Traits.Curiosity, 0, 1))
+            ? new Reading(window, ChatPrompts.NoteAbout)
+            : null;
+        Start(pet, ChatKind.Note, usual, rules, noteWindow: window, noteX: pet.Feet.X, read: read); // nothing readable: the usual topic
         return true;
     }
 
+    /// <param name="pet">Who speaks or writes.</param>
+    /// <param name="kind">What kind of line.</param>
+    /// <param name="user">What to say; with <paramref name="read"/>, what to say when nothing could be read (null: say nothing).</param>
+    /// <param name="rules">Chat tuning.</param>
+    /// <param name="listener">Who a banter line is said to.</param>
+    /// <param name="noteWindow">The window a note goes on.</param>
+    /// <param name="noteX">Where on it.</param>
+    /// <param name="answerAt">When an answer may be shown.</param>
+    /// <param name="read">Read this window first and ask about what's there.</param>
     private void Start(
-        ChatPet pet, ChatKind kind, string user, ChatRules rules, ChatPet? listener = null, long? noteWindow = null, double noteX = 0,
-        double answerAt = 0)
+        ChatPet pet, ChatKind kind, string? user, ChatRules rules, ChatPet? listener = null, long? noteWindow = null, double noteX = 0,
+        double answerAt = 0, Reading? read = null)
     {
         var system = kind == ChatKind.Note
             ? ChatPrompts.NoteSystem(pet.Name, pet.Personality, _notes.Recent(pet.Id))
@@ -330,7 +355,9 @@ public sealed class ChatDirector : IDisposable
         Task<string> task;
         try
         {
-            task = Model!.CompleteAsync(new ChatPrompt(system, user), rules.MaxTokens, rules.Temperature, cancel.Token);
+            task = read is not null && Reader is { } reader
+                ? ReadThenAskAsync(reader, Model!, read, pet, system, user, rules, cancel.Token)
+                : Model!.CompleteAsync(new ChatPrompt(system, user ?? string.Empty), rules.MaxTokens, rules.Temperature, cancel.Token);
         }
 #pragma warning disable CA1031 // any model failure just skips this one
         catch (Exception e)
@@ -341,6 +368,41 @@ public sealed class ChatDirector : IDisposable
 
         _job = new Job(pet.Id, pet.Name, kind, task, cancel, _now, listener?.Id, noteWindow, noteX, answerAt);
         TrackFor(kind).Mark(pet.Id, _now);
+    }
+
+    /// <summary>
+    /// Reads the window, then asks the model about the nearest text there. With nothing readable (an excluded window,
+    /// no text, no OCR) it asks <paramref name="fallback"/> instead, or says nothing (an empty reply) without one.
+    /// The text read only goes into this one prompt.
+    /// </summary>
+    private static async Task<string> ReadThenAskAsync(
+        IScreenReader reader, IChatModel model, Reading read, ChatPet pet, string system, string? fallback, ChatRules rules,
+        CancellationToken cancellationToken)
+    {
+        ScreenText? seen;
+        try
+        {
+            seen = await reader.ReadAsync(read.WindowId, pet.Feet, pet.Scale, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+#pragma warning disable CA1031 // a failed read is just nothing read
+        catch (Exception)
+#pragma warning restore CA1031
+        {
+            seen = null;
+        }
+
+        var snippet = seen is null ? null : ScreenReading.Snippet(seen.Lines, pet.Feet, rules.ReadChars, seen.Title);
+        var user = snippet is not null ? read.Prompt(seen!.Title, snippet) : fallback;
+        if (user is null)
+        {
+            return string.Empty;
+        }
+
+        return await model.CompleteAsync(new ChatPrompt(system, user), rules.MaxTokens, rules.Temperature, cancellationToken).ConfigureAwait(false);
     }
 
     private void Finish(Job job, IReadOnlyList<ChatPet> pets, ChatRules rules)
@@ -445,6 +507,9 @@ public sealed class ChatDirector : IDisposable
             _recent.Remove(petId);
         }
     }
+
+    /// <summary>A window to read before asking, and the prompt to ask with (title, text read).</summary>
+    private sealed record Reading(long WindowId, Func<string, string, string> Prompt);
 
     private sealed record PendingAnswer(int ListenerId, string SpeakerName, string Line, double ShowAt);
 

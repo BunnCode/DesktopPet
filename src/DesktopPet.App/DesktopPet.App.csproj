@@ -3,7 +3,7 @@
   <!-- WPF composition root: windows, rendering, menus, tray. Wires Platform.Windows into Core. -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <UseWPF>true</UseWPF>
     <!-- Only for the tray NotifyIcon. -->
     <UseWindowsForms>true</UseWindowsForms>

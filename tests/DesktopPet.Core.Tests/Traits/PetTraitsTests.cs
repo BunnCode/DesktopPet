@@ -189,7 +189,7 @@ public class PetTraitsTests
             Name = "Barnaby",
             Neediness = new Neediness(1.25, 0.6, 2),
             Behavior = new BehaviorTraits(1, 0.5, 1.5, 0.7, 1.9, 0.55),
-            Chat = new ChatTraits(0.5, 2, 0, 1.3),
+            Chat = new ChatTraits(0.5, 2, 0, 1.3, 1.7),
         };
         var parsed = PetTraitsFile.Parse(PetTraitsFile.Serialize(traits));
 
@@ -214,6 +214,14 @@ public class PetTraitsTests
     }
 
     [Fact]
+    public void Chat_sections_from_before_curiosity_count_it_as_average()
+    {
+        var parsed = PetTraitsFile.Parse("""{ "Name": "Ava", "Chat": { "Needy": 1.2, "Banter": 0.8, "Jokes": 1.5, "Notes": 0.6 } }""");
+
+        Assert.Equal(new ChatTraits(1.2, 0.8, 1.5, 0.6, Curiosity: 1), parsed.Traits!.Chat);
+    }
+
+    [Fact]
     public void Traits_file_with_a_null_section_uses_averages()
     {
         var parsed = PetTraitsFile.Parse("""{ "Name": "Edna", "Neediness": null }""");
@@ -228,6 +236,7 @@ public class PetTraitsTests
     [InlineData("""{ "Name": "Ava", "Behavior": { "Push": -1 } }""", "Behavior.Push must be between 0 and 10 (it is -1).")]
     [InlineData("""{ "Name": "Ava", "Behavior": { "Idle": 0, "Walk": 0, "Sit": 0 } }""", "Behavior.Idle, Behavior.Walk and Behavior.Sit can't all be 0.")]
     [InlineData("""{ "Name": "Ava", "Chat": { "Jokes": 12 } }""", "Chat.Jokes must be between 0 and 10 (it is 12).")]
+    [InlineData("""{ "Name": "Ava", "Chat": { "Curiosity": -2 } }""", "Chat.Curiosity must be between 0 and 10 (it is -2).")]
     [InlineData("{ nope", "Not valid JSON (line 1).")]
     [InlineData("null", "The file is empty.")]
     public void Traits_file_problems_are_reported(string text, string error)

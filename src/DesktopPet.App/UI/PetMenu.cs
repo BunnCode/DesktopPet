@@ -52,13 +52,14 @@ internal sealed class PetMenu : IDisposable
     /// <param name="onPushing">"Let it push windows" toggled (applies to all pets).</param>
     /// <param name="chat">Initial state of "Let them talk" (speech bubbles), and what to do when it's toggled.</param>
     /// <param name="notes">Initial state of "Let them leave notes" (sticky notes, a separate behavior), and what to do when it's toggled.</param>
+    /// <param name="reading">Initial state of "Let them read the screen" (talking and writing about what's on windows), and what to do when it's toggled.</param>
     /// <param name="customize">Customize submenu actions: edit settings, open data folder, export sprite template.</param>
     /// <param name="onDebugOverlay">Debug overlay toggled.</param>
     /// <param name="onExit">Exit chosen.</param>
     public PetMenu(
         Func<IPetControls> defaultTarget, Func<bool> canAdd, Func<bool> canRemove, Action onAdd, Action<IPetControls> onRemove,
         (Action<IPetControls> EditTraits, Action<IPetControls> OpenFolder) petFiles, FurnitureActions furniture, bool pushingEnabled, Action<bool> onPushing, (bool Enabled, Action<bool> OnChanged) chat,
-        (bool Enabled, Action<bool> OnChanged) notes,
+        (bool Enabled, Action<bool> OnChanged) notes, (bool Enabled, Action<bool> OnChanged) reading,
         (Action EditSettings, Action OpenDataFolder, Action ExportSpriteTemplate) customize,
         Action<bool> onDebugOverlay, Action onExit)
     {
@@ -107,6 +108,8 @@ internal sealed class PetMenu : IDisposable
         talking.CheckedChanged += (_, _) => chat.OnChanged(talking.Checked);
         var leavingNotes = new ToolStripMenuItem("Let them leave notes") { CheckOnClick = true, Checked = notes.Enabled };
         leavingNotes.CheckedChanged += (_, _) => notes.OnChanged(leavingNotes.Checked);
+        var readingScreen = new ToolStripMenuItem("Let them read the screen") { CheckOnClick = true, Checked = reading.Enabled };
+        readingScreen.CheckedChanged += (_, _) => reading.OnChanged(readingScreen.Checked);
 
         var debugOverlay = new ToolStripMenuItem("Debug overlay") { CheckOnClick = true };
         debugOverlay.CheckedChanged += (_, _) => onDebugOverlay(debugOverlay.Checked);
@@ -132,6 +135,7 @@ internal sealed class PetMenu : IDisposable
             pushing,
             talking,
             leavingNotes,
+            readingScreen,
             customizeMenu,
             debugOverlay,
             new ToolStripMenuItem("Exit", null, (_, _) => onExit()),
@@ -182,7 +186,7 @@ internal sealed class PetMenu : IDisposable
             $"Likes: idling {X(b.Idle)}, walking {X(b.Walk)}, sitting {X(b.Sit)}, napping {X(b.Sleep)}, " +
             $"climbing {X(b.Climb)}, pushing windows {X(b.Push)}");
         var c = pet.Traits.Chat;
-        _chat.Text = Wrap($"Talks: about its needs {X(c.Needy)}, with friends {X(c.Banter)}, jokes {X(c.Jokes)}. Leaves sticky notes {X(c.Notes)}");
+        _chat.Text = Wrap($"Talks: about its needs {X(c.Needy)}, with friends {X(c.Banter)}, jokes {X(c.Jokes)}. Leaves sticky notes {X(c.Notes)}. Curious about what's on screen {X(c.Curiosity)}");
         RefreshFurniture(pet);
         _add.Enabled = _canAdd();
         _remove.Enabled = _canRemove();

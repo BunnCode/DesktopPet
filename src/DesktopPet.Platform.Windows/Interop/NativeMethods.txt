@@ -39,3 +39,14 @@ HWND_TOP
 
 // Icons
 DestroyIcon
+
+// Reading the screen (M12b): window title, screen capture
+GetWindowText
+GetDC
+ReleaseDC
+CreateCompatibleDC
+DeleteDC
+CreateDIBSection
+SelectObject
+DeleteObject
+BitBlt

@@ -15,13 +15,13 @@ matching line here.
 - C# / .NET 10 / WPF desktop pet (Shimeji-style), Windows only. About 11,000 lines including tests.
 - Build `dotnet build DesktopPet.slnx`, test `dotnet test DesktopPet.slnx`. Warnings are errors (`Directory.Build.props`).
   Tests take well under a second.
-- Exe: `src/DesktopPet.App/bin/Debug/net10.0-windows/DesktopPet.App.exe`. A running pet locks `bin/`.
+- Exe: `src/DesktopPet.App/bin/Debug/net10.0-windows10.0.19041.0/DesktopPet.App.exe`. A running pet locks `bin/`.
   Single instance (named mutex `Local\DesktopPet.SingleInstance`).
 - Projects (dependencies point down):
 
 ```
-DesktopPet.App               net10.0-windows WPF exe (+WinForms for the tray/menu only). Composition root, glue.
-  ├─ DesktopPet.Platform.Windows   net10.0-windows. Thin Win32 adapter via CsWin32; no game rules.
+DesktopPet.App               net10.0-windows10.0.19041.0 WPF exe (+WinForms for the tray/menu only). Composition root, glue.
+  ├─ DesktopPet.Platform.Windows   net10.0-windows10.0.19041.0. Thin Win32 adapter via CsWin32 (+ Windows OCR); no game rules.
   │    └─ DesktopPet.Core
   ├─ DesktopPet.Chat          net10.0 (win-x64). The local language model via LLamaSharp; implements Core's IChatModel.
   │    └─ DesktopPet.Core
@@ -63,6 +63,7 @@ One pet. The App talks to Core almost only through this class.
 | `Reconfigure(PetConfig)` | Live settings swap (shared config; traits re-applied); forces platform/wall rebuild |
 | `Traits`, `SetTraits(PetTraits)` | The pet's name and multipliers; live swap when its traits.json changes |
 | `DropFrom(feet)` | Place an airborne pet (new pets arriving) |
+| `ReadableWindow(reachDip)` | The window the pet can read (M12b): stands on or clings to, else the one behind it, else one beside it |
 | `FurnitureTarget`, `Pen`, `LeaveFurniture()` | The furniture it's heading for or using, the pen it's shut in; free its slot (pet removed) |
 | `UserAway`, `PushingEnabled` | Set by host / menu |
 | `Config` (effective, traits applied), `Stats`, `CreateSave()`, `IsHeld`, `Mode`, `State`, `Platforms`, `Walls`, `GroundKey`, `RespawnCount` | Read-outs for menu, saving, overlay, tests |
@@ -120,8 +121,10 @@ UseFurniture; `LostGround`→Fall, `Grabbed`→Hang, `Clung`→Cling, `HitWall`�
 | `Furniture/RoomSave.cs` | `RoomSave`/`RoomItem` and `RoomStore` (`room.json`, atomic write) |
 | `Chat/ChatRules.cs` | Chat tuning (`PetConfig.Chat`): shared model settings, then **speech** and **sticky notes**, two separate behaviors with their own switches, rates and gaps |
 | `Chat/IChatModel.cs` | `IChatModel.CompleteAsync(ChatPrompt, maxTokens, temperature, ct)`, `ChatPrompt(System, User)` |
-| `Chat/ChatDirector.cs` | **Runs speech and notes**: `Tick(dt, pets, rules, speech, notes, notesOnScreen)`, `Clicked(petId, click)` (a reaction that goes first and skips the gaps), one request at a time, timeouts, banter → answer (held until `AnswerDelaySeconds`), per-behavior gaps and recent lines (`Track`); `TakeLines` → `ChatLine`s, `TakeProblems`, `Forget`. `ChatPet` is a pet as chat sees it |
-| `Chat/ChatPrompts.cs` | `ChatKind` (Needy, Banter, Answer, Clicked, Joke; Note = a note's text), `NeedKind`; `System` (speech, mood only for needs), `NoteSystem` (writing), `Needy`/`Clicked`/`Banter`/`Answer`/`Joke`, `NoteTopics` + `Note(topic)`, `Mood` |
+| `Chat/ChatDirector.cs` | **Runs speech and notes**: `Tick(dt, pets, rules, speech, notes, notesOnScreen)`, `Clicked(petId, click)` (a reaction that goes first and skips the gaps), one request at a time, timeouts, banter → answer (held until `AnswerDelaySeconds`), per-behavior gaps and recent lines (`Track`); `TakeLines` → `ChatLine`s, `TakeProblems`, `Forget`. `ChatPet` is a pet as chat sees it (incl. `ReadWindowId`). `Reader` (null = reading off): remarks and reading notes read first, then ask (`ReadThenAskAsync`) |
+| `Chat/ChatPrompts.cs` | `ChatKind` (Needy, Banter, Answer, Clicked, Joke, Remark; Note = a note's text), `NeedKind`; `System` (speech, mood only for needs), `NoteSystem` (writing), `Needy`/`Clicked`/`Banter`/`Answer`/`Joke`, `NoteTopics` + `Note(topic)`, `Remark`/`NoteAbout` (title + text read), `Mood` |
+| `Chat/ScreenReading.cs` | M12b: `ScreenLine`, `ScreenText`, `IScreenReader` (the App's OCR reader, a fake in tests); `ScreenReading`: `Allows` (excluded apps and title words), `Area` (box around the pet, slid into the window), `Visible` (drop lines under covers), `Snippet` (nearest readable lines, reading order) |
+| `Chat/TextList.cs` | A string list that compares by items (settings lists, so config records stay equal) |
 | `Chat/ChatText.cs` | `ChatText.Clean` (raw reply → bubble/note text or null); `ChatMl.Format` (Qwen ChatML, thinking off) |
 | `Simulation/PetClick.cs` | `PetClick` (Petted, WokenUp, Poked): what a click did; `PetSimulation.TakeClick()` drains it |
 | `Simulation/PetConfigValidator.cs` | Range checks for every setting |
@@ -145,6 +148,7 @@ Win32 through CsWin32: add API names to `Interop/NativeMethods.txt` (one per lin
 | `PetWindowInterop.cs` | Extended styles (no-activate, tool window), `SetBounds` / `SetPosition` in physical pixels, `BringToTopmost`, overlay styles |
 | `WindowManipulator.cs` | `MoveBy(windowId, dx, dy)` with `WindowMoveGuard` against the live frame |
 | `NativeIcon.cs` | `DestroyIcon` |
+| `ScreenText.cs` | M12b: `WindowIdentity` (`Describe` → title + process name; `CoversOf` → other processes' windows in front), `ScreenCapture.Capture(area)` (GDI BitBlt → BGRA), `TextRecognizer` (`Windows.Media.Ocr`, 2× below 150% scale, lines with screen bounds) |
 | `WindowTracker.cs` | For sticky notes: `Query(id)` → `TrackedWindowState` (Gone, Hidden, Shown) + frame; `PlaceAbove(ours, id)` keeps our window just above another in z-order |
 
 ## Chat (`src/DesktopPet.Chat/`)
@@ -176,8 +180,9 @@ Win32 through CsWin32: add API names to `Interop/NativeMethods.txt` (one per lin
 | `UI/IPetControls.cs` | What the menu needs from a pet |
 | `UI/TrayIcon.cs` | `NotifyIcon` with the shared menu; `Notify(title, text, warning)` |
 | `UI/DebugOverlay.cs` | Click-through overlay per monitor drawing floors, window tops, walls, hang bars, pet and furniture boxes (`DebugView`, `DebugPet`) |
-| `Chat/ChatHost.cs` | Loads the model in the background, ticks `ChatDirector` every display frame (`CompositionTarget.Rendering`) with `PetHost.ChatInfo`, shows lines as bubbles (stacked when they'd overlap) and notes, tracks notes against their windows every 100 ms; `Enabled` (speech), `NotesEnabled`, `Forget`, `BringToFront` |
+| `Chat/ChatHost.cs` | Loads the model in the background, ticks `ChatDirector` every display frame (`CompositionTarget.Rendering`) with `PetHost.ChatInfo`, shows lines as bubbles (stacked when they'd overlap) and notes, tracks notes against their windows every 100 ms; `Enabled` (speech), `NotesEnabled`, `ReadingEnabled` (sets `ChatDirector.Reader`), `Forget`, `BringToFront` |
 | `Chat/SpeechBubble.cs` | Click-through topmost bubble sized to its text; `Say`, `Follow` (fade, follow the head, stack above `taken`), `Silence` |
+| `Chat/ScreenReader.cs` | `IScreenReader` for Core: query window, check `ScreenReading.Allows`, capture the area, OCR, keep `Visible` lines (covers: windows in front + our pets, bubbles, notes); notifies once if there's no OCR |
 | `Chat/StickyNote.cs` | Note window anchored to another window by offset; `Track(state, bounds)`; click → `Dismissed` |
 | `app.manifest` | PerMonitorV2 DPI awareness |
 
@@ -245,6 +250,7 @@ the Recycle Bin.
 | Add a furniture use effect | `UseEffect`, `UseFurnitureState.Update`, `PetSimulation.UseActivity`, tests in `Behavior/FurnitureBehaviorTests` |
 | Add a kind of spoken line | `ChatKind`, a prompt in `ChatPrompts`, a rate in `ChatRules` (+ validator), the roll in `ChatDirector.TrySpeak`, maybe a `ChatTraits` multiplier; tests in `Chat/ChatDirectorTests` |
 | Change what notes are about | `ChatPrompts.NoteTopics` / `NoteSystem` |
+| Change what pets may read | `ChatRules.ReadExcluded*` defaults, `ScreenReading` (area, visibility, snippet), `ScreenReader` (App glue); tests in `Chat/ScreenReadingTests`, `Chat/ChatReadingTests` |
 | Add a file to the pet folder | `DataFolder` (path, load/write), `PetFileKind` + `PetRoster.Classify` if it reloads live, `App.OnPetChanged` |
 
 ## Tests (`tests/DesktopPet.Core.Tests/`)

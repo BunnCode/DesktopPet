@@ -24,7 +24,8 @@ public static class TraitRoller
             Behavior = new BehaviorTraits(
                 Multiplier(random, act), Multiplier(random, act), Multiplier(random, act),
                 Multiplier(random, act), Multiplier(random, act), Multiplier(random, act)),
-            Chat = new ChatTraits(Multiplier(random, chat), Multiplier(random, chat), Multiplier(random, chat), Multiplier(random, chat)),
+            Chat = new ChatTraits(
+                Multiplier(random, chat), Multiplier(random, chat), Multiplier(random, chat), Multiplier(random, chat), Multiplier(random, chat)),
         };
     }
 

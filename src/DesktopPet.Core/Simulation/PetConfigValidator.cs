@@ -176,6 +176,19 @@ public static class PetConfigValidator
             Range("Chat.BubbleSeconds", chat.BubbleSeconds, 0.5, 120);
             Range("Chat.BubbleSecondsPerChar", chat.BubbleSecondsPerChar, 0, 5);
             Range("Chat.RecentLines", chat.RecentLines, 0, 20);
+            Range("Chat.RemarksPerHour", chat.RemarksPerHour, 0, 3_600);
+            Range("Chat.NoteReadChance", chat.NoteReadChance, 0, 1);
+            Range("Chat.ReadReachDip", chat.ReadReachDip, 0, 1_000);
+            Range("Chat.ReadChars", chat.ReadChars, 40, 2_000);
+            if (chat.ReadExcludedApps is null || chat.ReadExcludedApps.Any(string.IsNullOrWhiteSpace))
+            {
+                errors.Add("Chat.ReadExcludedApps must be a list of app names (it can be empty: []).");
+            }
+
+            if (chat.ReadExcludedTitleWords is null || chat.ReadExcludedTitleWords.Any(string.IsNullOrWhiteSpace))
+            {
+                errors.Add("Chat.ReadExcludedTitleWords must be a list of words (it can be empty: []).");
+            }
         }
 
         ValidateStats(c.Stats, errors, Range);
