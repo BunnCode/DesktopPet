@@ -6,14 +6,15 @@ namespace DesktopPet.Core.Persistence;
 /// <summary>Which of a pet's files changed.</summary>
 public enum PetFileKind
 {
-    Traits,
+    /// <summary>Its save.json, which holds its traits (the app's own autosaves included).</summary>
+    Save,
     Personality,
     Sprites,
 }
 
 /// <summary>
-/// Which pets exist is which pet folders exist: pet <i>n</i> lives in <c>pets\n\</c> (its save, traits, personality and
-/// sprites), so copying the folder moves the pet. Before M10 pets were bare save files in the data folder
+/// Which pets exist is which pet folders exist: pet <i>n</i> lives in <c>pets\n\</c> (its save with its traits, its personality
+/// and sprites), so copying the folder moves the pet. Before M10 pets were bare save files in the data folder
 /// (<c>save.json</c> for pet 1, <c>save-n.json</c> for pet <i>n</i>); <see cref="PlanMigration"/> moves those into folders.
 /// </summary>
 public static class PetRoster
@@ -130,7 +131,7 @@ public static class PetRoster
 
     /// <summary>
     /// What a change at <paramref name="relativePath"/> (relative to the pets folder, either slash) means: a pet's
-    /// traits, personality or sprites. Null for anything else, including the save, which only the app writes.
+    /// save (which holds its traits), personality or sprites. Null for anything else.
     /// </summary>
     public static (int PetId, PetFileKind Kind)? Classify(string relativePath)
     {
@@ -151,9 +152,9 @@ public static class PetRoster
             return null;
         }
 
-        if (string.Equals(parts[1], PetTraitsFile.FileName, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(parts[1], SaveFileName, StringComparison.OrdinalIgnoreCase))
         {
-            return (id, PetFileKind.Traits);
+            return (id, PetFileKind.Save);
         }
 
         return string.Equals(parts[1], Personality.FileName, StringComparison.OrdinalIgnoreCase)

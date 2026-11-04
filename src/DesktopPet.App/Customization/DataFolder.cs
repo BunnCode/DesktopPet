@@ -11,7 +11,7 @@ namespace DesktopPet.App.Customization;
 
 /// <summary>
 /// <c>%LOCALAPPDATA%\DesktopPet</c>: settings.json, the shared sprites folder, the exported sprite template,
-/// <c>pets\n\</c>, one folder per pet with its save, traits.json, personality.txt and own sprites, the furniture
+/// <c>pets\n\</c>, one folder per pet with its save.json (stats and traits), personality.txt and own sprites, the furniture
 /// definitions and art in <c>furniture\</c>, and where the furniture stands in room.json.
 /// </summary>
 internal sealed class DataFolder(string root)
@@ -50,17 +50,17 @@ internal sealed class DataFolder(string root)
 
     public string PetFolder(int petId) => Path.Combine(Pets, PetRoster.FolderName(petId));
     public string SavePath(int petId) => Path.Combine(PetFolder(petId), PetRoster.SaveFileName);
-    public string TraitsPath(int petId) => Path.Combine(PetFolder(petId), PetTraitsFile.FileName);
+    public string LegacyTraitsPath(int petId) => Path.Combine(PetFolder(petId), PetTraitsFile.LegacyFileName);
     public string PersonalityPath(int petId) => Path.Combine(PetFolder(petId), Personality.FileName);
     public string PetSprites(int petId) => Path.Combine(PetFolder(petId), PetRoster.SpritesFolderName);
 
     /// <summary>Sprite folders for a pet, most specific first: its own, then the shared one.</summary>
     public IReadOnlyList<string> SpriteFolders(int petId) => [PetSprites(petId), Sprites];
 
-    /// <summary>Ids of the pet folders that hold a pet (a save or traits), ascending.</summary>
+    /// <summary>Ids of the pet folders that hold a pet (a save, or an old traits.json not yet folded in), ascending.</summary>
     public IReadOnlyList<int> ExistingPets() =>
         [.. PetRoster.IdsFromFolderNames(Directory.EnumerateDirectories(Pets).Select(d => Path.GetFileName(d)))
-            .Where(id => File.Exists(SavePath(id)) || File.Exists(TraitsPath(id)))];
+            .Where(id => File.Exists(SavePath(id)) || File.Exists(LegacyTraitsPath(id)))];
 
     /// <summary>Pets to start with: one per pet folder except the dead ones, or pet 1 if there are no pet folders.</summary>
     public IReadOnlyList<int> StartupPets() => PetRoster.StartupPets(ExistingPets(), [.. DeadPets().Select(d => d.Id)]);
@@ -108,24 +108,58 @@ internal sealed class DataFolder(string root)
         return problems;
     }
 
-    /// <summary>A pet's traits.json, or null if it has none yet.</summary>
+    /// <summary>
+    /// Folds each pet's old traits.json (from before version 4 of the save) into its save.json as the Traits section,
+    /// then moves the traits.json to the Recycle Bin. Returns what went wrong; a file that couldn't be folded in stays.
+    /// </summary>
+    public IReadOnlyList<string> MigrateTraitsFiles()
+    {
+        var problems = new List<string>();
+        foreach (var id in PetRoster.IdsFromFolderNames(Directory.EnumerateDirectories(Pets).Select(d => Path.GetFileName(d))))
+        {
+            var traitsPath = LegacyTraitsPath(id);
+            if (!File.Exists(traitsPath))
+            {
+                continue;
+            }
+
+            try
+            {
+                var savePath = SavePath(id);
+                var saveText = File.Exists(savePath) ? File.ReadAllText(savePath) : null;
+                var (text, error) = PetSaveFile.FoldIn(saveText, File.ReadAllText(traitsPath), DateTimeOffset.UtcNow);
+                if (text is null)
+                {
+                    problems.Add($@"pets\{id}\{error} So traits.json wasn't moved into save.json yet: fix it and restart.");
+                    continue;
+                }
+
+                var temp = savePath + ".tmp";
+                File.WriteAllText(temp, text);
+                File.Move(temp, savePath, overwrite: true);
+                FileSystem.DeleteFile(traitsPath, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                problems.Add($@"pets\{id}\traits.json couldn't be moved into its save.json: {e.Message}");
+            }
+        }
+
+        return problems;
+    }
+
+    /// <summary>The Traits in a pet's save.json, or null if it has no save or no Traits yet.</summary>
     public TraitsParseResult? LoadTraits(int petId)
     {
-        var path = TraitsPath(petId);
+        var path = SavePath(petId);
         try
         {
-            return File.Exists(path) ? PetTraitsFile.Parse(File.ReadAllText(path)) : null;
+            return File.Exists(path) ? PetSaveFile.Parse(File.ReadAllText(path)).Traits : null;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return new TraitsParseResult(null, [$"traits.json couldn't be read: {e.Message}"]);
+            return new TraitsParseResult(null, [$"save.json couldn't be read: {e.Message}"]);
         }
-    }
-
-    public void WriteTraits(int petId, PetTraits traits)
-    {
-        EnsurePetFolder(petId);
-        File.WriteAllText(TraitsPath(petId), PetTraitsFile.Serialize(traits));
     }
 
     /// <summary>A pet's personality text, or null if it has no personality.txt (or it can't be read right now).</summary>

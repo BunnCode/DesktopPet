@@ -70,6 +70,7 @@ public partial class App : Application
 
         _data.EnsureExists();
         var problems = new List<string>(_data.MigrateLegacySaves());
+        problems.AddRange(_data.MigrateTraitsFiles());
         var settings = _data.LoadSettings();
         _config = settings.Config ?? PetConfig.Default;
         _pushingEnabled = _config.EnablePushing;
@@ -81,7 +82,7 @@ public partial class App : Application
         problems.AddRange(LoadFurniture());
         _furniture.Start();
 
-        // Read every pet's traits first, so names rolled for pets without a traits.json avoid all the existing ones.
+        // Read every pet's traits first, so names rolled for pets without any avoid all the existing ones.
         var startup = _data.StartupPets().Select(id => (Id: id, Traits: _data.LoadTraits(id))).ToList();
         var names = new List<string>();
         foreach (var (id, loaded) in startup)
@@ -92,7 +93,7 @@ public partial class App : Application
             }
             else if (loaded is not null)
             {
-                problems.AddRange(loaded.Errors.Select(error => $@"pets\{id}\traits.json: {error}"));
+                problems.AddRange(loaded.Errors.Select(error => $@"pets\{id}\save.json: {error}"));
             }
         }
 
@@ -195,12 +196,12 @@ public partial class App : Application
     // ---- Pets ----
 
     /// <summary>
-    /// Starts pet <paramref name="id"/> from its folder: its save (or fresh), its traits (rolled and written if it has
-    /// no traits.json; average ones while that file is broken), its personality (written from the traits if missing)
+    /// Starts pet <paramref name="id"/> from its folder: its save (or fresh), its traits (rolled if its save has none,
+    /// and saved with it; average ones while they're broken), its personality (written from the traits if missing)
     /// and its sprites. Returns the problems found, for reporting.
     /// </summary>
     /// <param name="id">The pet's id (its folder name).</param>
-    /// <param name="loaded">Its traits.json as read, or null if it has none.</param>
+    /// <param name="loaded">The Traits in its save.json as read, or null if it has none.</param>
     /// <param name="names">Names of all pets, including ones not started yet; a newly rolled name is added.</param>
     /// <param name="dropIn">Drop in at a random spot rather than at the top centre.</param>
     /// <param name="dropAt">Drop in here instead (a hatchling, where its egg was).</param>
@@ -213,11 +214,10 @@ public partial class App : Application
         {
             var rolled = TraitRoller.Roll(_config, _traitRandom, names);
             names.Add(rolled.Name);
-            TryWrite(() => _data.WriteTraits(id, rolled), problems);
-            traits = rolled;
+            traits = rolled; // saved into save.json below
         }
 
-        traits ??= PetTraits.Neutral($"Pet {id}"); // traits.json is broken (reported by the caller)
+        traits ??= PetTraits.Neutral($"Pet {id}"); // its Traits are broken (reported by the caller; the file keeps them)
         var personality = _data.LoadPersonality(id);
         if (personality is null)
         {
@@ -232,7 +232,11 @@ public partial class App : Application
         var pet = new PetHost(id, _config, traits, personality, new JsonFileSaveStore(_data.SavePath(id)), atlas, _desktop!, _furniture!.World)
         {
             PushingEnabled = _pushingEnabled,
+            TraitProblems = loaded is { Traits: null } ? string.Join("\n", loaded.Errors) : null,
         };
+        pet.BrokenSaveKept += (_, copy) => ReportProblems(
+            $"{pet.Name}'s save.json wasn't valid JSON",
+            [$"It was saved over to keep the pet going. Your version is in {Path.GetFileName(copy)} next to it."]);
         pet.MenuRequested += (_, _) =>
         {
             _lastClicked = pet;
@@ -251,7 +255,7 @@ public partial class App : Application
         }
 
         pet.Start();
-        pet.Save(); // a new pet exists from now on, even if the app is killed
+        pet.Save(); // a new pet exists from now on, even if the app is killed (with its traits, if they were rolled)
         _pets.Add(pet);
         return problems;
     }
@@ -269,10 +273,9 @@ public partial class App : Application
         var (list, listProblems) = _data.LoadPersonalityTraits();
         var (traits, personality) = PersonalityTraits.Give(TraitRoller.Roll(_config, _traitRandom, names), list, _traitRandom);
         var problems = listProblems.Select(p => $"{PersonalityTraits.FileName} (the default list is used): {p}").ToList();
-        TryWrite(() => _data.WriteTraits(id, traits), problems);
         TryWrite(() => _data.WritePersonality(id, personality), problems);
         names.Add(traits.Name);
-        problems.AddRange(StartPet(id, new TraitsParseResult(traits, []), names, dropIn: true)); // shown last, so it's above the debug overlay if that's on
+        problems.AddRange(StartPet(id, new TraitsParseResult(traits, []), names, dropIn: true)); // saves the traits // shown last, so it's above the debug overlay if that's on
         if (problems.Count > 0)
         {
             ReportProblems("The new pet's files have problems", problems);
@@ -326,9 +329,9 @@ public partial class App : Application
         var (traits, personality) = PersonalityTraits.Give(named, list, _traitRandom);
         var problems = listProblems.Select(p => $"{PersonalityTraits.FileName} (the default list is used): {p}").ToList();
         var now = DateTimeOffset.UtcNow;
-        TryWrite(() => _data.WriteTraits(id, traits), problems);
         TryWrite(() => _data.WritePersonality(id, personality), problems);
-        TryWrite(() => new JsonFileSaveStore(_data.SavePath(id)).Save(SaveData.From(PetStats.Fresh, now, lastMated: now) with { BornUtc = now }), problems);
+        TryWrite(() => new JsonFileSaveStore(_data.SavePath(id)).Save(
+            SaveData.From(PetStats.Fresh, now, lastMated: now) with { BornUtc = now, Traits = traits }, replaceTraits: true), problems);
         if (egg.SpritesFrom is { } parent && _data.HasOwnSprites(parent))
         {
             TryWrite(() => _data.CopySprites(parent, id), problems);
@@ -359,19 +362,19 @@ public partial class App : Application
         };
     }
 
-    /// <summary>Fixes a pet (or undoes it) by rewriting its traits.json: a fixed pet never mates.</summary>
+    /// <summary>Fixes a pet (or undoes it) by rewriting the Traits in its save.json: a fixed pet never mates.</summary>
     private void SetFixed(PetHost pet, bool isFixed)
     {
-        var traits = pet.Traits with { Fixed = isFixed };
+        var old = pet.Traits;
         var problems = new List<string>();
-        TryWrite(() => _data.WriteTraits(pet.Id, traits), problems);
+        TryWrite(() => pet.WriteTraits(old with { Fixed = isFixed }), problems);
         if (problems.Count > 0)
         {
-            ReportProblems($"{pet.Name}'s traits.json couldn't be written", problems);
+            pet.SetTraits(old);
+            ReportProblems($"{pet.Name}'s save.json couldn't be written", problems);
             return;
         }
 
-        pet.SetTraits(traits);
         _tray?.Notify(isFixed ? $"{pet.Name} is fixed" : $"{pet.Name} isn't fixed any more",
             isFixed ? "No babies from now on." : "Babies are possible again.");
     }
@@ -483,7 +486,7 @@ public partial class App : Application
         }
     }
 
-    /// <summary>A dead pet's gravestone details: its name from its traits.json (else <paramref name="fallbackName"/>), its dates from its save.</summary>
+    /// <summary>A dead pet's gravestone details: its name from its traits (else <paramref name="fallbackName"/>), its dates from its save.</summary>
     private GraveInfo GraveFor(int id, SaveData save, string fallbackName)
     {
         var name = _data.LoadTraits(id)?.Traits?.Name ?? fallbackName;
@@ -526,7 +529,7 @@ public partial class App : Application
         var loaded = _data.LoadTraits(id);
         if (loaded is { Traits: null })
         {
-            problems.AddRange(loaded.Errors.Select(error => $@"pets\{id}\traits.json: {error}"));
+            problems.AddRange(loaded.Errors.Select(error => $@"pets\{id}\save.json: {error}"));
         }
 
         var names = _pets.Select(p => p.Name).ToList();
@@ -814,7 +817,7 @@ public partial class App : Application
         }
     }
 
-    /// <summary>One of a pet's own files changed: traits.json, personality.txt or its sprites folder.</summary>
+    /// <summary>One of a pet's own files changed: save.json (its traits), personality.txt or its sprites folder.</summary>
     private void OnPetChanged(int id, PetFileKind kind)
     {
         var pet = _pets.FirstOrDefault(p => p.Id == id);
@@ -825,7 +828,7 @@ public partial class App : Application
 
         switch (kind)
         {
-            case PetFileKind.Traits:
+            case PetFileKind.Save:
                 OnTraitsChanged(pet);
                 break;
 
@@ -860,14 +863,25 @@ public partial class App : Application
         var loaded = _data.LoadTraits(pet.Id);
         if (loaded is null || loaded.Traits == pet.Traits)
         {
-            return; // deleted (the current traits stay in force) or unchanged, such as our own write
+            // Deleted (the current traits stay in force, and the next save writes them back) or unchanged, such as an autosave.
+            pet.TraitProblems = loaded is null ? pet.TraitProblems : null;
+            return;
         }
 
         if (loaded.Traits is not { } traits)
         {
-            ReportProblems($"{pet.Name}'s traits not applied (the previous ones stay)", loaded.Errors);
+            // Autosaves keep the broken Traits as they are, so the same problems come back each minute: report them once.
+            var problems = string.Join("\n", loaded.Errors);
+            if (problems != pet.TraitProblems)
+            {
+                pet.TraitProblems = problems;
+                ReportProblems($"{pet.Name}'s traits not applied (the previous ones stay)", loaded.Errors);
+            }
+
             return;
         }
+
+        pet.TraitProblems = null;
 
         var oldName = pet.Name;
         var oldJacket = pet.Jacket;
@@ -879,22 +893,22 @@ public partial class App : Application
         }
 
         var renamed = oldName != traits.Name ? $"{oldName} is now called {traits.Name}. " : string.Empty;
-        _tray?.Notify($"{traits.Name}'s traits applied", renamed + "Your changes to traits.json are live.");
+        _tray?.Notify($"{traits.Name}'s traits applied", renamed + "Your changes to save.json are live.");
     }
 
-    /// <summary>Opens the pet's traits.json for editing, writing it first if it's missing.</summary>
+    /// <summary>Opens the pet's save.json (its Traits are the part to edit), writing it first if it's missing.</summary>
     private void EditTraits(PetHost pet)
     {
-        var path = _data.TraitsPath(pet.Id);
+        var path = _data.SavePath(pet.Id);
         var problems = new List<string>();
         if (!File.Exists(path))
         {
-            TryWrite(() => _data.WriteTraits(pet.Id, pet.Traits), problems);
+            TryWrite(() => pet.WriteTraits(pet.Traits), problems);
         }
 
         if (problems.Count > 0)
         {
-            ReportProblems($"{pet.Name}'s traits.json couldn't be written", problems);
+            ReportProblems($"{pet.Name}'s save.json couldn't be written", problems);
             return;
         }
 

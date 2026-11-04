@@ -8,7 +8,7 @@ internal interface IPetControls
 {
     string Name { get; }
 
-    /// <summary>Name and multipliers (read-only here; edited in the pet's traits.json).</summary>
+    /// <summary>Name and multipliers (read-only here; edited in the Traits of the pet's save.json).</summary>
     PetTraits Traits { get; }
 
     /// <summary>The pet's personality text.</summary>

@@ -6,7 +6,7 @@ namespace DesktopPet.Core.Traits;
 
 /// <summary>
 /// What makes one pet different from another: its name, how fast its needs drop and how it likes to spend its time.
-/// Multipliers are 1 for an average pet. Kept in the pet's own <c>traits.json</c> and applied on top of the shared
+/// Multipliers are 1 for an average pet. Kept in the <c>Traits</c> section of the pet's <c>save.json</c> and applied on top of the shared
 /// settings with <see cref="ApplyTo"/>.
 /// </summary>
 public sealed record PetTraits

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace DesktopPet.Core.Traits;
 
@@ -7,26 +8,20 @@ namespace DesktopPet.Core.Traits;
 public sealed record TraitsParseResult(PetTraits? Traits, IReadOnlyList<string> Errors);
 
 /// <summary>
-/// A pet's <c>traits.json</c>: its name and multipliers. Forgiving to hand-edit like <c>settings.json</c> (comments,
-/// trailing commas, any key casing, missing keys default to 1) and strict about values.
+/// A pet's traits as JSON: its name and multipliers, the <c>Traits</c> section of its <c>save.json</c>
+/// (<see cref="Persistence.PetSaveFile"/>). Forgiving to hand-edit like <c>settings.json</c> (comments, trailing commas,
+/// any key casing, missing keys default to 1) and strict about values.
 /// </summary>
 public static class PetTraitsFile
 {
-    public const string FileName = "traits.json";
+    /// <summary>Where traits lived before they moved into the save; folded into it at startup.</summary>
+    public const string LegacyFileName = "traits.json";
 
     /// <summary>Longest allowed name, in characters.</summary>
     public const int MaxNameLength = 24;
 
     /// <summary>Largest allowed multiplier.</summary>
     public const double MaxMultiplier = 10;
-
-    public const string Header =
-        "// This pet's traits. Edit and save: changes apply right away.\n" +
-        "// Neediness: how fast each need drops (1 = average, 2 = twice as fast, 0.5 = half as fast).\n" +
-        "// Behavior: how often it idles, walks, sits, naps, climbs walls and pushes windows (1 = average).\n" +
-        "// Chat: how often it complains about its needs, chats with other pets, tells jokes, leaves sticky notes,\n" +
-        "// and (Curiosity) talks or writes about what it reads on screen.\n" +
-        "// Multipliers can be 0 to 10. Remove a line to set it back to 1.\n";
 
     private static readonly JsonSerializerOptions Options = new()
     {
@@ -36,7 +31,10 @@ public static class PetTraitsFile
         PropertyNameCaseInsensitive = true,
     };
 
-    public static string Serialize(PetTraits traits) => Header + JsonSerializer.Serialize(traits, Options) + "\n";
+    public static string Serialize(PetTraits traits) => JsonSerializer.Serialize(traits, Options) + "\n";
+
+    /// <summary>The traits as a JSON object, for the save file.</summary>
+    public static JsonNode ToNode(PetTraits traits) => JsonSerializer.SerializeToNode(traits, Options)!;
 
     public static TraitsParseResult Parse(string text)
     {
@@ -51,11 +49,28 @@ public static class PetTraitsFile
             return new TraitsParseResult(null, [$"Not valid JSON{where}."]);
         }
 
-        if (traits is null)
+        return traits is null ? new TraitsParseResult(null, ["The file is empty."]) : Finish(traits);
+    }
+
+    /// <summary>The <c>Traits</c> section of a save, already parsed as JSON.</summary>
+    public static TraitsParseResult Parse(JsonNode? node)
+    {
+        PetTraits? traits;
+        try
         {
-            return new TraitsParseResult(null, ["The file is empty."]);
+            traits = node.Deserialize<PetTraits>(Options);
+        }
+        catch (Exception e) when (e is JsonException or InvalidOperationException)
+        {
+            var where = e is JsonException { Path: { Length: > 1 } path } ? $" at Traits{path.TrimStart('$')}" : string.Empty;
+            return new TraitsParseResult(null, [$"Traits has a value of the wrong kind{where}."]);
         }
 
+        return traits is null ? new TraitsParseResult(null, ["Traits is empty."]) : Finish(traits);
+    }
+
+    private static TraitsParseResult Finish(PetTraits traits)
+    {
         traits = traits with
         {
             Name = traits.Name?.Trim() ?? string.Empty,

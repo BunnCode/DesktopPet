@@ -56,7 +56,7 @@ in the menu (**Let them read the screen**) or with `ReadingEnabled` in `settings
 
 ## How often
 
-Each pet has its own multipliers in its `traits.json` (1 = average, 2 = twice as often, 0 = never). `Curiosity` is how often it remarks on, or writes notes about, what it
+Each pet has its own multipliers in the `Traits` of its `save.json` (1 = average, 2 = twice as often, 0 = never). `Curiosity` is how often it remarks on, or writes notes about, what it
 reads:
 
 ```jsonc

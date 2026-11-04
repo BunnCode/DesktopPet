@@ -5,9 +5,10 @@ using DesktopPet.Core.Persistence;
 namespace DesktopPet.App.Customization;
 
 /// <summary>
-/// Watches the data folder for edits to settings.json, anything under sprites\ and furniture\, and each pet's traits,
-/// personality and sprites, and reports them on the UI thread, debounced (editors often write a file several times in a
-/// row, and art tools save in steps). Our own writes of saves, room.json, problems.txt and the template are ignored.
+/// Watches the data folder for edits to settings.json, anything under sprites\ and furniture\, and each pet's save
+/// (which holds its traits), personality and sprites, and reports them on the UI thread, debounced (editors often write a
+/// file several times in a row, and art tools save in steps). Our own writes of room.json, problems.txt and the template
+/// are ignored; our autosaves are reported too, and the handler sees the traits haven't changed.
 /// </summary>
 internal sealed class CustomizationWatcher : IDisposable
 {

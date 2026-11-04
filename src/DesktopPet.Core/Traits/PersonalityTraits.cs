@@ -36,7 +36,7 @@ public static class PersonalityTraits
     public const string Header =
         "// The personality traits new pets are given 2 or 3 of (added from the menu or hatched from an egg).\n" +
         "// Text finishes the sentence \"Mia is a little grey rabbit who ...\" and goes into the pet's personality.txt.\n" +
-        "// Nudge multiplies the pet's numbers in its traits.json: Hunger, Happiness, Energy (neediness), Idle, Walk,\n" +
+        "// Nudge multiplies the pet's numbers (the Traits in its save.json): Hunger, Happiness, Energy (neediness), Idle, Walk,\n" +
         "// Sit, Sleep, Climb, Push, Mating (behavior), Needy, Banter, Jokes, Notes, Curiosity (chat).\n" +
         "// Traits nudging the same number opposite ways are never given together. Edits apply to the next new pet.\n";
 

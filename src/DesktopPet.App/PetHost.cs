@@ -57,6 +57,11 @@ internal sealed class PetHost : IPetControls, IDisposable
         Id = id;
         Personality = personality;
         _store = store;
+        if (_store is JsonFileSaveStore kept)
+        {
+            kept.BrokenFileKept += (_, copy) => BrokenSaveKept?.Invoke(this, copy);
+        }
+
         _desktop = desktop;
         _snapshot = _desktop.GetSnapshot();
         var save = _store.Load();
@@ -90,6 +95,12 @@ internal sealed class PetHost : IPetControls, IDisposable
 
     /// <summary>A need went critical or reached 0: tell the user.</summary>
     public event EventHandler<PetWarning>? Warned;
+
+    /// <summary>Its save.json wasn't valid JSON (a hand edit), so it was copied here before being saved over.</summary>
+    public event EventHandler<string>? BrokenSaveKept;
+
+    /// <summary>The problems last reported for the Traits in its save.json (so autosaves don't repeat them); null when fine.</summary>
+    public string? TraitProblems { get; set; }
 
     /// <summary>The pet died of neglect (raised once, after the step it happened in).</summary>
     public event EventHandler<PetDeath>? Died;
@@ -171,8 +182,19 @@ internal sealed class PetHost : IPetControls, IDisposable
     /// <summary>How many of its animations use custom art.</summary>
     public int CustomAnimations => _atlas.CustomCount;
 
-    /// <summary>Applies edited traits live.</summary>
+    /// <summary>Applies traits edited in its save.json live.</summary>
     public void SetTraits(PetTraits traits) => _simulation.SetTraits(traits);
+
+    /// <summary>
+    /// Changes its traits from the app (the menu) and writes them into its save.json, replacing the file's Traits.
+    /// Unlike <see cref="Save"/>, a failure throws, so the caller can report it.
+    /// </summary>
+    public void WriteTraits(PetTraits traits)
+    {
+        _simulation.SetTraits(traits);
+        _store.Save(_simulation.CreateSave(), replaceTraits: true);
+        _sinceSave.Restart();
+    }
 
     /// <summary>Switches to reloaded sprites.</summary>
     public void SetAtlas(SpriteAtlas atlas)
@@ -198,7 +220,10 @@ internal sealed class PetHost : IPetControls, IDisposable
         Save();
     }
 
-    /// <summary>Writes the save file. Failures (disk full, permissions) are swallowed: the pet keeps running.</summary>
+    /// <summary>
+    /// Writes the save file, keeping the Traits in it as they are (the user may be editing them). Failures (disk full,
+    /// permissions) are swallowed: the pet keeps running.
+    /// </summary>
     public void Save()
     {
         if (_closed)

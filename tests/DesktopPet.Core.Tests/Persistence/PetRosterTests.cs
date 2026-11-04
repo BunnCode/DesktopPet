@@ -68,8 +68,8 @@ public class PetRosterTests
     }
 
     [Theory]
-    [InlineData(@"3\traits.json", 3, PetFileKind.Traits)]
-    [InlineData("3/TRAITS.JSON", 3, PetFileKind.Traits)]
+    [InlineData(@"3\save.json", 3, PetFileKind.Save)]
+    [InlineData("3/SAVE.JSON", 3, PetFileKind.Save)]
     [InlineData(@"2\personality.txt", 2, PetFileKind.Personality)]
     [InlineData(@"2\sprites", 2, PetFileKind.Sprites)]
     [InlineData(@"2\sprites\atlas.json", 2, PetFileKind.Sprites)]
@@ -80,12 +80,13 @@ public class PetRosterTests
     }
 
     [Theory]
-    [InlineData(@"3\save.json")] // our own writes
     [InlineData(@"3\save.json.tmp")]
+    [InlineData(@"3\save.bad.json")]
+    [InlineData(@"3\traits.json")] // folded into save.json at startup
     [InlineData("3")]
-    [InlineData(@"x\traits.json")]
-    [InlineData(@"3\notes\traits.json")]
-    [InlineData("traits.json")]
+    [InlineData(@"x\save.json")]
+    [InlineData(@"3\notes\save.json")]
+    [InlineData("save.json")]
     public void Ignores_other_changes(string path)
     {
         Assert.Null(PetRoster.Classify(path));

@@ -64,7 +64,7 @@ One pet. The App talks to Core almost only through this class.
 | `TakeClick()` | The last click (not a drag) and what it did (`PetClick`), for the spoken reaction |
 | `TakeCommands()` | Drains `WindowCommand(WindowId, Dx, Dy)`s produced by pushing |
 | `Reconfigure(PetConfig)` | Live settings swap (shared config; traits re-applied); forces platform/wall rebuild |
-| `Traits`, `SetTraits(PetTraits)` | The pet's name and multipliers; live swap when its traits.json changes |
+| `Traits`, `SetTraits(PetTraits)` | The pet's name and multipliers; live swap when the Traits in its save.json change |
 | `Death`, `TakeWarnings()`, `Neglect`, `BornUtc` | M14: set once it has died (`PetDeath`); warnings since the last call (`PetWarning`); the neglect timers; its birthday (from the save, else now) |
 | `DropFrom(feet)` | Place an airborne pet (new pets arriving) |
 | `ReadableWindow(reachDip)` | The window the pet can read (M12b): stands on or clings to, else the one behind it, else one beside it |
@@ -111,13 +111,14 @@ UseFurniture; `LostGround`→Fall, `Grabbed`→Hang, `Clung`→Cling, `HitWall`�
 | `Input/ThrowEstimator.cs` | Least-squares release velocity over the last `ThrowWindowSeconds` |
 | `Stats/PetStats.cs` | `PetStats(Hunger, Happiness, Energy)` (100 = good), `StatActivity`, `PetAction` |
 | `Stats/StatRules.cs`, `StatsSystem.cs` | Decay/restore rates, critical and away floors; pure `Advance`, `CatchUp`, `Apply`, `Petted` |
-| `Persistence/SaveData.cs` | `SaveData` record (versioned; v2 adds `LastMatedUtc`; v3 adds `BornUtc`, `Neglect`, `DiedUtc`, `DiedOf`, `IsDead`, `Revived(rules, now)`), `ISaveStore`, `JsonFileSaveStore` (atomic write) |
+| `Persistence/SaveData.cs` | `SaveData` record (versioned; v2 adds `LastMatedUtc`; v3 adds `BornUtc`, `Neglect`, `DiedUtc`, `DiedOf`, `IsDead`, `Revived(rules, now)`; v4 adds `Traits`), `ISaveStore` (`Save(data, replaceTraits)`), `JsonFileSaveStore` (atomic write via `PetSaveFile.Merge`; `LoadFile`; a file that isn't JSON → `save.bad.json` + `BrokenFileKept`) |
+| `Persistence/PetSaveFile.cs` | A pet's `save.json` with its `Traits` section: `Serialize`, `Parse` → `PetFileParseResult(Save, Traits)` (traits read on their own), `Merge(onDisk, data, replaceTraits)` (keeps the file's Traits as they are unless replacing), `FoldIn(save, traits.json, now)` (migration) |
 | `Persistence/PetConfigFile.cs` | `settings.json` (de)serialization with comments/trailing commas; returns `ConfigParseResult(Config, Errors)` |
-| `Persistence/PetRoster.cs` | Pet ids ↔ pet folder names (`pets\<n>\`), `MaxPets = 8`, `NextId`, `StartupPets(existing, dead)` (dead ones skipped; none if all are dead); legacy `save.json`/`save-n.json` names and `PlanMigration`; `Classify(relative path)` → `(PetId, PetFileKind)` for the watcher |
+| `Persistence/PetRoster.cs` | Pet ids ↔ pet folder names (`pets\<n>\`), `MaxPets = 8`, `NextId`, `StartupPets(existing, dead)` (dead ones skipped; none if all are dead); legacy `save.json`/`save-n.json` names and `PlanMigration`; `Classify(relative path)` → `(PetId, PetFileKind)` (`Save`, `Personality`, `Sprites`) for the watcher |
 | `Traits/PetTraits.cs` | `PetTraits(Name, Neediness, Behavior, Chat, Fixed, Jacket, Parents)`, `Neediness`, `BehaviorTraits` (incl. `Mating`), `ChatTraits` (multipliers, 1 = average), `TraitRange`; `ApplyTo(shared config)` (chat and mating aren't applied there; `ChatDirector` and `BreedingDirector` read them) |
 | `Traits/TraitRoller.cs` | `Roll(config, random, takenNames)`: free name + log-uniform multipliers in `NewPetNeediness`/`NewPetBehavior` |
 | `Traits/PetNames.cs` | `Popular`, `Rare`, `All` (200 names); `Pick(random, taken)` |
-| `Traits/PetTraitsFile.cs` | `traits.json` (de)serialization and validation → `TraitsParseResult(Traits, Errors)` |
+| `Traits/PetTraitsFile.cs` | Traits JSON (the `Traits` section of save.json; `LegacyFileName` = the old traits.json): `Serialize`, `ToNode`, `Parse(text or JsonNode)` and validation → `TraitsParseResult(Traits, Errors)` |
 | `Traits/Personality.cs` | `personality.txt`: `Describe(traits)` (sentence from the strongest numbers, for old pets without one), `Clean` |
 | `Traits/PersonalityTraits.cs` | M13: `personality-traits.json` (`Defaults`, `Parse`, `Serialize`); `PersonalityTrait(Text, Nudge)`; `Draw` (2–3, never two pulling a number opposite ways), `Apply` (nudges), **`Give(traits, list, random)`** → nudged traits + personality sentence (used for added and hatched pets) |
 | `Traits/JacketColors.cs` | `JacketShades(Base, Shade, Light)`; `Variants` (by pet number), `For(id, jacket)`, `ShadesOf`, `Blend` (a child's colour), `TryParse`/`Format` (#RRGGBB) |
@@ -183,7 +184,7 @@ Win32 through CsWin32: add API names to `Interop/NativeMethods.txt` (one per lin
 | File | Purpose |
 |---|---|
 | `App.xaml.cs` | Composition root (also M13: `AddPet` via `PersonalityTraits.Give`, `LayEgg`, `Hatch`, `SetFixed`, the egg's right-click menu; M14: `OnWarned` (notifications), `OnDied` (close, gravestone), `PlaceGraves` at startup, the gravestone's menu, `Revive`, `DeleteGrave`, `RoomForPet`): single-instance mutex, data folder + migration, settings, furniture (`WriteDefaultFurniture`, `LoadFurniture` keeping the last good or default spec for a broken file, `FurnitureHost`, `AddFurniture`, furniture right-click menu, `OnFurnitureChanged`), one `PetHost` per pet folder (`StartPet`: traits rolled/written if missing, personality, layered sprites), shared `PetMenu` + `TrayIcon`, `CustomizationWatcher` callbacks (`OnSettingsChanged`, `OnSpritesChanged`, `OnPetChanged`), add/remove pets, push toggle, `ChatHost` (started last; talk and notes toggles), debug overlay timer, problem reporting (tray + `problems.txt`) |
-| `PetHost.cs` | One pet: `PetSimulation` (with the shared `FurnitureWorld`) + `PetWindow` + `GameLoop` + save store, plus `Name`/`Traits`/`Personality`, `Feet`/`SizePx`, `BornUtc`, `Warned`/`Died` events (raised after `Step`; `Died` posted to the dispatcher), `SetTraits`, `Config`, `UserAway`, `ChatInfo` (a `ChatPet`: stats, place, asleep or not, the window it stands on). `BeginFrame` (snapshot, cursor sampling while pressed) → `Step` (Tick + carry out `WindowCommand`s) → `Render` (interpolate, pick frame from `SpriteAtlas`, autosave each minute). Lock/unlock → `UserAway`. Implements `IPetControls` for the menu |
+| `PetHost.cs` | One pet: `PetSimulation` (with the shared `FurnitureWorld`) + `PetWindow` + `GameLoop` + save store, plus `Name`/`Traits`/`Personality`, `Feet`/`SizePx`, `BornUtc`, `Warned`/`Died` events (raised after `Step`; `Died` posted to the dispatcher), `BrokenSaveKept`, `SetTraits`, `WriteTraits` (menu changes, replacing the file's Traits), `TraitProblems`, `Config`, `UserAway`, `ChatInfo` (a `ChatPet`: stats, place, asleep or not, the window it stands on). `BeginFrame` (snapshot, cursor sampling while pressed) → `Step` (Tick + carry out `WindowCommand`s) → `Render` (interpolate, pick frame from `SpriteAtlas`, autosave each minute). Lock/unlock → `UserAway`. Implements `IPetControls` for the menu |
 | `GameLoop.cs` | `CompositionTarget.Rendering` → `FixedStepper` → step/render; re-entrancy guarded |
 | `PetWindow.xaml(.cs)` | Borderless transparent topmost window showing one `Image`; `Present(rect, bitmap, mirror, smooth)`; raises `PointerPressed/Released/Canceled`, `MenuRequested`. Also used for furniture (`KeepOnTop = false`, so pets stay in front) |
 | `Furniture/FurnitureHost.cs` | Owns the `FurnitureWorld`, its own `GameLoop`, a window per piece, `room.json` saving (once settled, and each minute); `SetSpecs`, `Add`, `AddEgg`, `AddGrave`, `Remove`, `RemoveAll` (not eggs or gravestones), `Count` (furniture only), `EggCount`, `DebugInfo`, `MaxItems`. `Render` is guarded against re-entry (a nested one made orphaned windows) |
@@ -195,9 +196,9 @@ Win32 through CsWin32: add API names to `Interop/NativeMethods.txt` (one per lin
 | `SpriteSheet/rabbit.png` | The built-in sheet (EmbeddedResource `DesktopPet.App.rabbit.png`). Generated; don't hand-edit (see `docs/SPRITE_GENERATOR.md`) |
 | `SpriteSheet/SpriteAtlas.cs` | (animation id, frame) → `AtlasFrame(Bitmap, FacesLeft, Smooth)`. `Load(folders, animations, jacket)` → `(atlas, SpriteLayer[])`: per animation the first folder whose `atlas.json` defines it (pet's own, then shared), built-in art elsewhere; `CustomCount` |
 | `SpriteSheet/SpriteTemplateExporter.cs` | Menu → Export sprite template: the built-in art as `template.png` + `atlas.json` + README |
-| `Customization/DataFolder.cs` | `%LOCALAPPDATA%\DesktopPet\` paths (`settings.json`, `personality-traits.json` (`LoadPersonalityTraits`, written with the defaults if missing), `HasOwnSprites`, `CopySprites`, `sprites\`, `sprite-template\`, `problems.txt`, `furniture\` (+ `defaults-written.txt`), `room.json`, `pets\<n>\` with save, traits, personality, sprites), `ExistingPets`, `StartupPets` and `DeadPets` (saves marked dead), `MigrateLegacySaves`, traits/personality load and write, `RecyclePetFolder`, `FindModel` (chat model: next to the exe, then `models\` in the data folder), settings load, `WriteDefaultFurniture` (first run: all; later: defaults added since, per `defaults-written.txt`), `LoadFurniture`, `Open` |
+| `Customization/DataFolder.cs` | `%LOCALAPPDATA%\DesktopPet\` paths (`settings.json`, `personality-traits.json` (`LoadPersonalityTraits`, written with the defaults if missing), `HasOwnSprites`, `CopySprites`, `sprites\`, `sprite-template\`, `problems.txt`, `furniture\` (+ `defaults-written.txt`), `room.json`, `pets\<n>\` with save (and traits), personality, sprites), `ExistingPets`, `StartupPets` and `DeadPets` (saves marked dead), `MigrateLegacySaves`, `MigrateTraitsFiles` (old traits.json → save.json), `LoadTraits` (from the save), personality load and write, `RecyclePetFolder`, `FindModel` (chat model: next to the exe, then `models\` in the data folder), settings load, `WriteDefaultFurniture` (first run: all; later: defaults added since, per `defaults-written.txt`), `LoadFurniture`, `Open` |
 | `Customization/CustomizationWatcher.cs` | `FileSystemWatcher` on settings, shared sprites, the furniture folder and pet folders (via `PetRoster.Classify`), 400 ms debounce per file kind and pet, callbacks on the UI thread |
-| `UI/PetMenu.cs` | WinForms `ContextMenuStrip` shared by all pets (with no pets, only the app-wide items): name + mood header, stat bars, About submenu (personality, traits read-only, parents and fixed, Edit traits, Open its folder), Feed/Play/Sleep, "*name* is fixed" (writes `Fixed` to traits.json), Furniture submenu (`FurnitureActions`: add beside the pet, remove all, open folder), add/remove pet, push toggle, Customize submenu, debug overlay, Exit. Acts on the current `IPetControls` target |
+| `UI/PetMenu.cs` | WinForms `ContextMenuStrip` shared by all pets (with no pets, only the app-wide items): name + mood header, stat bars, About submenu (personality, traits read-only, parents and fixed, Edit traits, Open its folder), Feed/Play/Sleep, "*name* is fixed" (writes `Fixed` into the Traits in save.json), Furniture submenu (`FurnitureActions`: add beside the pet, remove all, open folder), add/remove pet, push toggle, Customize submenu, debug overlay, Exit. Acts on the current `IPetControls` target |
 | `UI/IPetControls.cs` | What the menu needs from a pet |
 | `UI/TrayIcon.cs` | `NotifyIcon` with the shared menu; `Notify(title, text, warning)` |
 | `UI/DebugOverlay.cs` | Click-through overlay per monitor drawing floors, window tops, walls, hang bars, pet and furniture boxes (`DebugView`, `DebugPet`) |
@@ -211,10 +212,10 @@ Win32 through CsWin32: add API names to `Interop/NativeMethods.txt` (one per lin
 
 ## Flows
 
-**Startup:** `App.OnStartup` → mutex → `DataFolder.EnsureExists` → `MigrateLegacySaves` → `LoadSettings` (errors →
+**Startup:** `App.OnStartup` → mutex → `DataFolder.EnsureExists` → `MigrateLegacySaves` → `MigrateTraitsFiles` → `LoadSettings` (errors →
 defaults) → `DesktopSource` → `WriteDefaultFurniture` (first run) → `FurnitureHost` → `LoadFurniture` (specs + art) →
-`FurnitureHost.Start` (loads `room.json`, starts its loop) → read every startup pet's `traits.json` (names first, so rolled ones avoid them) → for
-each id `StartPet`: roll + write traits if missing, write personality if missing,
+`FurnitureHost.Start` (loads `room.json`, starts its loop) → read every startup pet's traits from its `save.json` (names first, so rolled ones avoid them) → for
+each id `StartPet`: roll traits if missing (saved with the first `Save`), write personality if missing,
 `SpriteAtlas.Load(SpriteFolders(id), Animations.All, variant)` → `new PetHost(...)` (loads save, builds
 `PetSimulation` with the traits, window, loop) → `Start` → menu, tray → one problems toast → watcher.
 
@@ -232,8 +233,8 @@ positions and `Stopwatch` timestamps; while pressed, `BeginFrame` feeds `Pointer
 **Sprites edit:** watcher → `App.OnSpritesChanged` → `SpriteAtlas.Load` per pet (its folders, its variant) →
 `PetHost.SetAtlas`.
 
-**Pet file edit:** watcher → `PetRoster.Classify` → `App.OnPetChanged(id, kind)`: traits → `PetTraitsFile.Parse` →
-`PetHost.SetTraits` (unchanged → nothing; errors → keep old + toast); personality → `PetHost.Personality`; sprites →
+**Pet file edit:** watcher → `PetRoster.Classify` → `App.OnPetChanged(id, kind)`: save → `DataFolder.LoadTraits`
+(`PetSaveFile.Parse`) → `PetHost.SetTraits` (unchanged, such as an autosave → nothing; errors → keep old + toast once, per `PetHost.TraitProblems`); personality → `PetHost.Personality`; sprites →
 reload that pet's atlas.
 
 **Pets and furniture:** a voluntary state ends → `PickNext` → `BehaviorPicker.Pick(context)` may roll furniture →
@@ -249,10 +250,11 @@ gone are removed from the room).
 
 **Death:** `PetSimulation.UpdateStats` → `Mortality.Update` (warnings → `TakeWarnings` → `PetHost.Warned` → `App.OnWarned` → tray) → once a timer runs out, `Death` is set → `PetHost.Died` (posted) → `App.OnDied` (forget in chat and breeding, `Close(save: true)` writes the dead save, `FurnitureHost.AddGrave` at its feet). Startup: `StartupPets` skips dead pets, then `PlaceGraves`. Gravestone right-click → `Revive` (`SaveData.Revived`, remove the gravestone, `StartPet` there) or `DeleteGrave` (Recycle Bin, then remove).
 
-**Breeding (every 100 ms):** `BreedingHost.Tick` → `BreedingDirector.Tick` (a ready, close pair rolls → both `Court`; once both arrived and `CourtshipSeconds` pass → `Mating`, both `EndCourtship(mated)`) → `App.LayEgg` (`Inheritance.Egg` → `FurnitureHost.AddEgg`). Pill rounds (M15) run in the same `Tick`: a pet that finished a `Breed` use has `OnPillRound` → the director walks it to each other pet (`Seek` → `VisitState`), asks, and starts a courtship on yes; sayings → `ChatHost.Say` → eggs past `HatchAtUtc` → `App.Hatch` (remove egg, name, `PersonalityTraits.Give`, write traits/personality/save with the cooldown, copy a parent's sprites, `StartPet` at the egg).
+**Breeding (every 100 ms):** `BreedingHost.Tick` → `BreedingDirector.Tick` (a ready, close pair rolls → both `Court`; once both arrived and `CourtshipSeconds` pass → `Mating`, both `EndCourtship(mated)`) → `App.LayEgg` (`Inheritance.Egg` → `FurnitureHost.AddEgg`). Pill rounds (M15) run in the same `Tick`: a pet that finished a `Breed` use has `OnPillRound` → the director walks it to each other pet (`Seek` → `VisitState`), asks, and starts a courtship on yes; sayings → `ChatHost.Say` → eggs past `HatchAtUtc` → `App.Hatch` (remove egg, name, `PersonalityTraits.Give`, write personality and the save (traits, cooldown), copy a parent's sprites, `StartPet` at the egg).
 
 **Saving:** `PetHost.Save` → `JsonFileSaveStore` (`pets\<n>\save.json`) each minute, after menu actions, on exit,
-and on session end. Traits and personality are only written when a pet is created. Removing a pet moves its folder to
+and on session end; `PetSaveFile.Merge` keeps the file's `Traits` as they are. The app's own trait changes
+(`PetHost.WriteTraits`: "fixed", or traits rolled for a pet with none) replace them. Personality is only written when a pet is created. Removing a pet moves its folder to
 the Recycle Bin.
 
 ---

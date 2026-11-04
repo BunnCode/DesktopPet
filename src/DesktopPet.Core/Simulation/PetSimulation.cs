@@ -115,7 +115,7 @@ public sealed class PetSimulation
     /// <summary>This pet's name and multipliers.</summary>
     public PetTraits Traits { get; private set; }
 
-    /// <summary>Swaps in edited traits live (the pet's traits.json changed). Stats and behavior carry on.</summary>
+    /// <summary>Swaps in edited traits live (the Traits in the pet's save.json changed). Stats and behavior carry on.</summary>
     public void SetTraits(PetTraits traits)
     {
         ArgumentNullException.ThrowIfNull(traits);
@@ -259,6 +259,7 @@ public sealed class PetSimulation
     /// <summary>A snapshot of what should survive a restart (marked dead once it has died).</summary>
     public SaveData CreateSave() => SaveData.From(_ctx.Stats, _clock.UtcNow, LastMatedUtc) with
     {
+        Traits = Traits,
         BornUtc = BornUtc,
         Neglect = _mortality.Timers.IsZero ? null : _mortality.Timers,
         DiedUtc = Death?.AtUtc,

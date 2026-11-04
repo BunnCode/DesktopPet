@@ -49,8 +49,8 @@ internal sealed class PetMenu : IDisposable
     /// <param name="canRemove">Whether a pet may be removed (not the last one).</param>
     /// <param name="onAdd">"Add a pet" chosen.</param>
     /// <param name="onRemove">"Remove this pet" chosen for the target.</param>
-    /// <param name="petFiles">About submenu actions for the target: edit its traits.json, open its folder.</param>
-    /// <param name="onFixed">"Fixed" toggled for the target: it can't have babies (saved in its traits.json).</param>
+    /// <param name="petFiles">About submenu actions for the target: edit its traits (in its save.json), open its folder.</param>
+    /// <param name="onFixed">"Fixed" toggled for the target: it can't have babies (saved in the Traits of its save.json).</param>
     /// <param name="furniture">Furniture submenu: the kinds, adding one beside the target, removing all, the folder.</param>
     /// <param name="pushingEnabled">Initial state of "Let it push windows".</param>
     /// <param name="onPushing">"Let it push windows" toggled (applies to all pets).</param>

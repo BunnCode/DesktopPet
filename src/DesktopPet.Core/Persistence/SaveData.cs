@@ -1,20 +1,29 @@
-using System.Text.Json;
 using System.Text.Json.Serialization;
 using DesktopPet.Core.Death;
 using DesktopPet.Core.Stats;
+using DesktopPet.Core.Traits;
 
 namespace DesktopPet.Core.Persistence;
 
-/// <summary>What survives a restart. Versioned for future migrations.</summary>
+/// <summary>
+/// What survives a restart: a pet's <c>save.json</c> (<see cref="PetSaveFile"/>). Versioned for future migrations.
+/// </summary>
 public sealed record SaveData
 {
     /// <summary>
-    /// 2 added <see cref="LastMatedUtc"/>; 3 added <see cref="BornUtc"/>, <see cref="Neglect"/> and the death fields.
-    /// Older files load with them unset.
+    /// 2 added <see cref="LastMatedUtc"/>; 3 added <see cref="BornUtc"/>, <see cref="Neglect"/> and the death fields;
+    /// 4 added <see cref="Traits"/> (they were in traits.json). Older files load with them unset.
     /// </summary>
-    public const int CurrentVersion = 3;
+    public const int CurrentVersion = 4;
 
     public int Version { get; init; } = CurrentVersion;
+
+    /// <summary>
+    /// The pet's name and multipliers, the hand-editable part of the file; null if it has none or they aren't valid.
+    /// Read and written by <see cref="PetSaveFile"/> as its own section, so broken traits don't lose the stats.
+    /// </summary>
+    [JsonIgnore]
+    public PetTraits? Traits { get; init; }
     public double Hunger { get; init; }
     public double Happiness { get; init; }
     public double Energy { get; init; }
@@ -42,6 +51,7 @@ public sealed record SaveData
     [JsonIgnore]
     public bool IsDead => DiedUtc is not null;
 
+    [JsonIgnore]
     public PetStats Stats => new PetStats(Hunger, Happiness, Energy).Clamped();
 
     public static SaveData From(PetStats stats, DateTimeOffset now, DateTimeOffset? lastMated = null) =>
@@ -68,38 +78,44 @@ public interface ISaveStore
     /// <summary>The saved pet, or null if there is none or it can't be read.</summary>
     SaveData? Load();
 
-    void Save(SaveData data);
+    /// <summary>
+    /// Writes <paramref name="data"/>. The traits already in the file are kept as they are (the user may have edited
+    /// them), unless <paramref name="replaceTraits"/> or the file has none; then <see cref="SaveData.Traits"/> is written.
+    /// </summary>
+    void Save(SaveData data, bool replaceTraits = false);
 }
 
 /// <summary>
 /// JSON file store with atomic replace: writes <c>save.json.tmp</c> then swaps it in, so a crash mid-write
 /// never leaves a half-written save. A corrupt or unreadable file loads as "no save" (fresh pet) rather than crashing.
+/// Saving over a file that isn't valid JSON (a hand edit gone wrong) first copies it to <see cref="BrokenCopyPath"/>.
 /// </summary>
 public sealed class JsonFileSaveStore(string path) : ISaveStore
 {
-    private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
-
     public string Path { get; } = path;
 
-    public SaveData? Load()
+    /// <summary>Where an unreadable file is kept before it's saved over: <c>save.bad.json</c> next to it.</summary>
+    public string BrokenCopyPath => System.IO.Path.ChangeExtension(Path, ".bad.json");
+
+    /// <summary>A file that wasn't valid JSON was copied to <see cref="BrokenCopyPath"/> before being saved over.</summary>
+    public event EventHandler<string>? BrokenFileKept;
+
+    public SaveData? Load() => LoadFile()?.Save;
+
+    /// <summary>The whole file as parsed, or null if there is none or it can't be read right now.</summary>
+    public PetFileParseResult? LoadFile()
     {
         try
         {
-            if (!File.Exists(Path))
-            {
-                return null;
-            }
-
-            var data = JsonSerializer.Deserialize<SaveData>(File.ReadAllText(Path), Options);
-            return data is { Version: >= 1 } ? data : null;
+            return File.Exists(Path) ? PetSaveFile.Parse(File.ReadAllText(Path)) : null;
         }
-        catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return null;
         }
     }
 
-    public void Save(SaveData data)
+    public void Save(SaveData data, bool replaceTraits = false)
     {
         ArgumentNullException.ThrowIfNull(data);
         var directory = System.IO.Path.GetDirectoryName(Path);
@@ -108,8 +124,19 @@ public sealed class JsonFileSaveStore(string path) : ISaveStore
             Directory.CreateDirectory(directory);
         }
 
+        var onDisk = File.Exists(Path) ? File.ReadAllText(Path) : null;
+        var (text, broken) = PetSaveFile.Merge(onDisk, data, replaceTraits);
+        if (broken)
+        {
+            File.Copy(Path, BrokenCopyPath, overwrite: true);
+        }
+
         var temp = Path + ".tmp";
-        File.WriteAllText(temp, JsonSerializer.Serialize(data, Options));
+        File.WriteAllText(temp, text);
         File.Move(temp, Path, overwrite: true);
+        if (broken)
+        {
+            BrokenFileKept?.Invoke(this, BrokenCopyPath);
+        }
     }
 }
