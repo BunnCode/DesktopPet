@@ -120,6 +120,10 @@ From VS Code (`.vscode/`):
 | Task `run` | Run without the debugger |
 | Task `publish` | Self-contained single-file `publish/DesktopPet.App.exe` (no .NET install needed) |
 
+`tools/publish/publish.ps1` (Claude skill `publish`) does build + test + publish in one go and copies the repo's
+`data/` into `publish/data/`, so a copied or zipped `publish` folder carries the current pets and settings. It
+backs the old `publish/data` up to `%TEMP%\DesktopPet-backups\` and deletes nothing unless run with `-Mirror`.
+
 Only one pet can run at a time (named mutex). A running pet locks `bin/`, so stop it (Shift+F5 or Exit in the menu)
 before rebuilding.
 

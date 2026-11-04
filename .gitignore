@@ -486,6 +486,9 @@ $RECYCLE.BIN/
 
 # Self-contained publish output (VS Code 'publish' task)
 /publish/
+# The template's generic 'publish/' rule above would also hide these.
+!/tools/publish/
+!/.claude/skills/publish/
 
 # Chat model (M12): downloaded by tools/models/get-model.ps1, too big for git
 /models/

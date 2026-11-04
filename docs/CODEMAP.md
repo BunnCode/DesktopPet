@@ -31,6 +31,8 @@ tools/sprites/make_rabbit.py Python generator for the built-in sprite sheet and 
 tools/sprites/make_character.py  Renders characters/<name>.py (overrides on the rabbit's rig) to a drop-in sheet + atlas.json.
 tools/sprites/sprite_preview.py  overview / zoom / check (pose conventions) for any generated sheet.
 tools/models/get-model.ps1   Downloads the chat model into models/ at the repo root (gitignored); the build copies it.
+tools/publish/publish.ps1    Stops running pets, builds, tests, publishes, then copies data/ into publish/data/ (backs
+                             the old copy up to %TEMP%\DesktopPet-backups first). The `publish` Claude skill runs it.
 ```
 
 ## Conventions you need everywhere
