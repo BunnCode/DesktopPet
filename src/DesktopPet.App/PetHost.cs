@@ -99,6 +99,9 @@ internal sealed class PetHost : IPetControls, IDisposable
     /// <summary>Its save.json wasn't valid JSON (a hand edit), so it was copied here before being saved over.</summary>
     public event EventHandler<string>? BrokenSaveKept;
 
+    /// <summary>Finds a piece of furniture's window, so a pet shut in a pen is drawn behind the pen.</summary>
+    public Func<FurnitureItem, nint>? FurnitureWindow { get; init; }
+
     /// <summary>The problems last reported for the Traits in its save.json (so autosaves don't repeat them); null when fine.</summary>
     public string? TraitProblems { get; set; }
 
@@ -327,6 +330,7 @@ internal sealed class PetHost : IPetControls, IDisposable
             : Vec2.Lerp(_simulation.Previous.FeetPos, current.FeetPos, alpha);
 
         var frame = _atlas.Get(current.AnimationId, current.FrameIndex);
+        _window.Behind = _simulation.Pen is { } pen && FurnitureWindow is { } find ? find(pen) : 0;
         _window.Present(
             PetFrame.SpriteRect(feet + new Vec2(0, current.SinkY), current.Size),
             frame.Bitmap,

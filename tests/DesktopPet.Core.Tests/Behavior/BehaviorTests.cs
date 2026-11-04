@@ -22,6 +22,19 @@ public class BehaviorTests
         Assert.Equal(expected, BehaviorPicker.Pick(PetConfig.Default, new FakeRandom(roll), Core.Stats.PetStats.Fresh));
 
     [Fact]
+    public void Picker_mostly_sits_when_penned()
+    {
+        var random = new SeededRandom(3);
+        var sits = 0;
+        for (var i = 0; i < 1000; i++)
+        {
+            sits += BehaviorPicker.Pick(PetConfig.Default, random, Core.Stats.PetStats.Fresh, penned: true) == PetStateId.Sit ? 1 : 0;
+        }
+
+        Assert.InRange(sits, 580, 720); // 15 of 23 ≈ 65% of picks (and sits last longer than the rest)
+    }
+
+    [Fact]
     public void Picker_never_picks_zero_weight_behavior()
     {
         var config = PetConfig.Default with { Weights = new BehaviorWeights(Idle: 0, Walk: 1, Sit: 0) };

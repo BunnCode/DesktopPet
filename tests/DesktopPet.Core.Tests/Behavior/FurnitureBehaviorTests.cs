@@ -354,6 +354,31 @@ public class FurnitureBehaviorTests
     }
 
     [Fact]
+    public void A_pet_in_the_pen_spends_most_of_its_time_sitting()
+    {
+        var room = new Room(Screen());
+        var pen = room.Add("playpen", 800);
+        var sim = room.Pet(Content, 300, new SeededRandom(7));
+        room.RunUntil(sim, Grounded, maxTicks: 120);
+
+        DropAt(sim, 760);
+        room.RunUntil(sim, s => s.Mode == BodyMode.Grounded, maxTicks: 120);
+        Assert.Same(pen, sim.Pen);
+
+        var sitting = 0;
+        const int ticks = 60 * 60 * 5; // five minutes
+        for (var i = 0; i < ticks; i++)
+        {
+            room.Tick(sim);
+            sitting += sim.State == PetStateId.Sit ? 1 : 0;
+            Assert.NotEqual(Animations.SitLedge.Id, sim.Current.AnimationId);
+        }
+
+        Assert.Same(pen, sim.Pen);
+        Assert.True(sitting > ticks * 0.6, $"sat {sitting * 100.0 / ticks:F0}% of the time");
+    }
+
+    [Fact]
     public void Walking_pets_turn_at_a_pen_instead_of_going_in()
     {
         var room = new Room(Screen());

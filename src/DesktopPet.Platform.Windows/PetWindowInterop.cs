@@ -49,6 +49,24 @@ public static class PetWindowInterop
             SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE | SET_WINDOW_POS_FLAGS.SWP_NOZORDER | SET_WINDOW_POS_FLAGS.SWP_NOOWNERZORDER |
             SET_WINDOW_POS_FLAGS.SWP_NOSIZE);
 
+    /// <summary>
+    /// Puts the window directly below <paramref name="above"/> in z-order (a pet shut in a pen, drawn behind the pen).
+    /// Below a topmost window it stays topmost. Does nothing when it's already there.
+    /// </summary>
+    public static void PlaceBelow(nint hwnd, nint above)
+    {
+        if (PInvoke.GetWindow(new HWND(above), GET_WINDOW_CMD.GW_HWNDNEXT) == new HWND(hwnd))
+        {
+            return;
+        }
+
+        PInvoke.SetWindowPos(
+            new HWND(hwnd), new HWND(above),
+            0, 0, 0, 0,
+            SET_WINDOW_POS_FLAGS.SWP_NOMOVE | SET_WINDOW_POS_FLAGS.SWP_NOSIZE | SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE |
+            SET_WINDOW_POS_FLAGS.SWP_NOOWNERZORDER);
+    }
+
     /// <summary>Puts the window back at the top of the topmost band (other topmost windows and the taskbar can cover it).</summary>
     public static void BringToTopmost(nint hwnd) =>
         PInvoke.SetWindowPos(

@@ -233,6 +233,7 @@ public partial class App : Application
         var pet = new PetHost(id, _config, traits, personality, new JsonFileSaveStore(_data.SavePath(id)), atlas, _desktop!, _furniture!.World)
         {
             PushingEnabled = _pushingEnabled,
+            FurnitureWindow = _furniture.WindowOf,
             TraitProblems = loaded is { Traits: null } ? string.Join("\n", loaded.Errors) : null,
         };
         pet.BrokenSaveKept += (_, copy) => ReportProblems(

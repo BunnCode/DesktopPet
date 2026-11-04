@@ -238,7 +238,8 @@ internal sealed class SitState : TimedState
     public override void Enter(PetContext context)
     {
         base.Enter(context);
-        if (context.Body.Mode == BodyMode.Grounded && context.CurrentGround() is { Kind: PlatformKind.WindowTop })
+        // Not in a pen on a title bar: it sits on the pen's floor, not on the edge.
+        if (context.Pen is null && context.Body.Mode == BodyMode.Grounded && context.CurrentGround() is { Kind: PlatformKind.WindowTop })
         {
             context.Animation.Play(Animations.SitLedge, restart: true);
         }

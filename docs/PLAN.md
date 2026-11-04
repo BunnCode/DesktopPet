@@ -592,12 +592,15 @@ written on first run, all seven landed on the taskbar, and two pets walked to th
   | Play pen | confine |
   | Trough | eat (hunger +2400/h, 15–25 s), 2 pets |
 
-- **Play pen:** a pet the user drops in (released by the mouse, landing inside) is shut in: it walks to and fro inside,
-  never chooses furniture, and its needs don't drop. Dragging it out lets it go. Other pets turn at the pen's sides.
+- **Play pen:** a pet the user drops in (released by the mouse, landing inside) is shut in: it mostly sits (sit weight
+  `Furniture.PenSitWeight`, 15: about three quarters of the time), otherwise idles or walks to and fro inside, never
+  chooses furniture, and its needs don't drop. It's drawn behind the pen (its window is kept just below the pen's in
+  z-order), so the user can see it's inside; on a title bar it sits on the pen's floor, not on the ledge. Dragging it
+  out lets it go and brings it back to the front. Other pets turn at the pen's sides.
 - **Art:** the generator draws the furniture (`FURNITURE` in `make_rabbit.py`, embedded from
   `src/DesktopPet.App/Furniture/Art/`) and three new rabbit animations: `kick`, `game`, `bounce`.
 - **Tuning** in `settings.json` under `Furniture`: `NeedBelow`, `Weight`, `CuriosityWeight`, `ErrandSeconds`,
-  `RetrySeconds`, kick, hop and bounce speeds.
+  `RetrySeconds`, `PenSitWeight`, kick, hop and bounce speeds.
 
 ### M12: speech bubbles and sticky notes (done)
 Built 2026-11-03. **Two distinct behaviors that both use the language model:** pets *talk* (short lines in speech

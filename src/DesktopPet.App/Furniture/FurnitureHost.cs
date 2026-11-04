@@ -153,6 +153,9 @@ internal sealed class FurnitureHost : IDisposable
         [.. World.Items.Select(i => new DebugPet(
             i.Spec.Name, i.Current.Bounds, i.Egg is not null ? "egg" : i.Grave is not null ? "grave" : i.Spec.Slots > 0 ? $"{i.Occupied}/{i.Spec.Slots}" : "pen", i.Mode, i.GroundKey))];
 
+    /// <summary>The native window showing <paramref name="item"/>, or 0 if it has none (yet).</summary>
+    public nint WindowOf(FurnitureItem item) => _windows.TryGetValue(item.Id, out var window) ? window.Handle : 0;
+
     /// <summary>Re-asserts that the furniture is on top of ordinary windows (pets go above it afterwards).</summary>
     public void BringToFront()
     {

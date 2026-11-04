@@ -28,12 +28,18 @@ internal static class BehaviorPicker
             }
         }
 
-        return Pick(context.Config, context.Random, context.Stats);
+        return Pick(context.Config, context.Random, context.Stats, penned: context.Pen is not null);
     }
 
-    public static PetStateId Pick(PetConfig config, IRandom random, PetStats stats)
+    /// <param name="penned">Shut in a play pen: it mostly sits (<see cref="FurnitureRules.PenSitWeight"/>).</param>
+    public static PetStateId Pick(PetConfig config, IRandom random, PetStats stats, bool penned = false)
     {
         var (idle, walk, sit, sleep) = Weights(config, stats);
+        if (penned)
+        {
+            sit = System.Math.Max(sit, config.Furniture.PenSitWeight);
+        }
+
         var roll = random.NextDouble() * (idle + walk + sit + sleep);
 
         if ((roll -= idle) < 0)

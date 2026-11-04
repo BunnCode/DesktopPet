@@ -25,6 +25,7 @@ public partial class PetWindow : Window
     private bool? _smooth; // unset until the first frame
     private bool _pressed;
     private bool _releasingCapture;
+    private bool _wasBehind;
 
     public PetWindow()
     {
@@ -36,6 +37,15 @@ public partial class PetWindow : Window
     /// switch it off so the pets' windows stay in front of them.
     /// </summary>
     public bool KeepOnTop { get; set; } = true;
+
+    /// <summary>
+    /// A window to stay just behind instead of on top (the pen a pet is shut in), or 0. Clearing it puts the window
+    /// back on top straight away.
+    /// </summary>
+    public nint Behind { get; set; }
+
+    /// <summary>The native window, 0 before <see cref="CreateHandle"/>.</summary>
+    public nint Handle => _hwnd;
 
     /// <summary>Left button went down on the pet. The mouse is captured until release.</summary>
     public event EventHandler? PointerPressed;
@@ -106,7 +116,7 @@ public partial class PetWindow : Window
     /// <summary>Re-asserts topmost now (e.g. after other topmost windows such as the debug overlay appeared).</summary>
     public void BringToFront()
     {
-        if (_hwnd != 0)
+        if (_hwnd != 0 && Behind == 0)
         {
             PetWindowInterop.BringToTopmost(_hwnd);
             _sinceTopmost.Restart();
@@ -146,8 +156,21 @@ public partial class PetWindow : Window
             Flip.ScaleX = facingLeft ? -1 : 1;
         }
 
-        if (KeepOnTop && _sinceTopmost.Elapsed >= TopmostInterval && _hwnd != 0)
+        if (_hwnd == 0)
         {
+            return;
+        }
+
+        if (Behind != 0)
+        {
+            PetWindowInterop.PlaceBelow(_hwnd, Behind); // cheap when it's already there
+            _wasBehind = true;
+            return;
+        }
+
+        if (KeepOnTop && (_wasBehind || _sinceTopmost.Elapsed >= TopmostInterval))
+        {
+            _wasBehind = false;
             _sinceTopmost.Restart();
             PetWindowInterop.BringToTopmost(_hwnd);
         }

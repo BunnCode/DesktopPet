@@ -138,6 +138,7 @@ public static class PetConfigValidator
             Range("Furniture.CuriosityWeight", f.CuriosityWeight, 0, 1_000);
             Range("Furniture.ErrandSeconds", f.ErrandSeconds, 1, 3_600);
             Range("Furniture.RetrySeconds", f.RetrySeconds, 0, 3_600);
+            Range("Furniture.PenSitWeight", f.PenSitWeight, 0, 1_000);
             Range("Furniture.KickSpeedDip", f.KickSpeedDip, 0, 5_000);
             Range("Furniture.KickLiftDip", f.KickLiftDip, 0, 5_000);
             Range("Furniture.HopSpeedDip", f.HopSpeedDip, 0, 5_000);

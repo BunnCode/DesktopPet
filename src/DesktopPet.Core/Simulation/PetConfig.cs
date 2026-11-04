@@ -212,6 +212,12 @@ public sealed record FurnitureRules
     /// <summary>Furniture a pet couldn't reach isn't tried again for this long.</summary>
     public double RetrySeconds { get; init; } = 30;
 
+    /// <summary>
+    /// Weight of sitting for a pet shut in a play pen (raises <see cref="BehaviorWeights.Sit"/> to this; with the default
+    /// weights and durations it sits about three quarters of the time there).
+    /// </summary>
+    public double PenSitWeight { get; init; } = 15;
+
     /// <summary>How hard a pet kicks a ball: sideways and upward speed, DIP/s.</summary>
     public double KickSpeedDip { get; init; } = 380;
 
