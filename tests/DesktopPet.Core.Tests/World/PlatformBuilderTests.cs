@@ -148,4 +148,20 @@ public class PlatformBuilderTests
             .Snapshot();
         Assert.Equal([(100.0, 300.0), (500.0, 700.0), (900.0, 1100.0)], Spans(s, 3));
     }
+
+    [Theory]
+    [InlineData("window:1234", 1234L)]
+    [InlineData("window:-5", -5L)]
+    [InlineData("floor:DISPLAY1", null)]
+    [InlineData("hang:1234", null)]
+    [InlineData("window:", null)]
+    [InlineData(null, null)]
+    public void Window_ids_come_back_out_of_window_keys(string? key, long? id)
+    {
+        Assert.Equal(id, PlatformBuilder.WindowIdFromKey(key));
+        if (id is { } value)
+        {
+            Assert.Equal(key, PlatformBuilder.WindowKey(value));
+        }
+    }
 }

@@ -483,3 +483,6 @@ $RECYCLE.BIN/
 
 # Self-contained publish output (VS Code 'publish' task)
 /publish/
+
+# Chat model (M12): downloaded by tools/models/get-model.ps1, too big for git
+/models/

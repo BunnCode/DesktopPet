@@ -1,4 +1,4 @@
-﻿using System.Drawing;
+using System.Drawing;
 using System.Text;
 using System.Windows.Forms;
 using DesktopPet.Core.Stats;
@@ -30,6 +30,7 @@ internal sealed class PetMenu : IDisposable
     private readonly ToolStripLabel _personality;
     private readonly ToolStripLabel _neediness;
     private readonly ToolStripLabel _behavior;
+    private readonly ToolStripLabel _chat;
     private readonly ToolStripMenuItem _editTraits;
     private readonly ToolStripMenuItem _openFolder;
     private readonly ToolStripMenuItem _sleep;
@@ -49,12 +50,16 @@ internal sealed class PetMenu : IDisposable
     /// <param name="furniture">Furniture submenu: the kinds, adding one beside the target, removing all, the folder.</param>
     /// <param name="pushingEnabled">Initial state of "Let it push windows".</param>
     /// <param name="onPushing">"Let it push windows" toggled (applies to all pets).</param>
+    /// <param name="chat">Initial state of "Let them talk" (speech bubbles), and what to do when it's toggled.</param>
+    /// <param name="notes">Initial state of "Let them leave notes" (sticky notes, a separate behavior), and what to do when it's toggled.</param>
     /// <param name="customize">Customize submenu actions: edit settings, open data folder, export sprite template.</param>
     /// <param name="onDebugOverlay">Debug overlay toggled.</param>
     /// <param name="onExit">Exit chosen.</param>
     public PetMenu(
         Func<IPetControls> defaultTarget, Func<bool> canAdd, Func<bool> canRemove, Action onAdd, Action<IPetControls> onRemove,
-        (Action<IPetControls> EditTraits, Action<IPetControls> OpenFolder) petFiles, FurnitureActions furniture, bool pushingEnabled, Action<bool> onPushing, (Action EditSettings, Action OpenDataFolder, Action ExportSpriteTemplate) customize,
+        (Action<IPetControls> EditTraits, Action<IPetControls> OpenFolder) petFiles, FurnitureActions furniture, bool pushingEnabled, Action<bool> onPushing, (bool Enabled, Action<bool> OnChanged) chat,
+        (bool Enabled, Action<bool> OnChanged) notes,
+        (Action EditSettings, Action OpenDataFolder, Action ExportSpriteTemplate) customize,
         Action<bool> onDebugOverlay, Action onExit)
     {
         _defaultTarget = defaultTarget;
@@ -72,6 +77,7 @@ internal sealed class PetMenu : IDisposable
         _personality = new ToolStripLabel { TextAlign = ContentAlignment.MiddleLeft };
         _neediness = new ToolStripLabel { TextAlign = ContentAlignment.MiddleLeft };
         _behavior = new ToolStripLabel { TextAlign = ContentAlignment.MiddleLeft };
+        _chat = new ToolStripLabel { TextAlign = ContentAlignment.MiddleLeft };
         _editTraits = new ToolStripMenuItem("Edit traits…", null, (_, _) => petFiles.EditTraits(Target));
         _openFolder = new ToolStripMenuItem("Open its folder", null, (_, _) => petFiles.OpenFolder(Target));
         _about = new ToolStripMenuItem("About");
@@ -81,6 +87,7 @@ internal sealed class PetMenu : IDisposable
             new ToolStripSeparator(),
             _neediness,
             _behavior,
+            _chat,
             new ToolStripSeparator(),
             _editTraits,
             _openFolder,
@@ -95,6 +102,11 @@ internal sealed class PetMenu : IDisposable
 
         var pushing = new ToolStripMenuItem("Let it push windows") { CheckOnClick = true, Checked = pushingEnabled };
         pushing.CheckedChanged += (_, _) => onPushing(pushing.Checked);
+
+        var talking = new ToolStripMenuItem("Let them talk") { CheckOnClick = true, Checked = chat.Enabled };
+        talking.CheckedChanged += (_, _) => chat.OnChanged(talking.Checked);
+        var leavingNotes = new ToolStripMenuItem("Let them leave notes") { CheckOnClick = true, Checked = notes.Enabled };
+        leavingNotes.CheckedChanged += (_, _) => notes.OnChanged(leavingNotes.Checked);
 
         var debugOverlay = new ToolStripMenuItem("Debug overlay") { CheckOnClick = true };
         debugOverlay.CheckedChanged += (_, _) => onDebugOverlay(debugOverlay.Checked);
@@ -118,6 +130,8 @@ internal sealed class PetMenu : IDisposable
             _add, _remove,
             new ToolStripSeparator(),
             pushing,
+            talking,
+            leavingNotes,
             customizeMenu,
             debugOverlay,
             new ToolStripMenuItem("Exit", null, (_, _) => onExit()),
@@ -167,6 +181,8 @@ internal sealed class PetMenu : IDisposable
         _behavior.Text = Wrap(
             $"Likes: idling {X(b.Idle)}, walking {X(b.Walk)}, sitting {X(b.Sit)}, napping {X(b.Sleep)}, " +
             $"climbing {X(b.Climb)}, pushing windows {X(b.Push)}");
+        var c = pet.Traits.Chat;
+        _chat.Text = Wrap($"Talks: about its needs {X(c.Needy)}, with friends {X(c.Banter)}, jokes {X(c.Jokes)}. Leaves sticky notes {X(c.Notes)}");
         RefreshFurniture(pet);
         _add.Enabled = _canAdd();
         _remove.Enabled = _canRemove();

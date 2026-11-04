@@ -12,7 +12,7 @@ matching line here.
 
 ## At a glance
 
-- C# / .NET 10 / WPF desktop pet (Shimeji-style), Windows only. About 9,000 lines including tests.
+- C# / .NET 10 / WPF desktop pet (Shimeji-style), Windows only. About 11,000 lines including tests.
 - Build `dotnet build DesktopPet.slnx`, test `dotnet test DesktopPet.slnx`. Warnings are errors (`Directory.Build.props`).
   Tests take well under a second.
 - Exe: `src/DesktopPet.App/bin/Debug/net10.0-windows/DesktopPet.App.exe`. A running pet locks `bin/`.
@@ -23,9 +23,11 @@ matching line here.
 DesktopPet.App               net10.0-windows WPF exe (+WinForms for the tray/menu only). Composition root, glue.
   ├─ DesktopPet.Platform.Windows   net10.0-windows. Thin Win32 adapter via CsWin32; no game rules.
   │    └─ DesktopPet.Core
+  ├─ DesktopPet.Chat          net10.0 (win-x64). The local language model via LLamaSharp; implements Core's IChatModel.
+  │    └─ DesktopPet.Core
   └─ DesktopPet.Core         net10.0, NO WPF/Win32. All game logic. InternalsVisibleTo the tests.
 tests/DesktopPet.Core.Tests  xUnit, Core only (no App/Platform tests).
-tools/sprites/make_rabbit.py Python generator for the built-in sprite sheet and furniture art (not part of the build).
+tools/sprites/make_rabbit.py Python generator for the built-in sprite sheet and furniture art (not part of the build)./models/get-model.ps1   Downloads the chat model into models/ at the repo root (gitignored); the build copies it.
 ```
 
 ## Conventions you need everywhere
@@ -56,6 +58,7 @@ One pet. The App talks to Core almost only through this class.
 | `Current` / `Previous` : `PetFrame` | What to draw now / last step (renderer interpolates feet) |
 | `PointerDown/Move/Up(pos, time)`, `PointerCancel()` | Mouse gestures: click vs drag (4 DIP threshold), throw on release |
 | `Apply(PetAction)` | Feed / Play / Sleep / WakeUp from the menu |
+| `TakeClick()` | The last click (not a drag) and what it did (`PetClick`), for the spoken reaction |
 | `TakeCommands()` | Drains `WindowCommand(WindowId, Dx, Dy)`s produced by pushing |
 | `Reconfigure(PetConfig)` | Live settings swap (shared config; traits re-applied); forces platform/wall rebuild |
 | `Traits`, `SetTraits(PetTraits)` | The pet's name and multipliers; live swap when its traits.json changes |
@@ -80,7 +83,7 @@ UseFurniture; `LostGround`→Fall, `Grabbed`→Hang, `Clung`→Cling, `HitWall`�
 | `Math/Vec2.cs`, `RectI.cs` | `Vec2`, `Vec2I`, `RectI` value types |
 | `World/DesktopSnapshot.cs` | `DesktopSnapshot(Monitors, Windows)`: the whole desktop as data. Windows are front-to-back |
 | `World/MonitorInfo.cs`, `WindowInfo.cs` | `MonitorInfo(Id, Bounds, WorkArea, Scale, IsPrimary)`, `WindowInfo(Id, Bounds, IsMaximized)` |
-| `World/Platform.cs`, `PlatformBuilder.cs` | One-way surfaces (`Floor`, `WindowTop`, `HangBar`) and the occlusion/clipping that builds them |
+| `World/Platform.cs`, `PlatformBuilder.cs` (+ `WindowIdFromKey`) | One-way surfaces (`Floor`, `WindowTop`, `HangBar`) and the occlusion/clipping that builds them |
 | `World/Wall.cs`, `WallBuilder.cs` | Vertical climbable faces (`WallKind`, `WallSide`) from window sides and outer screen edges |
 | `World/WorldQuery.cs` | `MonitorAt`, `Nearest`, `IsWalkable` (leading edge inside a work area), `IsLost` |
 | `World/WindowMoveGuard.cs` | `Clamp(frame, workArea, dx, dy)`: a pushed window can't leave the screen |
@@ -101,7 +104,7 @@ UseFurniture; `LostGround`→Fall, `Grabbed`→Hang, `Clung`→Cling, `HitWall`�
 | `Persistence/SaveData.cs` | `SaveData` record (versioned), `ISaveStore`, `JsonFileSaveStore` (atomic write) |
 | `Persistence/PetConfigFile.cs` | `settings.json` (de)serialization with comments/trailing commas; returns `ConfigParseResult(Config, Errors)` |
 | `Persistence/PetRoster.cs` | Pet ids ↔ pet folder names (`pets\<n>\`), `MaxPets = 8`, `NextId`, `StartupPets`; legacy `save.json`/`save-n.json` names and `PlanMigration`; `Classify(relative path)` → `(PetId, PetFileKind)` for the watcher |
-| `Traits/PetTraits.cs` | `PetTraits(Name, Neediness, Behavior)`, `Neediness`, `BehaviorTraits` (multipliers, 1 = average), `TraitRange`; `ApplyTo(shared config)` |
+| `Traits/PetTraits.cs` | `PetTraits(Name, Neediness, Behavior, Chat)`, `Neediness`, `BehaviorTraits`, `ChatTraits` (multipliers, 1 = average), `TraitRange`; `ApplyTo(shared config)` (chat isn't applied there; `ChatDirector` reads it) |
 | `Traits/TraitRoller.cs` | `Roll(config, random, takenNames)`: free name + log-uniform multipliers in `NewPetNeediness`/`NewPetBehavior` |
 | `Traits/PetNames.cs` | `Popular`, `Rare`, `All` (200 names); `Pick(random, taken)` |
 | `Traits/PetTraitsFile.cs` | `traits.json` (de)serialization and validation → `TraitsParseResult(Traits, Errors)` |
@@ -115,6 +118,12 @@ UseFurniture; `LostGround`→Fall, `Grabbed`→Hang, `Clung`→Cling, `HitWall`�
 | `Furniture/FurnitureWorld.cs` | **All furniture, shared by pets**: `SetSpecs`, `Add`, `Remove`, `Tick` (physics via `PhysicsSystem` with the item's size, bounce, respawn), pointer drag/throw/poke, `Kick`, `PenAt`, `PenAhead`, `CreateSave`/`Load`, `Version` |
 | `Furniture/RoutePlanner.cs` | Dijkstra over ground segments with walk, walk off / drop, climb up, climb down → `RouteStep`s; `SideAt` |
 | `Furniture/RoomSave.cs` | `RoomSave`/`RoomItem` and `RoomStore` (`room.json`, atomic write) |
+| `Chat/ChatRules.cs` | Chat tuning (`PetConfig.Chat`): shared model settings, then **speech** and **sticky notes**, two separate behaviors with their own switches, rates and gaps |
+| `Chat/IChatModel.cs` | `IChatModel.CompleteAsync(ChatPrompt, maxTokens, temperature, ct)`, `ChatPrompt(System, User)` |
+| `Chat/ChatDirector.cs` | **Runs speech and notes**: `Tick(dt, pets, rules, speech, notes, notesOnScreen)`, `Clicked(petId, click)` (a reaction that goes first and skips the gaps), one request at a time, timeouts, banter → answer (held until `AnswerDelaySeconds`), per-behavior gaps and recent lines (`Track`); `TakeLines` → `ChatLine`s, `TakeProblems`, `Forget`. `ChatPet` is a pet as chat sees it |
+| `Chat/ChatPrompts.cs` | `ChatKind` (Needy, Banter, Answer, Clicked, Joke; Note = a note's text), `NeedKind`; `System` (speech, mood only for needs), `NoteSystem` (writing), `Needy`/`Clicked`/`Banter`/`Answer`/`Joke`, `NoteTopics` + `Note(topic)`, `Mood` |
+| `Chat/ChatText.cs` | `ChatText.Clean` (raw reply → bubble/note text or null); `ChatMl.Format` (Qwen ChatML, thinking off) |
+| `Simulation/PetClick.cs` | `PetClick` (Petted, WokenUp, Poked): what a click did; `PetSimulation.TakeClick()` drains it |
 | `Simulation/PetConfigValidator.cs` | Range checks for every setting |
 | `Simulation/PetFrame.cs` | Render output record; `SpriteRect` |
 | `Simulation/FixedStepper.cs` | Accumulator → number of fixed steps, capped |
@@ -133,9 +142,16 @@ Win32 through CsWin32: add API names to `Interop/NativeMethods.txt` (one per lin
 | `WindowSource.cs` | `EnumWindows` filter (visible, not minimized/cloaked/tool/untitled/shell) with DWM frame bounds |
 | `MonitorSource.cs` | Monitors: bounds, work area, DPI scale, device name as id |
 | `CursorSource.cs` | `GetCursorPos` in physical pixels |
-| `PetWindowInterop.cs` | Extended styles (no-activate, tool window), `SetBounds` in physical pixels, `BringToTopmost`, overlay styles |
+| `PetWindowInterop.cs` | Extended styles (no-activate, tool window), `SetBounds` / `SetPosition` in physical pixels, `BringToTopmost`, overlay styles |
 | `WindowManipulator.cs` | `MoveBy(windowId, dx, dy)` with `WindowMoveGuard` against the live frame |
 | `NativeIcon.cs` | `DestroyIcon` |
+| `WindowTracker.cs` | For sticky notes: `Query(id)` → `TrackedWindowState` (Gone, Hidden, Shown) + frame; `PlaceAbove(ours, id)` keeps our window just above another in z-order |
+
+## Chat (`src/DesktopPet.Chat/`)
+
+| File | Purpose |
+|---|---|
+| `LlamaChatModel.cs` | `LoadAsync(path, useGpu)` (Vulkan or CPU backend chosen once per process, warm-up answer), `CompleteAsync` (off the UI thread, one at a time, `StatelessExecutor` with ChatML and stop strings), `OnGpu`, `Backend` |
 
 ---
 
@@ -143,8 +159,8 @@ Win32 through CsWin32: add API names to `Interop/NativeMethods.txt` (one per lin
 
 | File | Purpose |
 |---|---|
-| `App.xaml.cs` | Composition root: single-instance mutex, data folder + migration, settings, furniture (`WriteDefaultFurniture`, `LoadFurniture` keeping the last good or default spec for a broken file, `FurnitureHost`, `AddFurniture`, furniture right-click menu, `OnFurnitureChanged`), one `PetHost` per pet folder (`StartPet`: traits rolled/written if missing, personality, layered sprites), shared `PetMenu` + `TrayIcon`, `CustomizationWatcher` callbacks (`OnSettingsChanged`, `OnSpritesChanged`, `OnPetChanged`), add/remove pets, push toggle, debug overlay timer, problem reporting (tray + `problems.txt`) |
-| `PetHost.cs` | One pet: `PetSimulation` (with the shared `FurnitureWorld`) + `PetWindow` + `GameLoop` + save store, plus `Name`/`Traits`/`Personality`, `Feet`/`SizePx`, `SetTraits`. `BeginFrame` (snapshot, cursor sampling while pressed) → `Step` (Tick + carry out `WindowCommand`s) → `Render` (interpolate, pick frame from `SpriteAtlas`, autosave each minute). Lock/unlock → `UserAway`. Implements `IPetControls` for the menu |
+| `App.xaml.cs` | Composition root: single-instance mutex, data folder + migration, settings, furniture (`WriteDefaultFurniture`, `LoadFurniture` keeping the last good or default spec for a broken file, `FurnitureHost`, `AddFurniture`, furniture right-click menu, `OnFurnitureChanged`), one `PetHost` per pet folder (`StartPet`: traits rolled/written if missing, personality, layered sprites), shared `PetMenu` + `TrayIcon`, `CustomizationWatcher` callbacks (`OnSettingsChanged`, `OnSpritesChanged`, `OnPetChanged`), add/remove pets, push toggle, `ChatHost` (started last; talk and notes toggles), debug overlay timer, problem reporting (tray + `problems.txt`) |
+| `PetHost.cs` | One pet: `PetSimulation` (with the shared `FurnitureWorld`) + `PetWindow` + `GameLoop` + save store, plus `Name`/`Traits`/`Personality`, `Feet`/`SizePx`, `SetTraits`, `Config`, `UserAway`, `ChatInfo` (a `ChatPet`: stats, place, asleep or not, the window it stands on). `BeginFrame` (snapshot, cursor sampling while pressed) → `Step` (Tick + carry out `WindowCommand`s) → `Render` (interpolate, pick frame from `SpriteAtlas`, autosave each minute). Lock/unlock → `UserAway`. Implements `IPetControls` for the menu |
 | `GameLoop.cs` | `CompositionTarget.Rendering` → `FixedStepper` → step/render; re-entrancy guarded |
 | `PetWindow.xaml(.cs)` | Borderless transparent topmost window showing one `Image`; `Present(rect, bitmap, mirror, smooth)`; raises `PointerPressed/Released/Canceled`, `MenuRequested`. Also used for furniture (`KeepOnTop = false`, so pets stay in front) |
 | `Furniture/FurnitureHost.cs` | Owns the `FurnitureWorld`, its own `GameLoop`, a window per piece, `room.json` saving (once settled, and each minute); `SetSpecs`, `Add`, `Remove(All)`, `DebugInfo`, `MaxItems` |
@@ -154,12 +170,15 @@ Win32 through CsWin32: add API names to `Interop/NativeMethods.txt` (one per lin
 | `SpriteSheet/rabbit.png` | The built-in sheet (EmbeddedResource `DesktopPet.App.rabbit.png`). Generated; don't hand-edit (see `docs/SPRITE_GENERATOR.md`) |
 | `SpriteSheet/SpriteAtlas.cs` | (animation id, frame) → `AtlasFrame(Bitmap, FacesLeft, Smooth)`. `Load(folders, animations, variant)` → `(atlas, SpriteLayer[])`: per animation the first folder whose `atlas.json` defines it (pet's own, then shared), built-in art elsewhere; `CustomCount` |
 | `SpriteSheet/SpriteTemplateExporter.cs` | Menu → Export sprite template: the built-in art as `template.png` + `atlas.json` + README |
-| `Customization/DataFolder.cs` | `%LOCALAPPDATA%\DesktopPet\` paths (`settings.json`, `sprites\`, `sprite-template\`, `problems.txt`, `furniture\`, `room.json`, `pets\<n>\` with save, traits, personality, sprites), `ExistingPets`, `MigrateLegacySaves`, traits/personality load and write, `RecyclePetFolder`, settings load, `WriteDefaultFurniture`, `LoadFurniture`, `Open` |
+| `Customization/DataFolder.cs` | `%LOCALAPPDATA%\DesktopPet\` paths (`settings.json`, `sprites\`, `sprite-template\`, `problems.txt`, `furniture\`, `room.json`, `pets\<n>\` with save, traits, personality, sprites), `ExistingPets`, `MigrateLegacySaves`, traits/personality load and write, `RecyclePetFolder`, `FindModel` (chat model: next to the exe, then `models\` in the data folder), settings load, `WriteDefaultFurniture`, `LoadFurniture`, `Open` |
 | `Customization/CustomizationWatcher.cs` | `FileSystemWatcher` on settings, shared sprites, the furniture folder and pet folders (via `PetRoster.Classify`), 400 ms debounce per file kind and pet, callbacks on the UI thread |
 | `UI/PetMenu.cs` | WinForms `ContextMenuStrip` shared by all pets: name + mood header, stat bars, About submenu (personality, traits read-only, Edit traits, Open its folder), Feed/Play/Sleep, Furniture submenu (`FurnitureActions`: add beside the pet, remove all, open folder), add/remove pet, push toggle, Customize submenu, debug overlay, Exit. Acts on the current `IPetControls` target |
 | `UI/IPetControls.cs` | What the menu needs from a pet |
 | `UI/TrayIcon.cs` | `NotifyIcon` with the shared menu; `Notify(title, text, warning)` |
 | `UI/DebugOverlay.cs` | Click-through overlay per monitor drawing floors, window tops, walls, hang bars, pet and furniture boxes (`DebugView`, `DebugPet`) |
+| `Chat/ChatHost.cs` | Loads the model in the background, ticks `ChatDirector` every display frame (`CompositionTarget.Rendering`) with `PetHost.ChatInfo`, shows lines as bubbles (stacked when they'd overlap) and notes, tracks notes against their windows every 100 ms; `Enabled` (speech), `NotesEnabled`, `Forget`, `BringToFront` |
+| `Chat/SpeechBubble.cs` | Click-through topmost bubble sized to its text; `Say`, `Follow` (fade, follow the head, stack above `taken`), `Silence` |
+| `Chat/StickyNote.cs` | Note window anchored to another window by offset; `Track(state, bounds)`; click → `Dismissed` |
 | `app.manifest` | PerMonitorV2 DPI awareness |
 
 ---
@@ -200,6 +219,8 @@ picked up calls the trip off.
 **Furniture edit:** watcher → `App.OnFurnitureChanged` → `LoadFurniture` → `FurnitureHost.SetSpecs` (kinds that are
 gone are removed from the room).
 
+**Speech and notes (each display frame):** `ChatHost.OnRendering` → `PetHost.ChatInfo` and `PetHost.TakeClick` → `ChatDirector.Clicked` for each pet → `ChatDirector.Tick` (collect a finished reply → `ChatText.Clean` → line; then maybe start one request: a click reaction, else a pending answer, else a speech roll, else a note roll → `IChatModel.CompleteAsync` on a worker thread) → `TakeLines`: speech → `SpeechBubble.Say`, notes → new `StickyNote` on the pet's window → bubbles `Follow` their pets; notes `Track` their windows every 100 ms.
+
 **Saving:** `PetHost.Save` → `JsonFileSaveStore` (`pets\<n>\save.json`) each minute, after menu actions, on exit,
 and on session end. Traits and personality are only written when a pet is created. Removing a pet moves its folder to
 the Recycle Bin.
@@ -222,6 +243,8 @@ the Recycle Bin.
 | Change the save format | `SaveData` (bump `CurrentVersion`; tolerate old files), `JsonFileSaveStoreTests` |
 | Add a furniture kind (default) | `DefaultFurniture` (spec), the generator (`FURNITURE` + a drawing function), regenerate, add it to `docs/FURNITURE.md` |
 | Add a furniture use effect | `UseEffect`, `UseFurnitureState.Update`, `PetSimulation.UseActivity`, tests in `Behavior/FurnitureBehaviorTests` |
+| Add a kind of spoken line | `ChatKind`, a prompt in `ChatPrompts`, a rate in `ChatRules` (+ validator), the roll in `ChatDirector.TrySpeak`, maybe a `ChatTraits` multiplier; tests in `Chat/ChatDirectorTests` |
+| Change what notes are about | `ChatPrompts.NoteTopics` / `NoteSystem` |
 | Add a file to the pet folder | `DataFolder` (path, load/write), `PetFileKind` + `PetRoster.Classify` if it reloads live, `App.OnPetChanged` |
 
 ## Tests (`tests/DesktopPet.Core.Tests/`)
@@ -234,6 +257,7 @@ the Recycle Bin.
 - `FakeRandom(values...)` cycles values; `ScriptedRandom(fallback, script...)` plays an exact roll sequence then the
   fallback; `FakeClock.Advance(TimeSpan)`.
 - Test folders mirror Core's folders; scenario tests are in `Behavior/`, `Simulation/` and `Input/`.
+- Chat (`Chat/ChatDirectorTests`) uses `FakeChatModel` (canned replies, or `Manual` with `Release`, or `Fail`) and a `Quiet` rules base with every rate 0 and no gaps; `FakeRandom(0.0)` makes every roll succeed.
 - Furniture scenarios (`Behavior/FurnitureBehaviorTests`) use a `Room` helper that ticks the `FurnitureWorld`, advances
   the `FakeClock` and ticks the pet together; `FakeRandom(0.99)` makes the picker choose furniture when it's weighted.
 
@@ -247,4 +271,5 @@ the Recycle Bin.
 - `DesktopSnapshot` reference equality matters: Core rebuilds platforms/walls only when the snapshot object changes.
 - WinForms implicit usings are removed in the App csproj (they clash with WPF types); import WinForms types explicitly.
 - Resizing a WPF window renders synchronously and can re-enter the loop; `GameLoop` guards against it.
+- The chat model loads in the background: chat is quiet for the first few seconds (and for good if `models\` has no model).
 - Windows PowerShell mangles double quotes in `git commit -m`; write the message to a file and use `-F`.

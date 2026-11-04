@@ -1,8 +1,9 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using DesktopPet.App.Chat;
 using DesktopPet.App.Customization;
 using DesktopPet.App.Furniture;
 using DesktopPet.App.SpriteSheet;
@@ -43,6 +44,7 @@ public partial class App : Application
     private CustomizationWatcher? _watcher;
     private DebugOverlay? _overlay;
     private FurnitureHost? _furniture;
+    private ChatHost? _chat;
     private Dictionary<string, FurnitureSpec> _furnitureSpecs = new(StringComparer.OrdinalIgnoreCase);
     private System.Windows.Forms.ContextMenuStrip? _furnitureMenu;
     private DispatcherTimer? _overlayTimer;
@@ -110,10 +112,22 @@ public partial class App : Application
                 OpenFolder: () => DataFolder.Open(_data.Furniture)),
             pushingEnabled: _pushingEnabled,
             onPushing: SetPushing,
+            chat: (_config.Chat.Enabled, enabled => _chat!.Enabled = enabled),
+            notes: (_config.Chat.NotesEnabled, enabled => _chat!.NotesEnabled = enabled),
             customize: (EditSettings, () => DataFolder.Open(_data.Root), ExportSpriteTemplate),
             onDebugOverlay: SetDebugOverlay,
             onExit: Shutdown);
         _tray = new TrayIcon(DefaultArt.TrayIconPixels(), DefaultArt.FrameSize, _menu.Strip);
+
+        // Chat last: its notifications need the tray, and the model loads in the background while the pets run.
+        _chat = new ChatHost(() => _pets, _desktop, (title, text, warning) => _tray?.Notify(title, text, warning))
+        {
+            Rules = _config.Chat,
+            Enabled = _config.Chat.Enabled,
+            NotesEnabled = _config.Chat.NotesEnabled,
+        };
+        var (modelPath, searched) = _data.FindModel(_config.Chat.ModelFile);
+        _chat.Start(modelPath, searched);
 
         if (settings.Errors.Count > 0)
         {
@@ -144,6 +158,7 @@ public partial class App : Application
     {
         _watcher?.Dispose();
         SetDebugOverlay(false);
+        _chat?.Dispose();
         foreach (var pet in _pets)
         {
             pet.Dispose(); // saves
@@ -250,6 +265,7 @@ public partial class App : Application
             return;
         }
 
+        _chat?.Forget(pet.Id);
         pet.Close(save: false);
         if (_lastClicked == pet)
         {
@@ -299,6 +315,8 @@ public partial class App : Application
         {
             pet.BringToFront();
         }
+
+        _chat?.BringToFront();
     }
 
     // ---- Furniture (shared by all pets) ----
@@ -441,6 +459,10 @@ public partial class App : Application
             }
 
             _furniture?.Reconfigure(config);
+            if (_chat is not null)
+            {
+                _chat.Rules = config.Chat; // the model file and the GPU choice only change on restart
+            }
             _tray?.Notify("Settings applied", "Your changes to settings.json are live.");
         }
         else

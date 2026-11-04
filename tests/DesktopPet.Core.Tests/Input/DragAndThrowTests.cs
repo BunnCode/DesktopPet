@@ -203,6 +203,53 @@ public class DragAndThrowTests
     }
 
     [Fact]
+    public void A_click_is_reported_once_with_what_it_did()
+    {
+        var sim = StandingPet();
+        sim.PointerDown(new Vec2(960, 1050), 10);
+        sim.PointerUp(new Vec2(960, 1050), 10.1);
+
+        Assert.Equal(PetClick.Petted, sim.TakeClick());
+        Assert.Null(sim.TakeClick());
+    }
+
+    [Fact]
+    public void Clicking_a_sleeping_pet_reports_waking_it()
+    {
+        var sim = StandingPet();
+        sim.ForceState(PetStateId.Sleep);
+        sim.PointerDown(new Vec2(960, 1050), 10);
+        sim.PointerUp(new Vec2(960, 1050), 10.1);
+
+        Assert.Equal(PetClick.WokenUp, sim.TakeClick());
+    }
+
+    [Fact]
+    public void Clicking_a_falling_pet_is_reported_as_a_poke()
+    {
+        var sim = NewSim(Desktop, new FakeRandom(0.99));
+        sim.Run(Desktop, 10);
+        sim.PointerDown(sim.Current.FeetPos, 1);
+        sim.PointerUp(sim.Current.FeetPos, 1.05);
+
+        Assert.Equal(PetClick.Poked, sim.TakeClick());
+    }
+
+    [Fact]
+    public void Drags_and_throws_are_not_clicks()
+    {
+        var sim = StandingPet();
+        var t = Drag(sim, Desktop, new Vec2(960, 1050), Line(new Vec2(960, 1050), new Vec2(0, -800), 10));
+        sim.PointerUp(new Vec2(960, 1050 - (800 * 10 * Dt)), t);
+        Assert.Null(sim.TakeClick());
+
+        var dropped = StandingPet();
+        Drag(dropped, Desktop, new Vec2(960, 1050), [new Vec2(970, 1050), new Vec2(700, 500)]);
+        dropped.PointerCancel();
+        Assert.Null(dropped.TakeClick());
+    }
+
+    [Fact]
     public void Clicking_a_falling_pet_does_nothing()
     {
         var sim = NewSim(Desktop, new FakeRandom(0.99));

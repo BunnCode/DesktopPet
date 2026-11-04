@@ -33,5 +33,9 @@ DWMWINDOWATTRIBUTE
 IsWindow
 MonitorFromWindow
 
+// Sticky notes (M12): follow another window and sit just above it in z-order
+GetWindow
+HWND_TOP
+
 // Icons
 DestroyIcon

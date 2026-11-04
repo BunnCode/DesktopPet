@@ -15,6 +15,9 @@ public sealed record PetTraits
 
     public BehaviorTraits Behavior { get; init; } = new();
 
+    /// <summary>How often it says each kind of line (used by <see cref="Chat.ChatDirector"/>, not by <see cref="ApplyTo"/>).</summary>
+    public ChatTraits Chat { get; init; } = new();
+
     /// <summary>An average pet: every multiplier 1.</summary>
     public static PetTraits Neutral(string name) => new() { Name = name };
 
@@ -60,6 +63,9 @@ public sealed record Neediness(double Hunger = 1, double Happiness = 1, double E
 
 /// <summary>How often the pet chooses each behavior compared with an average pet (2 = twice as likely).</summary>
 public sealed record BehaviorTraits(double Idle = 1, double Walk = 1, double Sit = 1, double Sleep = 1, double Climb = 1, double Push = 1);
+
+/// <summary>How often the pet says each kind of line compared with an average pet (0 = never, 2 = twice as often).</summary>
+public sealed record ChatTraits(double Needy = 1, double Banter = 1, double Jokes = 1, double Notes = 1);
 
 /// <summary>A range for rolling a new pet's multipliers.</summary>
 public readonly record struct TraitRange(double Min, double Max);

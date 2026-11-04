@@ -99,6 +99,7 @@ public static class PetConfigValidator
         // New pets
         TraitRange(nameof(c.NewPetNeediness), c.NewPetNeediness);
         TraitRange(nameof(c.NewPetBehavior), c.NewPetBehavior);
+        TraitRange(nameof(c.NewPetChat), c.NewPetChat);
 
         // Walls
         Range(nameof(c.ClimbChance), c.ClimbChance, 0, 1);
@@ -142,6 +143,39 @@ public static class PetConfigValidator
             Range("Furniture.BounceHops", f.BounceHops, 0, 20);
             Range("Furniture.BounceHopSpeedDip", f.BounceHopSpeedDip, 0, 10_000);
             Range("Furniture.BounceLaunchDip", f.BounceLaunchDip, 0, 10_000);
+        }
+
+        var chat = c.Chat;
+        if (chat is null)
+        {
+            errors.Add("Chat is missing.");
+        }
+        else
+        {
+            if (string.IsNullOrWhiteSpace(chat.ModelFile) || chat.ModelFile.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
+            {
+                errors.Add("Chat.ModelFile must be a file name or path.");
+            }
+
+            Range("Chat.MaxTokens", chat.MaxTokens, 8, 256);
+            Range("Chat.Temperature", chat.Temperature, 0, 2);
+            Range("Chat.NeedyBelow", chat.NeedyBelow, 0, 100);
+            Range("Chat.NeedyPerHour", chat.NeedyPerHour, 0, 3_600);
+            Range("Chat.BanterPerHour", chat.BanterPerHour, 0, 3_600);
+            Range("Chat.BanterDistanceDip", chat.BanterDistanceDip, 0, 100_000);
+            Range("Chat.JokesPerHour", chat.JokesPerHour, 0, 3_600);
+            Range("Chat.NotesPerHour", chat.NotesPerHour, 0, 3_600);
+            Range("Chat.MaxNotes", chat.MaxNotes, 0, 50);
+            Range("Chat.NoteGapSeconds", chat.NoteGapSeconds, 0, 86_400);
+            Range("Chat.PetNoteGapSeconds", chat.PetNoteGapSeconds, 0, 86_400);
+            Range("Chat.ClickLineWithinSeconds", chat.ClickLineWithinSeconds, 0, 600);
+            Range("Chat.MinGapSeconds", chat.MinGapSeconds, 0, 86_400);
+            Range("Chat.PetGapSeconds", chat.PetGapSeconds, 0, 86_400);
+            Range("Chat.ReplyTimeoutSeconds", chat.ReplyTimeoutSeconds, 1, 600);
+            Range("Chat.AnswerDelaySeconds", chat.AnswerDelaySeconds, 0, 60);
+            Range("Chat.BubbleSeconds", chat.BubbleSeconds, 0.5, 120);
+            Range("Chat.BubbleSecondsPerChar", chat.BubbleSecondsPerChar, 0, 5);
+            Range("Chat.RecentLines", chat.RecentLines, 0, 20);
         }
 
         ValidateStats(c.Stats, errors, Range);

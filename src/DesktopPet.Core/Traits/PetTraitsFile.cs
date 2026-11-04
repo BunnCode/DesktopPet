@@ -24,6 +24,7 @@ public static class PetTraitsFile
         "// This pet's traits. Edit and save: changes apply right away.\n" +
         "// Neediness: how fast each need drops (1 = average, 2 = twice as fast, 0.5 = half as fast).\n" +
         "// Behavior: how often it idles, walks, sits, naps, climbs walls and pushes windows (1 = average).\n" +
+        "// Chat: how often it complains about its needs, chats with other pets, tells jokes and leaves sticky notes.\n" +
         "// Multipliers can be 0 to 10. Remove a line to set it back to 1.\n";
 
     private static readonly JsonSerializerOptions Options = new()
@@ -59,6 +60,7 @@ public static class PetTraitsFile
             Name = traits.Name?.Trim() ?? string.Empty,
             Neediness = traits.Neediness ?? new Neediness(),
             Behavior = traits.Behavior ?? new BehaviorTraits(),
+            Chat = traits.Chat ?? new ChatTraits(),
         };
         var errors = Validate(traits);
         return new TraitsParseResult(errors.Count == 0 ? traits : null, errors);
@@ -103,6 +105,12 @@ public static class PetTraitsFile
         {
             errors.Add("Behavior.Idle, Behavior.Walk and Behavior.Sit can't all be 0.");
         }
+
+        var c = traits.Chat;
+        Range("Chat.Needy", c.Needy);
+        Range("Chat.Banter", c.Banter);
+        Range("Chat.Jokes", c.Jokes);
+        Range("Chat.Notes", c.Notes);
 
         return errors;
     }

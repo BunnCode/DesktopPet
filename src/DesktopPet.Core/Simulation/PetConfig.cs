@@ -90,6 +90,9 @@ public sealed record PetConfig
     /// <summary>A new pet's behavior multipliers (idle, walk, sit, sleep, climb, push) are rolled in this range.</summary>
     public Traits.TraitRange NewPetBehavior { get; init; } = new(0.5, 2.0);
 
+    /// <summary>A new pet's chat multipliers (needy lines, banter, jokes, sticky notes) are rolled in this range.</summary>
+    public Traits.TraitRange NewPetChat { get; init; } = new(0.5, 2.0);
+
     // ---- Walls: climbing window sides and screen edges, pushing windows ----
 
     public bool EnableClimbing { get; init; } = true;
@@ -155,6 +158,11 @@ public sealed record PetConfig
 
     /// <summary>When pets go and use furniture on their own, and how it moves them.</summary>
     public FurnitureRules Furniture { get; init; } = new();
+
+    // ---- Chat ----
+
+    /// <summary>Speech bubbles and sticky notes from the local language model.</summary>
+    public Chat.ChatRules Chat { get; init; } = new();
 }
 
 /// <summary>Tuning for furniture: when pets choose it, how they get there, and the kick and bounce physics.</summary>

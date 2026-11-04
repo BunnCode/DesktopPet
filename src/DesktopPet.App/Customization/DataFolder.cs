@@ -29,6 +29,24 @@ internal sealed class DataFolder(string root)
     public string Furniture => Path.Combine(Root, FurnitureSpecFile.FolderName);
     public string Room => Path.Combine(Root, RoomStore.FileName);
 
+    /// <summary>A second place for chat models (the first is the <c>models</c> folder next to the app).</summary>
+    public string Models => Path.Combine(Root, "models");
+
+    /// <summary>
+    /// Finds the chat model: a full path as is; a file name in the <c>models</c> folder next to the app, then in the
+    /// data folder's. Returns null when it's in none of them, with the places looked in.
+    /// </summary>
+    public (string? Path, IReadOnlyList<string> Searched) FindModel(string modelFile)
+    {
+        if (Path.IsPathRooted(modelFile))
+        {
+            return (File.Exists(modelFile) ? modelFile : null, [modelFile]);
+        }
+
+        string[] candidates = [Path.Combine(AppContext.BaseDirectory, "models", modelFile), Path.Combine(Models, modelFile)];
+        return (candidates.FirstOrDefault(File.Exists), candidates);
+    }
+
     public string PetFolder(int petId) => Path.Combine(Pets, PetRoster.FolderName(petId));
     public string SavePath(int petId) => Path.Combine(PetFolder(petId), PetRoster.SaveFileName);
     public string TraitsPath(int petId) => Path.Combine(PetFolder(petId), PetTraitsFile.FileName);

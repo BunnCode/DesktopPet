@@ -29,11 +29,12 @@ This document describes the design **as built**, the status of each milestone, a
 | — | Default art: chibi pixel rabbit replaces the placeholder blob | Done | |
 | M10 | Per-pet traits: own folder and sprites, names, neediness, personality | Done | `976c95a` |
 | M11 | Furniture, defined in user-editable files | Done | `0bcd1d0` |
-| M12 | Chat bubbles and sticky notes from a shared local LLM (Qwen3.5-2B) | Planned | |
+| M12 | Speech bubbles and sticky notes (two behaviors) from a shared local LLM (Qwen3.5-2B) | Done | |
+| M12b | Reading on-screen text and referring to it when talking or writing notes | Planned | |
 | M13 | Breeding: eggs that hatch into mixed children | Planned | |
 | M14 | Death and gravestones | Planned | |
 
-359 unit tests, all in `DesktopPet.Core.Tests`.
+424 unit tests, all in `DesktopPet.Core.Tests`.
 
 ### Changes from the original plan
 
@@ -72,6 +73,16 @@ This document describes the design **as built**, the status of each milestone, a
   except by the user (it just carries on or walks back to its slot).
 - **M11 trips give up** after 60 s or when no route exists, and that piece isn't tried again for 30 s.
 - **Furniture windows** are topmost like the pets' but don't re-assert it, so the pets always stay in front.
+- **M12 speech and sticky notes are two separate behaviors** (clarified by the user 2026-11-03). Each has its own
+  switch (menu: "Let them talk", "Let them leave notes"), rates, gaps, prompt and memory of past lines. They only
+  share the model and its one-at-a-time queue.
+- **M12 chat frequencies live in `traits.json`** (`Chat` multipliers), not in the save: the same reason as M10.
+- **M12 runtime:** LLamaSharp 0.30 with its **Vulkan** backend (17 MB, works with any recent GPU's driver) instead of
+  CUDA (200+ MB, NVIDIA only), plus the CPU backend as the fallback. The model is `Qwen3.5-2B-Q6_K.gguf` (1.5 GB,
+  smaller than the 2–3 GB guessed).
+- **M12 prompts:** the pet's mood only goes into lines about its needs (with it everywhere, a 2B model turned every
+  joke into a complaint), and each note gets one concrete topic (given "a reminder, a kind word or a silly thought",
+  it wrote that phrase back).
 
 ---
 
@@ -114,12 +125,14 @@ src/
     Persistence/             SaveData, ISaveStore, JsonFileSaveStore
     Simulation/              PetSimulation, PetFrame, PetConfig, FixedStepper, WindowCommand
     Furniture/               FurnitureSpec (+File, Defaults), FurnitureItem, FurnitureWorld, RoutePlanner, RoomSave
+    Chat/                    ChatRules, ChatDirector (speech and notes), ChatPrompts, ChatText (+ChatMl), IChatModel
     Abstractions/            IRandom/SeededRandom, IClock/SystemClock
   DesktopPet.Platform.Windows/   net10.0-windows: thin Win32 adapter, no game rules
     Interop/NativeMethods.txt    CsWin32 source generator input (no hand-written DllImports)
     MonitorSource, WindowSource, DesktopSource    the desktop -> DesktopSnapshot
     CursorSource, PetWindowInterop, NativeIcon    our own window and cursor
     WindowManipulator                             moves other windows (pushing), guarded
+  DesktopPet.Chat/           net10.0: LlamaChatModel (LLamaSharp, Vulkan + CPU backends), behind Core's IChatModel
   DesktopPet.App/            net10.0-windows WPF exe: composition root
     App.xaml(.cs)            startup, single instance, menu + tray wiring, save path
     PetHost                  owns one pet: simulation, window, loop, saving, lock detection
@@ -128,18 +141,21 @@ src/
     SpriteSheet/             DefaultArt (built-in rabbit, embedded rabbit.png), SpriteAtlas
     Furniture/               FurnitureHost (world, loop, windows, room.json), FurnitureArt, Art/*.png (defaults)
     UI/                      PetMenu (shared menu), TrayIcon, DebugOverlay
+    Chat/                    ChatHost (model, director, bubbles, notes), SpeechBubble, StickyNote
     app.manifest             PerMonitorV2 DPI awareness
 tests/
   DesktopPet.Core.Tests/     xUnit; Fakes/ has FakeDesktop, FakeRandom, ScriptedRandom, FakeClock
 tools/sprites/make_rabbit.py generates the built-in rabbit sheet and furniture art (docs/SPRITE_GENERATOR.md)
+tools/models/get-model.ps1   downloads the chat model into models/ (gitignored)
 docs/PLAN.md                 this file
 docs/CODEMAP.md              file-by-file code map, flows and change recipes
 docs/SPRITES.md              custom sprite format (user-facing)
 docs/FURNITURE.md            furniture and its definition files (user-facing)
+docs/CHAT.md                 speech bubbles, sticky notes and the model (user-facing)
 docs/SPRITE_GENERATOR.md     how the built-in sheet is generated
 ```
 
-Dependencies: `App -> Platform.Windows -> Core`, and `App -> Core`. Core depends on nothing.
+Dependencies: `App -> Platform.Windows -> Core`, `App -> Chat -> Core`, and `App -> Core`. Core depends on nothing.
 
 ---
 
@@ -278,12 +294,14 @@ push a window off screen.
   `personality.txt` and `sprites\`, and reloads them after a 400 ms pause.
 - **Menu** (right-click the pet or the tray icon): the pet's name and mood, stat bars, About *name* (personality,
   neediness and behavior, read-only; Edit traits, Open its folder), Feed / Play / Sleep or Wake up, Add / Remove pet,
-  Furniture (Add each kind beside the pet, Remove all, Open furniture folder), "Let it push windows", Customize (Edit
+  Furniture (Add each kind beside the pet, Remove all, Open furniture folder), "Let it push windows", "Let them talk",
+  "Let them leave notes", Customize (Edit
   settings, Open data folder, Export sprite template), Debug overlay, Exit. Right-clicking furniture offers Remove.
 - **Debug overlay:** click-through, one per monitor. Floors green, window tops orange, walls blue (screen edges dotted),
   hang bars dashed magenta, the current surface yellow, plus the pet box, state and a summary line.
 - **Data folder** `%LOCALAPPDATA%\DesktopPet\`: `settings.json`, `sprites\` (shared), `sprite-template\`,
-  `problems.txt`, `furniture\` (a `.json` and image per kind), `room.json` (where the furniture stands), and
+  `problems.txt`, `furniture\` (a `.json` and image per kind), `room.json` (where the furniture stands), `models\`
+  (optional second place for the chat model), and
   `pets\<n>\` per pet: `save.json`, `traits.json`, `personality.txt`, `sprites\`.
 - **Saving:** each pet's `save.json`, written atomically (temp file, then swap) every minute, after
   actions, on exit and on logoff. A missing or corrupt file gives a fresh pet.
@@ -319,6 +337,9 @@ push a window off screen.
 - **Furniture is always in front of other windows** (topmost, like the pets), even when its window is behind another.
 - **Furniture positions are screen pixels:** after a monitor layout change, saved furniture drops from where it was and
   respawns at the top of the nearest monitor if that's off screen.
+- **Memory with chat:** the process is about 750 MB to 1 GB (the model's weights are memory-mapped, plus the GPU
+  backend), up from 127 MB. With chat's model missing it stays as before.
+- **Sticky notes don't survive a restart**, and notes on a window only follow it while the app runs.
 - **Pets beside furniture face it from the side** (the art is a side view), so TV watchers stand left and right of the
   TV rather than in front of it.
 
@@ -390,7 +411,7 @@ jacket colour.
 - The old procedural `PlaceholderArt` was removed. In Core, `SpriteSheetSpec.UsingPlaceholder` became `UsingDefault`.
 
 ## Planned: M10–M14
-Requested 2026-11-03. M10 and M11 are done; the rest aren't started. **Suggested order:** M10 first, because M12 and M13 build on per-pet traits. M11
+Requested 2026-11-03. M10, M11 and M12 are done; M12b is next; the rest aren't started. **Suggested order:** M10 first, because M12 and M13 build on per-pet traits. M11
 and M12 don't depend on each other. M13 reuses M11's world objects for the egg. M14 goes last, because its warnings use
 M12's needy chat.
 
@@ -478,33 +499,58 @@ written on first run, all seven landed on the taskbar, and two pets walked to th
 - **Tuning** in `settings.json` under `Furniture`: `NeedBelow`, `Weight`, `CuriosityWeight`, `ErrandSeconds`,
   `RetrySeconds`, kick, hop and bounce speeds.
 
-### M12: chat (planned)
-Pets say short things (1–2 sentences) in a speech bubble, kept cheap on resources. This will be expanded later.
-- **Model:** [Qwen3.5-2B](https://huggingface.co/Qwen/Qwen3.5-2B), run locally. **One model instance is shared by every
-  pet:** requests go through one queue, one at a time, so VRAM is spent only once. Replies are capped at a few dozen
-  tokens. Thinking mode is off, if the model has one.
-- **Ships with the app:** the quantized model (about 2–3 GB) is included in the release. It sits next to the exe in a
-  `models\` folder rather than inside the single-file exe, which would have to unpack it on every start. The `publish`
-  task copies it there.
-- **GPU or CPU:** chosen in `settings.json`, defaulting to the GPU. With no usable GPU it falls back to the CPU and
-  says so in a tray notification.
-- **Architecture:** Core decides when a pet talks and what about (the kind of line, its stats, nearby pets, its
-  personality prompt, its recent lines) and talks to the model only through an `IChatModel` interface, with a fake for
-  tests. The model runs in a new project (for example `DesktopPet.Chat`, no WPF). The pet keeps acting while it waits.
-  A slow or failed reply is skipped.
-- **What pets say:**
-  - **Needy:** says so when a stat is low.
-  - **Banter:** when two pets are close, one speaks and the other replies.
+### M12: speech bubbles and sticky notes (done)
+Built 2026-11-03. **Two distinct behaviors that both use the language model:** pets *talk* (short lines in speech
+bubbles) and, separately, *leave sticky notes* on windows. Neither leads to the other. Checked live: the model loaded
+on the GPU in about 2.5 s and each line took about 0.5 s. Two pets talked (one line, then the other's answer), three
+notes appeared on a test window from another process, and they went when it closed. The published single-file build
+loads the model too. User-facing guide: `docs/CHAT.md`.
+- **Model:** [Qwen3.5-2B](https://huggingface.co/Qwen/Qwen3.5-2B) as `Qwen3.5-2B-Q6_K.gguf` (unsloth's quant,
+  1.5 GB), run by LLamaSharp 0.30 (llama.cpp). **One instance is shared by every pet** and answers one request at a
+  time. It's loaded once at startup in the background, then warmed up with one throwaway answer (the GPU compiles its
+  shaders on first use, which made the first real line take 12 s). Replies are capped at 60 tokens; thinking is off
+  (an empty think block, as Qwen's template does it).
+- **Ships with the app:** in a `models\` folder next to the exe, never inside the single-file exe. The build copies
+  (hard-links) `models\*.gguf` from the repo root into `bin\...\models\`, and the publish task into `publish\models\`.
+  `tools\models\get-model.ps1` downloads it there (gitignored). The llama.cpp DLLs (`runtimes\win-x64\native\...`)
+  also stay beside the exe when publishing, because LLamaSharp doesn't search single-file's unpack folder. A model
+  missing or failing to load leaves the pets running without chat, with a notification.
+- **GPU or CPU:** `Chat.UseGpu` (default on) uses the Vulkan backend on any recent GPU; without one it falls back to
+  the CPU and says so.
+- **Architecture:** Core's `ChatDirector` decides when each pet talks or writes, and what about. It talks to the model
+  only through `IChatModel`, with a fake in the tests. The model lives in the new project `DesktopPet.Chat`
+  (`LlamaChatModel`, no WPF). Requests run off the UI thread; the pets keep acting while one is in flight. A reply
+  slower than 25 s, or a failed one, is skipped (a failure is reported once).
+- **Speech** (`Chat.Enabled`, menu "Let them talk"):
+  - **Needs:** a need below 30 makes the pet say so (told its mood, like click reactions; other lines aren't).
+  - **Banter:** when another pet is within 260 DIP, one speaks to the other, and the other answers at least 2 s later.
   - **Jokes.**
-  - **Sticky notes:** the pet puts a note on a window, written in its personality. The note is a small window anchored
-    to that window. It moves with the window, hides when the window is minimized, goes when the window closes, and
-    clicking it dismisses it. The number of notes on screen is capped.
-- **Speech bubble:** a small window above the pet that follows it and fades after a few seconds.
-- **Per-pet settings:** how often each kind of line happens is stored in the pet's save. The personality prompt is in
-  the pet's files (M10). A menu toggle turns chat off.
-- **Runtime:** LLamaSharp (llama.cpp) with a quantized GGUF. The model is loaded once at startup and stays loaded.
-  Unloading after a long idle to free VRAM is a later stretch goal (see Leftovers).
+  - **Clicked:** every click on a pet (never a drag or throw) gets a spoken reaction to what the click did: being
+    petted, woken up, or poked while climbing or falling (requested 2026-11-03). Told its mood, so a hungry pet may say
+    so. It goes ahead of everything else and skips the gaps below, waits only for the model (a newer click on the same
+    pet replaces a waiting one), and is dropped if it can't start within 8 s.
+  - Rates per hour while the kind makes sense: 10, 8, 3. At least 20 s between any two lines, and 60 s between two
+    from the same pet (answers excepted).
+  - **Bubble:** a click-through window above the pet that follows it, stays 3 s + 0.06 s a character, then fades.
+    Bubbles of pets side by side stack instead of covering each other.
+- **Sticky notes** (`Chat.NotesEnabled`, menu "Let them leave notes"):
+  - A pet standing on a window now and then writes a note and sticks it there, about where it stands, below the title
+    bar. Its prompt is about writing, not speaking, with one topic picked per note (water, stretching, a break,
+    cheering on, a kind word, a silly thought …).
+  - 2 per hour while on a window; at least 2 min between notes and 10 min per pet; at most 3 on screen.
+  - The note is a small window anchored to its window: it moves with it, hides while it's minimized, goes when it
+    closes, and sits just above it in z-order (so whatever covers the window covers the note). Clicking dismisses it.
+- **Both:** sleeping pets do neither; nothing happens while the screen is locked. Each behavior keeps its own memory
+  of the pet's last 5 lines or notes, passed to the prompt so it doesn't repeat itself. The output is cleaned up:
+  quotes, name prefixes, narration, actions, emojis and think tags are removed, at most two sentences, 160 characters.
+- **Per pet:** `traits.json` has `Chat` multipliers (`Needy`, `Banter`, `Jokes`, `Notes`), rolled for new pets in
+  `NewPetChat` (0.5–2). Older files without them count as 1. Shown in About. The personality prompt is the pet's
+  `personality.txt` (M10).
+- **Later:** unloading the model when idle (see Leftovers).
 
+### M12b: reading the screen (planned)
+Requested 2026-11-03: pets can read text shown in applications and refer to it when talking or writing notes, if they
+want to. To be designed and built next.
 ### M13: breeding (planned)
 For now, a rare, automatic mating routine. This will be expanded later.
 - **Mating:** two pets close together, both with good stats, past a cooldown, with a small chance per hour. A short

@@ -152,6 +152,7 @@ public class PetTraitsTests
             Assert.Empty(PetTraitsFile.Validate(t));
             Assert.InRange(t.Neediness.Hunger, 0.8, 1.25);
             Assert.InRange(t.Behavior.Climb, 0.5, 2.0);
+            Assert.InRange(t.Chat.Banter, 0.5, 2.0);
         }
     }
 
@@ -188,6 +189,7 @@ public class PetTraitsTests
             Name = "Barnaby",
             Neediness = new Neediness(1.25, 0.6, 2),
             Behavior = new BehaviorTraits(1, 0.5, 1.5, 0.7, 1.9, 0.55),
+            Chat = new ChatTraits(0.5, 2, 0, 1.3),
         };
         var parsed = PetTraitsFile.Parse(PetTraitsFile.Serialize(traits));
 
@@ -208,6 +210,7 @@ public class PetTraitsTests
         Assert.Equal("Wilbur", parsed.Traits!.Name);
         Assert.Equal(new Neediness(), parsed.Traits.Neediness);
         Assert.Equal(new BehaviorTraits(Climb: 3), parsed.Traits.Behavior);
+        Assert.Equal(new ChatTraits(), parsed.Traits.Chat); // older files have no Chat section
     }
 
     [Fact]
@@ -224,6 +227,7 @@ public class PetTraitsTests
     [InlineData("""{ "Name": "Ava", "Neediness": { "Hunger": 11 } }""", "Neediness.Hunger must be between 0 and 10 (it is 11).")]
     [InlineData("""{ "Name": "Ava", "Behavior": { "Push": -1 } }""", "Behavior.Push must be between 0 and 10 (it is -1).")]
     [InlineData("""{ "Name": "Ava", "Behavior": { "Idle": 0, "Walk": 0, "Sit": 0 } }""", "Behavior.Idle, Behavior.Walk and Behavior.Sit can't all be 0.")]
+    [InlineData("""{ "Name": "Ava", "Chat": { "Jokes": 12 } }""", "Chat.Jokes must be between 0 and 10 (it is 12).")]
     [InlineData("{ nope", "Not valid JSON (line 1).")]
     [InlineData("null", "The file is empty.")]
     public void Traits_file_problems_are_reported(string text, string error)

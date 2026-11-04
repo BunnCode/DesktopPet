@@ -29,7 +29,32 @@
     <EmbeddedResource Include="Furniture\Art\*.png" LogicalName="DesktopPet.App.Furniture.%(Filename)%(Extension)" />
   </ItemGroup>
 
+  <!-- The chat model (tools/models/get-model.ps1 downloads it into models\ at the repo root). It goes in a models\
+       folder next to the exe, never inside the single-file exe, which would have to unpack 1.5 GB on every start.
+       Hard links where possible, so a build doesn't take another copy's worth of disk. -->
+  <PropertyGroup>
+    <CreateHardLinksForAdditionalFilesIfPossible>true</CreateHardLinksForAdditionalFilesIfPossible>
+  </PropertyGroup>
   <ItemGroup>
+    <None Include="..\..\models\*.gguf" Link="models\%(Filename)%(Extension)" Visible="false">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </None>
+  </ItemGroup>
+
+  <!-- LLamaSharp looks for its native DLLs in runtimes\win-x64\native\<variant>\ next to the exe. Bundled into a
+       single-file exe they'd be unpacked to a temp folder it never searches, and chat would stay off. -->
+  <Target Name="KeepLlamaNativesBesideTheExe" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish Condition="$([System.String]::Copy('%(ResolvedFileToPublish.RelativePath)').StartsWith('runtimes'))">
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DesktopPet.Chat\DesktopPet.Chat.csproj" />
     <ProjectReference Include="..\DesktopPet.Core\DesktopPet.Core.csproj" />
     <ProjectReference Include="..\DesktopPet.Platform.Windows\DesktopPet.Platform.Windows.csproj" />
   </ItemGroup>

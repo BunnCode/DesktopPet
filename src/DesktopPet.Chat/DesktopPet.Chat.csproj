@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The local language model behind chat (LLamaSharp / llama.cpp). No WPF; Core only sees IChatModel. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>DesktopPet.Chat</RootNamespace>
+    <!-- The backends ship native DLLs for every OS; with a runtime set, only the Windows x64 ones are copied. -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="LLamaSharp" Version="0.30.0" />
+    <!-- Vulkan runs on any recent graphics card with just its driver (17 MB, unlike CUDA's 200+ MB); CPU is the fallback. -->
+    <PackageReference Include="LLamaSharp.Backend.Vulkan.Windows" Version="0.30.0" />
+    <PackageReference Include="LLamaSharp.Backend.Cpu" Version="0.30.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DesktopPet.Core\DesktopPet.Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/DesktopPet.App/DesktopPet.App.csproj" />
+    <Project Path="src/DesktopPet.Chat/DesktopPet.Chat.csproj" />
     <Project Path="src/DesktopPet.Core/DesktopPet.Core.csproj" />
     <Project Path="src/DesktopPet.Platform.Windows/DesktopPet.Platform.Windows.csproj" />
   </Folder>

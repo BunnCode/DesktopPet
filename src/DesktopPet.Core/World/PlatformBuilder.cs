@@ -71,6 +71,13 @@ public static class PlatformBuilder
 
     public static string WindowKey(long windowId) => "window:" + windowId.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
+    /// <summary>The window a <see cref="WindowKey"/> names, or null for any other key (floors, hang bars, none).</summary>
+    public static long? WindowIdFromKey(string? key) =>
+        key is not null && key.StartsWith("window:", StringComparison.Ordinal) &&
+        long.TryParse(key.AsSpan(7), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var id)
+            ? id
+            : null;
+
     public static string HangKey(long windowId) => "hang:" + windowId.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>

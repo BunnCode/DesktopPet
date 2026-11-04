@@ -31,6 +31,7 @@ public sealed class PetSimulation
 
     // Pointer gesture in progress.
     private Vec2? _pressAt;
+    private PetClick? _click;
     private Vec2 _grabOffset;
 
     /// <param name="config">Shared tuning; the pet's <paramref name="traits"/> are applied on top.</param>
@@ -369,13 +370,30 @@ public sealed class PetSimulation
         else if (State == PetStateId.Sleep || (State == PetStateId.UseFurniture && _ctx.ActiveUse?.Animation == Animation.Animations.Sleep.Id))
         {
             Apply(PetAction.WakeUp); // a click wakes it (also asleep on furniture)
+            _click = PetClick.WokenUp;
         }
         else if (_ctx.Body.Mode == BodyMode.Grounded)
         {
             UpdateStats();
             _ctx.Stats = StatsSystem.Petted(_ctx.Stats, _ctx.Config.Stats);
             _fsm.ChangeTo(PetStateId.Happy, _ctx); // a click: being petted
+            _click = PetClick.Petted;
         }
+        else
+        {
+            _click = PetClick.Poked; // falling, climbing, clinging: nothing happens, but it noticed
+        }
+    }
+
+    /// <summary>
+    /// The last click on the pet since the previous call (a press released without dragging), and what it did; null if
+    /// there was none. Drags and throws never count. For the pet's spoken reaction.
+    /// </summary>
+    public PetClick? TakeClick()
+    {
+        var click = _click;
+        _click = null;
+        return click;
     }
 
     /// <summary>Abandons a gesture (e.g. mouse capture lost); a held pet is dropped in place.</summary>

@@ -15,6 +15,7 @@ public static class TraitRoller
         ArgumentNullException.ThrowIfNull(random);
         var need = config.NewPetNeediness;
         var act = config.NewPetBehavior;
+        var chat = config.NewPetChat;
 
         return new PetTraits
         {
@@ -23,6 +24,7 @@ public static class TraitRoller
             Behavior = new BehaviorTraits(
                 Multiplier(random, act), Multiplier(random, act), Multiplier(random, act),
                 Multiplier(random, act), Multiplier(random, act), Multiplier(random, act)),
+            Chat = new ChatTraits(Multiplier(random, chat), Multiplier(random, chat), Multiplier(random, chat), Multiplier(random, chat)),
         };
     }
 

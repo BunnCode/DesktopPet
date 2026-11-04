@@ -41,6 +41,14 @@ public static class PetWindowInterop
             bounds.Left, bounds.Top, bounds.Width, bounds.Height,
             SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE | SET_WINDOW_POS_FLAGS.SWP_NOZORDER | SET_WINDOW_POS_FLAGS.SWP_NOOWNERZORDER);
 
+    /// <summary>Moves without resizing (a window that sizes itself to its content), physical pixels.</summary>
+    public static void SetPosition(nint hwnd, int left, int top) =>
+        PInvoke.SetWindowPos(
+            new HWND(hwnd), HWND.Null,
+            left, top, 0, 0,
+            SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE | SET_WINDOW_POS_FLAGS.SWP_NOZORDER | SET_WINDOW_POS_FLAGS.SWP_NOOWNERZORDER |
+            SET_WINDOW_POS_FLAGS.SWP_NOSIZE);
+
     /// <summary>Puts the window back at the top of the topmost band (other topmost windows and the taskbar can cover it).</summary>
     public static void BringToTopmost(nint hwnd) =>
         PInvoke.SetWindowPos(

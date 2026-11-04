@@ -3,10 +3,13 @@ using System.IO;
 using System.Windows.Threading;
 using DesktopPet.App.SpriteSheet;
 using DesktopPet.App.UI;
+using DesktopPet.Core.Animation;
 using DesktopPet.Core.Behavior;
+using DesktopPet.Core.Chat;
 using DesktopPet.Core.Furniture;
 using DesktopPet.Core.Math;
 using DesktopPet.Core.Persistence;
+using DesktopPet.Core.Physics;
 using DesktopPet.Core.Simulation;
 using DesktopPet.Core.Stats;
 using DesktopPet.Core.Traits;
@@ -107,6 +110,28 @@ internal sealed class PetHost : IPetControls, IDisposable
     }
 
     public StatRules Rules => _simulation.Config.Stats;
+
+    /// <summary>The settings this pet runs on (shared ones with its traits applied).</summary>
+    public PetConfig Config => _simulation.Config;
+
+    /// <summary>The screen is locked: the user isn't there.</summary>
+    public bool UserAway => _simulation.UserAway;
+
+    /// <summary>The last click on the pet since the previous call (not drags), for its spoken reaction.</summary>
+    public PetClick? TakeClick() => _simulation.TakeClick();
+
+    /// <summary>The pet as chat sees it: who it is, how it feels, where it is, whether it can talk.</summary>
+    public ChatPet ChatInfo
+    {
+        get
+        {
+            var current = _simulation.Current;
+            var asleep = _simulation.State == PetStateId.Sleep || current.AnimationId == Animations.Sleep.Id;
+            var window = _simulation.Mode == BodyMode.Grounded ? PlatformBuilder.WindowIdFromKey(_simulation.GroundKey) : null;
+            var scale = current.Size.Y / System.Math.Max(1, _simulation.Config.SizeDip);
+            return new ChatPet(Id, Name, Personality, Stats, current.FeetPos, scale, !asleep, window, Traits.Chat);
+        }
+    }
 
     /// <summary>What this pet sees and is doing, for the debug overlay.</summary>
     public (IReadOnlyList<Core.World.Platform> Platforms, IReadOnlyList<Wall> Walls, DesktopSnapshot Snapshot, DebugPet Pet) DebugInfo
