@@ -160,6 +160,10 @@ public static class PetConfigValidator
             Range("Breeding.ApproachSeconds", breeding.ApproachSeconds, 1, 600);
             Range("Breeding.HatchMinutes", breeding.HatchMinutes, 0, 100_000);
             Range("Breeding.Variation", breeding.Variation, 0, 1);
+            Range("Breeding.PillMinutes", breeding.PillMinutes, 0, 10_000);
+            Range("Breeding.PillVisitSeconds", breeding.PillVisitSeconds, 1, 3_600);
+            Range("Breeding.PillAskSeconds", breeding.PillAskSeconds, 0, 600);
+            Range("Breeding.PillAgreeChance", breeding.PillAgreeChance, 0, 1);
         }
 
         var death = c.Death;

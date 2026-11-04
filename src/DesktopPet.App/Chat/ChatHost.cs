@@ -72,6 +72,18 @@ internal sealed class ChatHost : IDisposable
         }
     }
 
+    /// <summary>
+    /// Shows a fixed line in the pet's bubble (no model involved), if talking is on: what pets say on a breeding pill
+    /// round.
+    /// </summary>
+    public void Say(int petId, string text)
+    {
+        if (_enabled && _pets().FirstOrDefault(p => p.Id == petId) is { } pet)
+        {
+            Bubble(pet, text);
+        }
+    }
+
     /// <summary>Loads the model (in the background) and starts ticking.</summary>
     /// <param name="modelPath">The model file, or null if it wasn't found (chat stays quiet).</param>
     /// <param name="searched">Where it was looked for, for the notification when it's missing.</param>
@@ -244,13 +256,18 @@ internal sealed class ChatHost : IDisposable
             return;
         }
 
+        Bubble(pet, line.Text);
+    }
+
+    private void Bubble(PetHost pet, string text)
+    {
         if (!_bubbles.TryGetValue(pet.Id, out var bubble))
         {
             bubble = new SpeechBubble { Left = -32000, Top = -32000 };
             _bubbles[pet.Id] = bubble;
         }
 
-        bubble.Say(line.Text, Rules.BubbleDuration(line.Text));
+        bubble.Say(text, Rules.BubbleDuration(text));
         _spoke.Remove(pet.Id);
         _spoke.Add(pet.Id);
     }

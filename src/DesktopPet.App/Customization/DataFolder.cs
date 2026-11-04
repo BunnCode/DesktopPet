@@ -219,27 +219,53 @@ internal sealed class DataFolder(string root)
         }
     }
 
+    /// <summary>The list of default furniture kinds already written into the furniture folder.</summary>
+    public string WrittenDefaults => Path.Combine(Furniture, "defaults-written.txt");
+
     /// <summary>
-    /// First run (no furniture folder yet): writes the default furniture, a definition and an image per kind. Once the
-    /// folder exists it's the user's: deleted files stay deleted. Returns what went wrong, if anything.
+    /// Writes the default furniture, a definition and an image per kind: all of it on first run (no furniture folder
+    /// yet), and later only defaults added since (such as the breeding pill), going by <see cref="WrittenDefaults"/>.
+    /// Otherwise the folder is the user's: deleted files stay deleted. Returns what went wrong, if anything.
     /// </summary>
     public IReadOnlyList<string> WriteDefaultFurniture()
     {
-        if (Directory.Exists(Furniture))
-        {
-            return [];
-        }
-
         try
         {
-            Directory.CreateDirectory(Furniture);
-            foreach (var spec in DefaultFurniture.All)
+            IReadOnlyCollection<string>? written = null;
+            if (!Directory.Exists(Furniture))
             {
-                File.WriteAllText(Path.Combine(Furniture, spec.Kind + FurnitureSpecFile.Extension), FurnitureSpecFile.Serialize(spec));
-                if (FurnitureArt.DefaultPng(spec.Kind) is { } png)
+                Directory.CreateDirectory(Furniture);
+                written = [];
+            }
+            else if (File.Exists(WrittenDefaults))
+            {
+                written = [.. File.ReadAllLines(WrittenDefaults).Select(l => l.Trim()).Where(l => l.Length > 0 && !l.StartsWith('#'))];
+            }
+
+            var toWrite = DefaultFurniture.ToWrite(written);
+            foreach (var spec in toWrite)
+            {
+                var path = Path.Combine(Furniture, spec.Kind + FurnitureSpecFile.Extension);
+                if (File.Exists(path))
+                {
+                    continue; // the user made one of that name: theirs stays
+                }
+
+                File.WriteAllText(path, FurnitureSpecFile.Serialize(spec));
+                if (FurnitureArt.DefaultPng(spec.Kind) is { } png && !File.Exists(Path.Combine(Furniture, spec.Art)))
                 {
                     File.WriteAllBytes(Path.Combine(Furniture, spec.Art), png);
                 }
+            }
+
+            if (toWrite.Count > 0 || !File.Exists(WrittenDefaults))
+            {
+                File.WriteAllLines(WrittenDefaults,
+                [
+                    "# Default furniture already put in this folder (new defaults in later versions are added once).",
+                    "# Remove a line to get that piece back the next time the app starts.",
+                    .. DefaultFurniture.All.Select(s => s.Kind),
+                ]);
             }
 
             return [];

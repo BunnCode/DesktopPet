@@ -33,8 +33,9 @@ This document describes the design **as built**, the status of each milestone, a
 | M12b | Reading on-screen text (Windows OCR) and referring to it when talking or writing notes | Done | `630c904` |
 | M13 | Breeding: courtship, eggs that hatch into mixed children, fixing pets, personality traits list | Done | `d1e00b3` |
 | M14 | Death and gravestones: neglect timers, warnings, gravestones with name and dates, revive or delete | Done | `a9be018` |
+| M15 | Breeding pill: consumable furniture; the pet that swallows it asks every other pet to mate | Done | |
 
-522 unit tests, all in `DesktopPet.Core.Tests`.
+532 unit tests, all in `DesktopPet.Core.Tests`.
 
 ### Changes from the original plan
 
@@ -367,6 +368,8 @@ push a window off screen.
 - **Eggs are drawn behind the pets** (they're furniture windows), so an egg laid between two pets is half hidden until
   they move away.
 - **Only one courtship at a time,** and only between pets on the same surface.
+- **A breeding pill round doesn't survive a restart:** closing the app mid-round ends it (the pill is already gone).
+  At the pet cap a pet still swallows a pill, but its round ends at once.
 - **Pets beside furniture face it from the side** (the art is a side view), so TV watchers stand left and right of the
   TV rather than in front of it.
 - **A dead pet's files aren't watched:** renaming it in its traits.json shows on the gravestone after a restart.
@@ -681,6 +684,37 @@ Delete and the menu with no pets haven't been clicked through live yet.
 - **The last pet dying** is nothing special: with no pets the menu shows only the app-wide items, with "Add a pet".
 - **Pet cap:** gravestones don't count toward the cap of 8. Revive is disabled while pets and eggs are at the cap.
 - **Off switch and tuning:** `settings.json` under `Death` (`Enabled`, `ZeroHours`, `AllCriticalHours`, `ReviveStat`).
+
+## M15: breeding pill (done)
+Requested and built 2026-11-04. A new default furniture kind, the **breeding pill** (`pill`, 20×12 DIP, a blue
+capsule drawn by the generator).
+Checked live against a copy of the user's five pets with a pill put in `room.json`: on start the pill was added to
+the existing furniture folder, a pet swallowed the pill about 20 s later, and within 40 s it had asked three pets in
+turn and laid three eggs with them (one parent each time was the pill taker), stopping at the pet cap. The data folder
+was restored afterwards. The speech bubbles weren't looked at on screen.
+- **Consumable furniture** (new, general): `FurnitureSpec.Consumable` removes the piece once a pet has used it for the
+  whole time (an interrupted use doesn't count). The pill is the only default that uses it.
+- **Taking it:** its use (`Effect: Breed`, `eat` for 2–3 s, no need) is tempting: it counts as if a need it meets were
+  half empty (`FurnitureChooser.PillAppeal`), so a pet goes for a pill soon after it's placed. Fixed pets, pets already
+  on a round, and everyone while breeding is switched off leave it alone.
+- **The round** (Core `BreedingDirector`, pet side `VisitState`): the pet goes round every other pet, nearest first,
+  walking, climbing and dropping like a furniture trip (the route-following code is now shared, `RouteFollower`). It
+  stops beside each one and asks (faces it, gazes with hearts, and says a line such as "Leo, want to make babies?");
+  the asked pet stops what it's doing and faces it. After `PillAskSeconds` (3) it answers:
+  - **Yes** if it could mate anyway (not fixed, past its own cooldown, stats at least `MinStat`) and a roll of
+    `PillAgreeChance` (0.75) × its Mating trait (at most 1) succeeds; another pet on a pill round always says yes
+    (unless fixed). They then court as in M13 and an egg is laid. The pill overrides the asker's own cooldown and
+    stats.
+  - **No** otherwise, with a line that says why ("Sorry, I'm fixed.", "I just had babies!", "I'm not feeling up to
+    it.", or a plain "No thanks."); it turns its back and walks off, and the asker moves on.
+- A pet it can't reach within `PillVisitSeconds` (45), or with no way there for 2 s, or shut in a pen, is skipped.
+  The round ends once everyone's been asked, after `PillMinutes` (10), at the pet cap (eggs count), or if the asker
+  becomes fixed or breeding is switched off. Picking the asker up pauses it; it carries on after landing.
+- **Speech:** the lines are fixed (not the chat model) and shown in the usual bubbles when "Let them talk" is on.
+- **New defaults reach existing folders:** `furniture\defaults-written.txt` lists the defaults already written. A
+  folder without it (from before M15) is taken to have the first seven, so the pill is added once; a default the user
+  deleted stays deleted.
+- **Tuning:** `settings.json` under `Breeding`: `PillMinutes`, `PillVisitSeconds`, `PillAskSeconds`, `PillAgreeChance`.
 
 ## Leftovers (not started)
 Candidates, none chosen yet:

@@ -140,7 +140,7 @@ public partial class App : Application
         var (modelPath, searched) = _data.FindModel(_config.Chat.ModelFile);
         _chat.Start(modelPath, searched);
 
-        _breeding = new BreedingHost(() => _pets, _furniture, LayEgg, Hatch) { Rules = _config.Breeding };
+        _breeding = new BreedingHost(() => _pets, _furniture, LayEgg, Hatch, s => _chat?.Say(s.PetId, s.Text)) { Rules = _config.Breeding };
         _breeding.Start();
 
         if (settings.Errors.Count > 0)

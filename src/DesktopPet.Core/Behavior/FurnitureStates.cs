@@ -77,68 +77,25 @@ internal sealed class GoToFurnitureState : PetState
             return GiveUp(context);
         }
 
-        var speed = context.Config.WalkSpeedDip * context.Scale;
-        var feet = body.Feet;
-
-        if (step.Move == RouteMove.Arrive && errand.Use.Effect == UseEffect.Kick)
+        var kick = errand.Use.Effect == UseEffect.Kick;
+        if (kick && step.Move == RouteMove.Arrive
+            && System.Math.Abs(item.Feet.X - body.Feet.X) <= context.HalfWidthPx + (item.Size.X / 2))
         {
-            // A ball: close enough to kick is close enough.
-            if (System.Math.Abs(item.Feet.X - feet.X) <= context.HalfWidthPx + (item.Size.X / 2))
-            {
+            return PetStateId.UseFurniture; // a ball: close enough to kick is close enough
+        }
+
+        switch (RouteFollower.Follow(context, step, dt, snapToEnd: !kick))
+        {
+            case RouteProgress.Arrived:
                 return PetStateId.UseFurniture;
-            }
-        }
-        else if (step.Move != RouteMove.WalkOff && System.Math.Abs(step.X - feet.X) <= speed * dt)
-        {
-            body.Feet = feet with { X = step.X };
-            return Arrive(context, step);
-        }
-
-        var direction = step.Move == RouteMove.WalkOff ? step.Direction : System.Math.Sign(step.X - feet.X);
-        if (direction == 0)
-        {
-            return null;
-        }
-
-        context.FacingLeft = direction < 0;
-        var dx = direction * speed * dt;
-        if (step.Move != RouteMove.WalkOff && System.Math.Abs(dx) > System.Math.Abs(step.X - feet.X))
-        {
-            dx = step.X - feet.X;
-        }
-
-        if (!WorldQuery.IsWalkable(context.Monitors, feet.X + (direction * context.HalfWidthPx) + dx, feet.Y))
-        {
-            return GiveUp(context);
-        }
-
-        body.Feet = feet with { X = feet.X + dx };
-        return null;
-    }
-
-    /// <summary>Reached the step's spot: start using the furniture, or start the climb.</summary>
-    private static PetStateId? Arrive(PetContext context, RouteStep step)
-    {
-        var body = context.Body;
-        var size = context.SizePx;
-        switch (step.Move)
-        {
-            case RouteMove.Arrive:
-                return PetStateId.UseFurniture;
-
-            case RouteMove.ClimbUp when PhysicsSystem.FindWall(context.Walls, step.WallKey, body.Feet.Y - (size / 2)) is { } wall:
-                body.Cling(wall, body.Feet.Y, size);
-                context.ClimbDirection = -1;
+            case RouteProgress.Climbing:
                 return PetStateId.Climb;
-
-            case RouteMove.ClimbDown when context.CurrentGround() is { } ground
-                && RoutePlanner.SideAt(context.Walls, ground, step.Direction) is { } side:
-                body.Cling(side, side.Top + (size * 0.75), size);
-                context.ClimbDirection = 1;
-                return PetStateId.Climb;
-
+            case RouteProgress.Blocked:
+                return GiveUp(context);
+            case RouteProgress.Replan:
+                errand.Route = null; // the world changed under it: replan next tick
+                return null;
             default:
-                context.Errand!.Route = null; // the world changed under it: replan next tick
                 return null;
         }
     }
@@ -225,9 +182,14 @@ internal sealed class UseFurnitureState : PetState
         var full = use.Need == Need.Energy
             ? stats.Energy >= context.Config.Stats.WellRested
             : use.Need != Need.None && FurnitureChooser.Value(use.Need, stats) >= FurnitureChooser.Full;
-        if (full || (use.Effect != UseEffect.Bounce && (_remaining -= dt) <= 0))
+        if (full)
         {
             return Finish(context);
+        }
+
+        if (use.Effect != UseEffect.Bounce && (_remaining -= dt) <= 0)
+        {
+            return Done(context, errand);
         }
 
         return use.Effect switch
@@ -348,6 +310,24 @@ internal sealed class UseFurnitureState : PetState
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Used it for the whole time: a consumable piece is used up, and a breeding pill sends the pet round the others.
+    /// </summary>
+    private static PetStateId Done(PetContext context, Errand errand)
+    {
+        if (errand.Item.Spec.Consumable)
+        {
+            context.Furniture.Remove(errand.Item);
+        }
+
+        if (errand.Use.Effect == UseEffect.Breed && context.MayTakePill)
+        {
+            context.Visit = new Visit();
+        }
+
+        return Finish(context);
     }
 
     private static PetStateId Finish(PetContext context)

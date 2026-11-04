@@ -56,7 +56,10 @@ public sealed class PetSimulation
         _sharedConfig = config;
         Traits = traits ?? PetTraits.Neutral("Pet");
         config = Traits.ApplyTo(config);
-        _ctx = new PetContext(config, random ?? new SeededRandom(Environment.TickCount), furniture ?? new FurnitureWorld(config), this);
+        _ctx = new PetContext(config, random ?? new SeededRandom(Environment.TickCount), furniture ?? new FurnitureWorld(config), this)
+        {
+            Fixed = Traits.Fixed,
+        };
         _throw = new ThrowEstimator(config.ThrowWindowSeconds);
         _clock = clock ?? SystemClock.Instance;
         _statsUpdatedAt = _clock.UtcNow;
@@ -118,6 +121,7 @@ public sealed class PetSimulation
         ArgumentNullException.ThrowIfNull(traits);
         UpdateStats(); // time so far decays at the old rates
         Traits = traits;
+        _ctx.Fixed = traits.Fixed;
         ApplyConfig(traits.ApplyTo(_sharedConfig));
     }
 
@@ -332,6 +336,90 @@ public sealed class PetSimulation
         if (IsCourting)
         {
             _fsm.ChangeTo(mated ? PetStateId.Happy : PetStateId.Idle, _ctx);
+        }
+    }
+
+    // ---- Breeding pill round (M15, driven by Breeding.BreedingDirector) ----
+
+    /// <summary>It swallowed a breeding pill and is going round the other pets asking to mate.</summary>
+    public bool OnPillRound => _ctx.Visit is not null;
+
+    /// <summary>On a pill round and it has found no way to where it's heading for a while.</summary>
+    public bool PillRoundBlocked => _ctx.Visit is { Blocked: true };
+
+    /// <summary>
+    /// On a pill round: heads for <paramref name="x"/> (feet x) on surface <paramref name="groundKey"/>, or, with
+    /// null, waits where it is. A pet idling, walking or sitting sets off right away; otherwise once it's done.
+    /// </summary>
+    public void Seek(string? groundKey, double x)
+    {
+        if (_ctx.Visit is not { } visit)
+        {
+            return;
+        }
+
+        visit.Asking = false;
+        visit.TargetKey = groundKey;
+        visit.TargetX = x;
+        if (_ctx.Body.Mode == BodyMode.Grounded && State is PetStateId.Idle or PetStateId.Walk or PetStateId.Sit)
+        {
+            _fsm.ChangeTo(PetStateId.Visit, _ctx);
+        }
+    }
+
+    /// <summary>On a pill round: asks the pet it's next to, facing it and gazing with hearts, until told otherwise.</summary>
+    public void AskToMate(bool faceLeft)
+    {
+        if (_ctx.Visit is not { } visit)
+        {
+            return;
+        }
+
+        visit.Asking = true;
+        visit.AskFaceLeft = faceLeft;
+        _ctx.FacingLeft = faceLeft;
+        if (State != PetStateId.Visit && _ctx.Body.Mode == BodyMode.Grounded)
+        {
+            _fsm.ChangeTo(PetStateId.Visit, _ctx);
+        }
+    }
+
+    /// <summary>The pill round is over: it carries on as usual.</summary>
+    public void EndPillRound()
+    {
+        _ctx.Visit = null;
+        if (State == PetStateId.Visit)
+        {
+            _fsm.ChangeTo(_ctx.PickNext(), _ctx);
+        }
+    }
+
+    /// <summary>
+    /// Being asked to mate: stops what it's doing on the ground (furniture too) and stands facing the asker. Does
+    /// nothing while it's held, airborne, climbing or courting.
+    /// </summary>
+    public void Listen(bool faceLeft)
+    {
+        if (_ctx.Body.Mode != BodyMode.Grounded || IsCourting || _ctx.Pen is not null)
+        {
+            return;
+        }
+
+        _ctx.CancelErrand();
+        _ctx.FacingLeft = faceLeft;
+        if (State != PetStateId.Idle)
+        {
+            _fsm.ChangeTo(PetStateId.Idle, _ctx);
+        }
+    }
+
+    /// <summary>Said no: turns its back and walks off (the way given).</summary>
+    public void Refuse(bool walkLeft)
+    {
+        if (_ctx.Body.Mode == BodyMode.Grounded && !IsCourting && _ctx.Pen is null)
+        {
+            _fsm.ChangeTo(_ctx.OnTrip ? _ctx.TripState : PetStateId.Walk, _ctx);
+            _ctx.FacingLeft = walkLeft; // after Enter, which may turn a walker round
         }
     }
 
@@ -595,7 +683,7 @@ public sealed class PetSimulation
         {
             PetStateId.Sleep => StatActivity.Sleeping,
             PetStateId.Walk or PetStateId.Play or PetStateId.Shimmy or PetStateId.Climb or PetStateId.Push
-                or PetStateId.GoToFurniture => StatActivity.Active,
+                or PetStateId.GoToFurniture or PetStateId.Visit => StatActivity.Active,
             PetStateId.UseFurniture when use is not null => UseActivity(use),
             _ => StatActivity.Resting,
         };

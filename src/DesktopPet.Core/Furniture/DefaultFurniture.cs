@@ -55,5 +55,26 @@ public static class DefaultFurniture
         Uses = [new() { Need = Need.Hunger, RatePerHour = 2400, Animation = "eat", Seconds = new(15, 25) }],
     };
 
-    public static IReadOnlyList<FurnitureSpec> All { get; } = [Ball, Tv, Couch, Trampoline, Bed, PlayPen, Trough];
+    /// <summary>A blue pill, used up once swallowed: the pet then asks every other pet to mate (M15).</summary>
+    public static FurnitureSpec Pill { get; } = new()
+    {
+        Kind = "pill", Name = "Breeding pill", WidthDip = 20, HeightDip = 12, Art = "pill.png", Consumable = true,
+        Uses = [new() { Need = Need.None, Animation = "eat", Seconds = new(2, 3), Effect = UseEffect.Breed }],
+    };
+
+    public static IReadOnlyList<FurnitureSpec> All { get; } = [Ball, Tv, Couch, Trampoline, Bed, PlayPen, Trough, Pill];
+
+    /// <summary>The kinds written by the first version with furniture (M11), before the list of written defaults was kept.</summary>
+    public static IReadOnlyList<string> FirstKinds { get; } = ["ball", "tv", "couch", "trampoline", "bed", "playpen", "trough"];
+
+    /// <summary>
+    /// The defaults to write into an existing furniture folder: those added since it was last written to. A default
+    /// the user deleted stays deleted. <paramref name="written"/> is the list kept in the folder, or null if there's
+    /// none (a folder from before the list was kept, which has the <see cref="FirstKinds"/>).
+    /// </summary>
+    public static IReadOnlyList<FurnitureSpec> ToWrite(IReadOnlyCollection<string>? written)
+    {
+        var done = new HashSet<string>(written ?? FirstKinds, StringComparer.OrdinalIgnoreCase);
+        return [.. All.Where(s => !done.Contains(s.Kind))];
+    }
 }

@@ -20,6 +20,7 @@ internal sealed class BreedingHost : IDisposable
     private readonly FurnitureHost _furniture;
     private readonly Action<Mating> _laid;
     private readonly Action<FurnitureItem> _hatch;
+    private readonly Action<Saying> _said;
     private readonly DispatcherTimer _timer;
     private readonly Stopwatch _sinceTick = Stopwatch.StartNew();
     private readonly SystemClock _clock = SystemClock.Instance;
@@ -28,8 +29,11 @@ internal sealed class BreedingHost : IDisposable
     /// <param name="furniture">Where the eggs are.</param>
     /// <param name="laid">Two pets mated: lay the egg.</param>
     /// <param name="hatch">An egg is due: hatch it (the app removes it).</param>
-    public BreedingHost(Func<IReadOnlyList<PetHost>> pets, FurnitureHost furniture, Action<Mating> laid, Action<FurnitureItem> hatch)
+    /// <param name="said">A pet said something on a breeding pill round: show it.</param>
+    public BreedingHost(
+        Func<IReadOnlyList<PetHost>> pets, FurnitureHost furniture, Action<Mating> laid, Action<FurnitureItem> hatch, Action<Saying> said)
     {
+        _said = said;
         _pets = pets;
         _furniture = furniture;
         _laid = laid;
@@ -62,6 +66,11 @@ internal sealed class BreedingHost : IDisposable
         _sinceTick.Restart();
         var pets = _pets();
         Director.Tick(dt, [.. pets.Select(p => p.BreedingInfo)], Rules, RoomForEgg);
+        foreach (var saying in Director.TakeSayings())
+        {
+            _said(saying);
+        }
+
         foreach (var mating in Director.TakeMatings())
         {
             _laid(mating);

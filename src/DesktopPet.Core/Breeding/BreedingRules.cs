@@ -39,4 +39,22 @@ public sealed record BreedingRules
     /// ÷1.15 to ×1.15.
     /// </summary>
     public double Variation { get; init; } = 0.15;
+
+    /// <summary>
+    /// A pet that swallowed a breeding pill goes round asking the others for this long at most, minutes. The pill
+    /// overrides its own cooldown and stats, but not being fixed.
+    /// </summary>
+    public double PillMinutes { get; init; } = 10;
+
+    /// <summary>How long it tries to reach and ask one pet before moving on to the next, seconds.</summary>
+    public double PillVisitSeconds { get; init; } = 45;
+
+    /// <summary>How long it asks (gazing with hearts) before the other pet answers, seconds.</summary>
+    public double PillAskSeconds { get; init; } = 3;
+
+    /// <summary>
+    /// The chance an asked pet says yes, for an average pet (scaled by its Mating trait, at most 1). It can only say
+    /// yes if it could mate anyway: not fixed, past its cooldown, its stats at least <see cref="MinStat"/>.
+    /// </summary>
+    public double PillAgreeChance { get; init; } = 0.75;
 }

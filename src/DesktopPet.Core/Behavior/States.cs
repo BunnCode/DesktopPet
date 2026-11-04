@@ -453,8 +453,8 @@ internal sealed class ClimbState : TimedState
         WallBehavior.FaceWall(context);
     }
 
-    // On the way to furniture it keeps climbing the same way.
-    protected override PetStateId Next(PetContext context) => context.Errand is not null ? PetStateId.Climb : WallBehavior.Pick(context);
+    // On the way to furniture or another pet it keeps climbing the same way.
+    protected override PetStateId Next(PetContext context) => context.OnTrip ? PetStateId.Climb : WallBehavior.Pick(context);
 
     protected override PetStateId? Act(PetContext context, double dt)
     {
@@ -477,7 +477,7 @@ internal sealed class ClimbState : TimedState
                 {
                     body.Land(overX, p);
                     context.FacingLeft = wall.TowardWall < 0;
-                    return context.Errand is not null ? PetStateId.GoToFurniture : PetStateId.Idle;
+                    return context.OnTrip ? context.TripState : PetStateId.Idle;
                 }
             }
 

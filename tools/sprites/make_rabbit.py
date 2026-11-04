@@ -770,6 +770,23 @@ def trough():
     return [c]
 
 
+def pill():
+    """10x6: a blue breeding pill, a capsule in two shades of blue with a shine."""
+    c = canvas(10, 6)
+    fill(c, 2, 1, 7, 1, 'U')
+    fill(c, 1, 2, 8, 3, 'U')
+    fill(c, 2, 4, 7, 4, 'U')
+    for y in range(1, 5):
+        for x in range(5, 9):
+            if c[y][x] == 'U':
+                c[y][x] = 'Z'           # the lighter half
+    outlined(c)
+    fill(c, 2, 4, 4, 4, 'u')            # shade underneath
+    fill(c, 5, 4, 7, 4, 'U')
+    fill(c, 2, 2, 3, 2, 'w')            # shine
+    return [c]
+
+
 def egg():
     """12x13, 4 frames: a speckled egg standing still, then wobbling left and right (its top half shifted)."""
     rows = [(5, 6), (4, 7), (3, 8), (3, 8), (2, 9), (2, 9), (2, 9), (2, 9), (2, 9), (3, 8), (4, 7)]  # rows 1-11
@@ -818,7 +835,7 @@ def grave():
 
 
 FURNITURE = {
-    'ball': ball, 'tv': tv, 'couch': couch, 'trampoline': trampoline, 'bed': bed, 'playpen': playpen, 'trough': trough,
+    'ball': ball, 'tv': tv, 'couch': couch, 'trampoline': trampoline, 'bed': bed, 'playpen': playpen, 'trough': trough, 'pill': pill,
     'egg': egg, 'grave': grave,
 }
 

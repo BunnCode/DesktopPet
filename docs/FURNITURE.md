@@ -19,6 +19,10 @@ slower than your care: Feed and Play from the menu are still the quickest way to
 | Bed | Sleep (energy) |
 | Play pen | Pets never go in by themselves. Drop a pet in: it stays inside and its needs don't drop until you drag it out |
 | Trough | Eat (hunger), two pets at once |
+| Breeding pill | Swallowed (it's used up). The pet then goes round every other pet, nearest first, and asks to mate; each one that says yes mates with it and an egg is laid. Fixed pets leave it alone |
+
+New defaults in later versions (like the breeding pill) are added to your furniture folder once, on the next start.
+`defaults-written.txt` in the folder lists the defaults already put there; remove a line to get that piece back.
 
 ## Making your own
 
@@ -41,17 +45,20 @@ room); delete the whole folder to get the defaults back on the next start.
   "SlotOffsetsDip": [-40, 40], // where each pet stands, from the centre (optional: spread evenly)
   "Bounciness": 0,             // 0..0.95: how much it bounces when it lands
   "Friction": 1,               // lower slides further
+  "Consumable": false,         // true: used up once a pet has finished using it (a pill)
   "Uses": [
     {
       "Need": "Hunger",        // Hunger, Happiness, Energy or None
       "RatePerHour": 2400,     // points added per hour of use, on top of normal sleep etc.
       "Animation": "eat",      // the pet's animation (see SPRITES.md)
       "Seconds": { "Min": 15, "Max": 25 },
-      "Effect": "None",        // None, Hop, Bounce (launch), Kick (chase it) or Confine (a pen)
+      "Effect": "None",        // None, Hop, Bounce (launch), Kick (chase it), Confine (a pen) or Breed (a breeding pill)
       "SeatDip": 0             // draw the pet this high (on a bed or couch)
     }
   ]
 }
 ```
 
-When to go and how hard balls are kicked or trampolines launch are in `settings.json` under `Furniture`.
+When to go and how hard balls are kicked or trampolines launch are in `settings.json` under `Furniture`. How long a
+breeding pill lasts and how likely pets are to say yes are under `Breeding` (`PillMinutes`, `PillVisitSeconds`,
+`PillAskSeconds`, `PillAgreeChance`).

@@ -25,7 +25,8 @@ public static class FurnitureSpecFile
         "// A kind of furniture. Edit and save: changes apply right away. Sizes are DIPs (the pet is 64).\n" +
         "// Art: an image next to this file, its Frames side by side. Animate: Always, Moving or InUse.\n" +
         "// Uses: Need (Hunger, Happiness, Energy or None), RatePerHour (points added per hour of use),\n" +
-        "// Animation (the pet's), Seconds, Effect (None, Hop, Bounce, Kick or Confine), SeatDip (sit this high).\n" +
+        "// Animation (the pet's), Seconds, Effect (None, Hop, Bounce, Kick, Confine or Breed), SeatDip (sit this high).\n" +
+        "// Consumable: true if the piece is used up once a pet has finished using it (a pill).\n" +
         "// Delete this file to remove the furniture; delete the whole folder to get the defaults back.\n";
 
     private static readonly JsonSerializerOptions Options = new()

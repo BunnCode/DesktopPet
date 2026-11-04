@@ -35,6 +35,9 @@ internal static class FurnitureChooser
     /// <summary>A need counts as met at this value (a use ends early).</summary>
     public const double Full = 99.5;
 
+    /// <summary>How tempting a breeding pill is, as if a need it meets were this urgent (0..1).</summary>
+    public const double PillAppeal = 0.5;
+
     /// <summary>0 when the need is at or above <see cref="FurnitureRules.NeedBelow"/>, rising to 1 when it's empty.</summary>
     public static double Urgency(Need need, PetStats stats, FurnitureRules rules)
     {
@@ -150,9 +153,7 @@ internal static class FurnitureChooser
             return null;
         }
 
-        var walker = new Walker(context.HalfWidthPx, context.SizePx, context.Scale, context.Config.EnableClimbing,
-            context.Config.GravityDip * context.Scale);
-        errand.Route = RoutePlanner.Plan(context.Platforms, context.Walls, context.Monitors, from, body.Feet.X, to, x, walker);
+        errand.Route = RoutePlanner.Plan(context.Platforms, context.Walls, context.Monitors, from, body.Feet.X, to, x, RouteFollower.Walker(context));
         errand.PlannedFrom = from;
         errand.PlannedTarget = x;
         errand.ReplanIn = 0.5;
@@ -160,7 +161,7 @@ internal static class FurnitureChooser
     }
 
     private static bool CanChoose(PetContext context) =>
-        context.Pen is null && context.Errand is null && context.Body.Mode == Physics.BodyMode.Grounded
+        context.Pen is null && !context.OnTrip && context.Body.Mode == Physics.BodyMode.Grounded
         && context.Furniture.Items.Count > 0;
 
     /// <summary>Furniture uses worth going for now: free, standing somewhere, not recently found unreachable.</summary>
@@ -179,6 +180,16 @@ internal static class FurnitureChooser
             {
                 if (use.Effect == UseEffect.Confine || (use.Need != Need.None && Value(use.Need, context.Stats) >= Full))
                 {
+                    continue;
+                }
+
+                if (use.Effect == UseEffect.Breed)
+                {
+                    if (context.MayTakePill)
+                    {
+                        yield return (item, use, PillAppeal, false); // tempting: pets go for a pill fairly soon
+                    }
+
                     continue;
                 }
 

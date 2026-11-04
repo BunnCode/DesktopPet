@@ -25,10 +25,30 @@ public class FurnitureSpecFileTests
     [Fact]
     public void The_defaults_cover_the_planned_furniture()
     {
-        Assert.Equal(["ball", "tv", "couch", "trampoline", "bed", "playpen", "trough"], DefaultFurniture.All.Select(s => s.Kind));
+        Assert.Equal(["ball", "tv", "couch", "trampoline", "bed", "playpen", "trough", "pill"], DefaultFurniture.All.Select(s => s.Kind));
         Assert.True(DefaultFurniture.PlayPen.IsPen);
         Assert.Equal(4, DefaultFurniture.Tv.Slots);
         Assert.Contains(DefaultFurniture.Ball.Uses, u => u.Effect == UseEffect.Kick);
+        Assert.True(DefaultFurniture.Pill.Consumable);
+        Assert.Equal(UseEffect.Breed, Assert.Single(DefaultFurniture.Pill.Uses).Effect);
+    }
+
+    [Fact]
+    public void A_folder_from_before_the_pill_gets_only_the_pill_and_a_deleted_default_stays_deleted()
+    {
+        Assert.Equal(["pill"], DefaultFurniture.ToWrite(null).Select(s => s.Kind));
+        Assert.Empty(DefaultFurniture.ToWrite([.. DefaultFurniture.All.Select(s => s.Kind)]));
+        Assert.Equal(["tv", "pill"], DefaultFurniture.ToWrite(["ball", "couch", "trampoline", "bed", "playpen", "trough"]).Select(s => s.Kind));
+    }
+
+    [Fact]
+    public void Consumable_and_the_breed_effect_are_read_from_a_file()
+    {
+        var result = Parse("""{ "name": "Pill", "art": "pill.png", "consumable": true, "uses": [ { "animation": "eat", "effect": "breed" } ] }""");
+
+        Assert.Empty(result.Errors);
+        Assert.True(result.Spec!.Consumable);
+        Assert.Equal(UseEffect.Breed, result.Spec.Uses[0].Effect);
     }
 
     [Theory]

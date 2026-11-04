@@ -33,6 +33,12 @@ public enum UseEffect
     /// don't drop while it's in there.
     /// </summary>
     Confine,
+
+    /// <summary>
+    /// A breeding pill: once swallowed, the pet goes round every other pet asking to mate, and mates with each one that
+    /// agrees (<see cref="Breeding.BreedingDirector"/>). Fixed pets don't take it.
+    /// </summary>
+    Breed,
 }
 
 /// <summary>When the furniture's own frames play.</summary>
@@ -116,6 +122,9 @@ public sealed record FurnitureSpec
     public double Friction { get; init; } = 1;
 
     public IReadOnlyList<FurnitureUse> Uses { get; init; } = [];
+
+    /// <summary>Used up: the piece is gone once a pet has finished using it (a pill). Interrupted uses don't count.</summary>
+    public bool Consumable { get; init; }
 
     /// <summary>Whether this is a pen (pets dropped inside stay inside).</summary>
     [JsonIgnore]

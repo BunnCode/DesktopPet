@@ -43,6 +43,18 @@ internal sealed class PetContext
     /// <summary>The courtship under way (walking up to its partner, then gazing at it), if any.</summary>
     public Courtship? Courtship { get; set; }
 
+    /// <summary>
+    /// The pet swallowed a breeding pill and is going round the other pets (M15): where it's heading, set by
+    /// <see cref="Breeding.BreedingDirector"/>. Kept through climbs, falls and being picked up, until the round ends.
+    /// </summary>
+    public Visit? Visit { get; set; }
+
+    /// <summary>The pet is fixed (its traits): it never takes a breeding pill.</summary>
+    public bool Fixed { get; set; }
+
+    /// <summary>Whether it may take a breeding pill now: not fixed, breeding on, not already on a round.</summary>
+    public bool MayTakePill => !Fixed && Config.Breeding.Enabled && Visit is null;
+
     /// <summary>Furniture that couldn't be reached, by id, with the time it may be tried again.</summary>
     public Dictionary<int, double> Unreachable { get; } = [];
 
@@ -59,10 +71,16 @@ internal sealed class PetContext
     }
 
     /// <summary>
-    /// What to do next when a behavior ends: carry on to the furniture it's heading for, or pick by weight (which may
-    /// start a new trip to furniture).
+    /// What to do next when a behavior ends: carry on to the furniture it's heading for or the pet it's visiting, or
+    /// pick by weight (which may start a new trip to furniture).
     /// </summary>
-    public PetStateId PickNext() => Errand is not null ? PetStateId.GoToFurniture : BehaviorPicker.Pick(this);
+    public PetStateId PickNext() => OnTrip ? TripState : BehaviorPicker.Pick(this);
+
+    /// <summary>On its way somewhere: to furniture, or round the other pets.</summary>
+    public bool OnTrip => Errand is not null || Visit is not null;
+
+    /// <summary>The state that carries the trip on (after a climb or a fall).</summary>
+    public PetStateId TripState => Errand is not null ? PetStateId.GoToFurniture : PetStateId.Visit;
 
     /// <summary>Current tuning; replaced live when the settings file changes.</summary>
     public PetConfig Config { get; set; }

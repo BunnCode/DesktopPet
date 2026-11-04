@@ -24,6 +24,7 @@ public enum PetStateId
     GoToFurniture,
     UseFurniture,
     Court,
+    Visit,
 }
 
 /// <summary>
