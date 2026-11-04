@@ -7,6 +7,8 @@ from a small language model that runs on your own PC.
 Built in C# / .NET 10 / WPF, and structured like a small 2D game: a fixed 60 Hz loop, a behavior state machine and
 sprite animation.
 
+![Four rabbits on a desktop: one climbs a window and talks, two chat on the taskbar, and a sticky note sits on the window](docs/screenshots/hero.png)
+
 ## Features
 
 - **Lives on your desktop:** transparent, click-through, always-on-top pets with gravity, landing on the taskbar and
@@ -33,6 +35,38 @@ sprite animation.
   windows are excluded by default.
 - **Customizable:** a live-reloading `settings.json`, custom sprite sheets (export the built-in rabbit as a template
   and paint over it), and per-pet traits and personality files. See [docs/SPRITES.md](docs/SPRITES.md).
+
+## Screenshots
+
+**Climbing and riding windows.** Pets stand on window tops and climb window sides.
+
+![One rabbit on top of a window while two others climb the sides of another](docs/screenshots/windows.png)
+
+**Speech bubbles and sticky notes.** All the text comes from the local model: banter between pets, and a note stuck
+to the window.
+
+![A rabbit climbing a window talks while two below chat, and a sticky note signed by Mabel sits on the window](docs/screenshots/chat.png)
+
+**Furniture.** A rabbit plays ball in front of the TV while two others nap on the couch.
+
+![A rabbit with a ball next to a TV, two rabbits asleep on a couch, an egg and a gravestone](docs/screenshots/furniture.png)
+
+**Eggs and babies.** Two happy pets court each other (left), and a moment later there's an egg (right).
+
+![Two rabbits facing each other with a heart between them; then the same pair with a new egg](docs/screenshots/eggs.png)
+
+**Death and gravestones.** A neglected pet leaves a gravestone with its name and dates.
+
+![A gravestone engraved with Clover and two dates](docs/screenshots/gravestone.png)
+
+**The menu and the debug overlay.** Right-click a pet for its stats and care options. The debug overlay shows the
+floors, window tops, walls and what each pet and piece of furniture is doing.
+
+<p>
+  <img src="docs/screenshots/menu.png" alt="The pet menu: name and mood, stat bars, Feed, Play, Sleep, furniture and settings" height="420">
+</p>
+
+![The debug overlay: labelled boxes around every pet and piece of furniture, and highlighted floors and window edges](docs/screenshots/debug-overlay.png)
 
 ## Requirements
 
