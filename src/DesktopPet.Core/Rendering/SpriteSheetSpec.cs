@@ -9,19 +9,19 @@ public sealed record SpriteFrame(string Image, RectI Rect);
 
 /// <summary>
 /// The result of reading <c>sprites/atlas.json</c>: frames for the animations that were defined correctly,
-/// plus everything the user should know (problems, and which animations still use the placeholder art).
+/// plus everything the user should know (problems, and which animations still use the built-in art).
 /// </summary>
 /// <param name="Animations">Animation id → exactly <see cref="AnimationDef.FrameCount"/> frames (cycled if fewer were drawn).</param>
 /// <param name="FacesLeft">The art is drawn facing left (the game's art convention is facing right).</param>
 /// <param name="Smooth">Scale with smoothing (for painted art) instead of nearest-neighbour (for pixel art).</param>
-/// <param name="Problems">Errors, each naming the animation and what to fix. Affected animations use placeholders.</param>
-/// <param name="UsingPlaceholder">Known animations without custom art.</param>
+/// <param name="Problems">Errors, each naming the animation and what to fix. Affected animations use the built-in art.</param>
+/// <param name="UsingDefault">Known animations without custom art.</param>
 public sealed record SpriteSheetSpec(
     IReadOnlyDictionary<string, IReadOnlyList<SpriteFrame>> Animations,
     bool FacesLeft,
     bool Smooth,
     IReadOnlyList<string> Problems,
-    IReadOnlyList<string> UsingPlaceholder);
+    IReadOnlyList<string> UsingDefault);
 
 /// <summary>
 /// Parses and checks <c>atlas.json</c>. Pure: image sizes come from a callback so this needs no imaging library.
@@ -93,8 +93,8 @@ public static class SpriteSheetParser
             }
         }
 
-        var placeholders = animations.Where(a => !result.ContainsKey(a.Id)).Select(a => a.Id).ToArray();
-        return new SpriteSheetSpec(result, atlas?.FacesLeft ?? false, atlas?.Smooth ?? false, problems, placeholders);
+        var builtIn = animations.Where(a => !result.ContainsKey(a.Id)).Select(a => a.Id).ToArray();
+        return new SpriteSheetSpec(result, atlas?.FacesLeft ?? false, atlas?.Smooth ?? false, problems, builtIn);
     }
 
     /// <summary>

@@ -9,7 +9,7 @@ namespace DesktopPet.App.SpriteSheet;
 
 /// <summary>
 /// Maps Core's (animation id, frame index) to frozen bitmaps: custom art from the sprites folder where it's defined,
-/// the procedural placeholder art everywhere else.
+/// the built-in rabbit (DefaultArt) everywhere else.
 /// </summary>
 internal sealed class SpriteAtlas
 {
@@ -24,28 +24,28 @@ internal sealed class SpriteAtlas
         Smooth = smooth;
     }
 
-    /// <summary>The custom art is drawn facing left (placeholder art faces right).</summary>
+    /// <summary>The custom art is drawn facing left (the built-in art faces right).</summary>
     public bool ArtFacesLeft { get; }
 
     /// <summary>Scale with smoothing rather than nearest-neighbour.</summary>
     public bool Smooth { get; }
 
-    public static SpriteAtlas CreatePlaceholder(IEnumerable<AnimationDef> animations, int variant = 0) =>
-        new(animations.ToDictionary(a => a.Id, a => Placeholder(a, variant)), facesLeft: false, smooth: false);
+    public static SpriteAtlas CreateDefault(IEnumerable<AnimationDef> animations, int variant = 0) =>
+        new(animations.ToDictionary(a => a.Id, a => BuiltIn(a, variant)), facesLeft: false, smooth: false);
 
     /// <summary>
-    /// Loads <c>atlas.json</c> and its PNGs from <paramref name="folder"/>. Returns placeholder art (and a null spec) if
+    /// Loads <c>atlas.json</c> and its PNGs from <paramref name="folder"/>. Returns the built-in art (and a null spec) if
     /// there's no atlas. Images are read fully into memory so the files stay free to edit.
     /// </summary>
     /// <param name="folder">The sprites folder.</param>
     /// <param name="animations">The game's animations.</param>
-    /// <param name="variant">Placeholder colour scheme for animations without custom art (one per pet).</param>
+    /// <param name="variant">Built-in art colour scheme for animations without custom art (one per pet).</param>
     public static (SpriteAtlas Atlas, SpriteSheetSpec? Spec) Load(string folder, IReadOnlyList<AnimationDef> animations, int variant = 0)
     {
         var atlasPath = Path.Combine(folder, AtlasFileName);
         if (!File.Exists(atlasPath))
         {
-            return (CreatePlaceholder(animations, variant), null);
+            return (CreateDefault(animations, variant), null);
         }
 
         var images = new Dictionary<string, BitmapSource?>(StringComparer.OrdinalIgnoreCase);
@@ -76,7 +76,7 @@ internal sealed class SpriteAtlas
             a => a.Id,
             a => spec.Animations.TryGetValue(a.Id, out var custom)
                 ? custom.Select(f => (BitmapSource)Crop(Image(f.Image)!, f.Rect)).ToArray()
-                : Placeholder(a, variant));
+                : BuiltIn(a, variant));
 
         return (new SpriteAtlas(frames, spec.FacesLeft, spec.Smooth), spec);
     }
@@ -87,9 +87,9 @@ internal sealed class SpriteAtlas
         return frames[System.Math.Clamp(frameIndex, 0, frames.Length - 1)];
     }
 
-    private static BitmapSource[] Placeholder(AnimationDef animation, int variant) =>
+    private static BitmapSource[] BuiltIn(AnimationDef animation, int variant) =>
         Enumerable.Range(0, animation.FrameCount)
-            .Select(i => ToBitmap(PlaceholderArt.Frame(animation.Id, i, variant), PlaceholderArt.FrameSize))
+            .Select(i => ToBitmap(DefaultArt.Frame(animation.Id, i, variant), DefaultArt.FrameSize))
             .ToArray();
 
     private static BitmapFrame? TryDecode(string path)

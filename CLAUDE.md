@@ -6,6 +6,10 @@ Shimeji-style desktop pet for Windows (C# / .NET 10 / WPF).
 milestone or making design decisions; the user edits it directly, and their edits override earlier conversations.
 Update it (status table, changes from plan, limitations, next steps) when a milestone lands or a design changes.
 
+**`docs/CODEMAP.md` maps the code** (every file's purpose, key types, frame flow, recipes for common changes). Read it
+before exploring the source, and open only the files it points to. Keep it current when files, public types or flows
+change. The built-in sprite generator (`tools/sprites/make_rabbit.py`) is documented in `docs/SPRITE_GENERATOR.md`.
+
 ## Rules
 - `DesktopPet.Core` stays free of WPF/Win32 references. Game logic goes there, with unit tests against `FakeDesktop`.
   The Windows layer and App stay thin glue.

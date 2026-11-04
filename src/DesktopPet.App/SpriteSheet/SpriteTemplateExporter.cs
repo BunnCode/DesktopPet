@@ -7,7 +7,7 @@ using DesktopPet.Core.Rendering;
 namespace DesktopPet.App.SpriteSheet;
 
 /// <summary>
-/// Writes the placeholder art as a ready-to-edit sprite sheet: one row per animation, a matching atlas.json and a
+/// Writes the built-in rabbit art as a ready-to-edit sprite sheet: one row per animation, a matching atlas.json and a
 /// short README. Copy the files into the sprites folder and paint over them.
 /// </summary>
 internal static class SpriteTemplateExporter
@@ -19,14 +19,14 @@ internal static class SpriteTemplateExporter
         DesktopPet sprite template
         ==========================
 
-        template.png holds the placeholder art, one row per animation (32x32 cells), and atlas.json says which row
+        template.png holds the built-in rabbit art, one row per animation (32x32 cells), and atlas.json says which row
         is which. To use your own art:
 
           1. Copy template.png and atlas.json into the "sprites" folder next to this one.
           2. Paint over the frames (keep the cell grid), or point atlas.json at your own images.
           3. Save. The pet reloads the art right away; problems are shown in a notification.
 
-        Any animation you remove from atlas.json keeps the placeholder art, so you can replace one at a time.
+        Any animation you remove from atlas.json keeps the built-in art, so you can replace one at a time.
 
         Conventions
           - Draw facing right (or set "facesLeft": true), with the feet at the bottom centre of each cell.
@@ -43,7 +43,7 @@ internal static class SpriteTemplateExporter
     public static void Export(string folder, IReadOnlyList<AnimationDef> animations)
     {
         Directory.CreateDirectory(folder);
-        const int cell = PlaceholderArt.FrameSize;
+        const int cell = DefaultArt.FrameSize;
         var columns = animations.Max(a => a.FrameCount);
         var width = columns * cell;
         var height = animations.Count * cell;
@@ -54,7 +54,7 @@ internal static class SpriteTemplateExporter
             var animation = animations[row];
             for (var frame = 0; frame < animation.FrameCount; frame++)
             {
-                var art = PlaceholderArt.Frame(animation.Id, frame);
+                var art = DefaultArt.Frame(animation.Id, frame);
                 for (var y = 0; y < cell; y++)
                 {
                     Array.Copy(art, y * cell, pixels, (((row * cell) + y) * width) + (frame * cell), cell);

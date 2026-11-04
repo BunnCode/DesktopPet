@@ -34,7 +34,7 @@ internal sealed class PetHost : IPetControls, IDisposable
     private bool _pointerActive;
     private bool _closed;
 
-    /// <param name="id">Pet number (1, 2, …); also picks its placeholder colours.</param>
+    /// <param name="id">Pet number (1, 2, …); also picks its jacket colour.</param>
     /// <param name="config">Tuning.</param>
     /// <param name="store">Where the pet is loaded from and saved to.</param>
     /// <param name="atlas">Sprites to draw with.</param>
@@ -72,8 +72,8 @@ internal sealed class PetHost : IPetControls, IDisposable
 
     public int Id { get; }
 
-    /// <summary>Placeholder colour scheme for this pet.</summary>
-    public int Variant => (Id - 1) % PlaceholderArt.VariantCount;
+    /// <summary>Built-in art colour scheme (jacket colour) for this pet.</summary>
+    public int Variant => (Id - 1) % DefaultArt.VariantCount;
 
     public string Name => $"Pet {Id}";
 

@@ -1,17 +1,17 @@
 # Custom sprites
 
-DesktopPet draws every animation with built-in placeholder art unless you give it your own. Custom art lives in
+DesktopPet draws every animation with its built-in chibi rabbit unless you give it your own. Custom art lives in
 `%LOCALAPPDATA%\DesktopPet\sprites\` (menu → Customize → Open data folder) and **reloads as soon as you save**.
 
 ## Quick start
-1. Menu → Customize → **Export sprite template**. This writes `template.png` (the placeholder art, one row per
+1. Menu → Customize → **Export sprite template**. This writes `template.png` (the built-in rabbit art, one row per
    animation, 32×32 cells) and a matching `atlas.json` to `sprite-template\`.
 2. Copy both files into `sprites\`.
 3. Paint over the frames and save. The pet updates within a second.
 
-Any animation you remove from `atlas.json` goes back to the placeholder art, so you can replace one animation at a time.
+Any animation you remove from `atlas.json` goes back to the built-in art, so you can replace one animation at a time.
 Problems (a missing image, a frame outside the image, an unknown animation name) show up as a notification. The full
-list goes to `problems.txt` in the data folder, and the affected animations use placeholders.
+list goes to `problems.txt` in the data folder, and the affected animations use the built-in art.
 
 ## atlas.json
 ```jsonc

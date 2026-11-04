@@ -19,6 +19,11 @@
     <Using Remove="System.Drawing" />
   </ItemGroup>
 
+  <!-- The built-in rabbit art. Regenerate with tools/sprites/make_rabbit.py. -->
+  <ItemGroup>
+    <EmbeddedResource Include="SpriteSheet\rabbit.png" LogicalName="DesktopPet.App.rabbit.png" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\DesktopPet.Core\DesktopPet.Core.csproj" />
     <ProjectReference Include="..\DesktopPet.Platform.Windows\DesktopPet.Platform.Windows.csproj" />

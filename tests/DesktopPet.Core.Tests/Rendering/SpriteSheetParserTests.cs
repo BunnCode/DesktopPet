@@ -34,10 +34,10 @@ public class SpriteSheetParserTests
     }
 
     [Fact]
-    public void Undefined_animations_use_the_placeholder_art()
+    public void Undefined_animations_use_the_built_in_art()
     {
         var spec = Parse("""{ "image": "sheet.png", "animations": { "idle": { "row": 0 } } }""");
-        Assert.Equal(["walk", "fall"], spec.UsingPlaceholder);
+        Assert.Equal(["walk", "fall"], spec.UsingDefault);
         Assert.False(spec.Animations.ContainsKey("walk"));
     }
 
@@ -72,7 +72,7 @@ public class SpriteSheetParserTests
         var problem = Assert.Single(spec.Problems);
         Assert.Contains("\"idle\"", problem, StringComparison.Ordinal);
         Assert.Contains("256×128", problem, StringComparison.Ordinal);
-        Assert.Contains("idle", spec.UsingPlaceholder);
+        Assert.Contains("idle", spec.UsingDefault);
     }
 
     [Fact]
@@ -98,11 +98,11 @@ public class SpriteSheetParserTests
     }
 
     [Fact]
-    public void Broken_json_means_all_placeholders()
+    public void Broken_json_means_all_built_in_art()
     {
         var spec = Parse("{ \"image\": ");
         Assert.Single(spec.Problems);
-        Assert.Equal(Anims.Length, spec.UsingPlaceholder.Count);
+        Assert.Equal(Anims.Length, spec.UsingDefault.Count);
     }
 
     [Fact]
@@ -127,7 +127,7 @@ public class SpriteSheetParserTests
         var spec = SpriteSheetParser.Parse(json, all, image => image == "template.png" ? (width, all.Count * 32) : null);
 
         Assert.Empty(spec.Problems);
-        Assert.Empty(spec.UsingPlaceholder);
+        Assert.Empty(spec.UsingDefault);
         Assert.All(all, a => Assert.Equal(a.FrameCount, spec.Animations[a.Id].Count));
     }
 }

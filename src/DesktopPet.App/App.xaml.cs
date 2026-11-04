@@ -75,7 +75,7 @@ public partial class App : Application
             customize: (EditSettings, () => DataFolder.Open(_data.Root), ExportSpriteTemplate),
             onDebugOverlay: SetDebugOverlay,
             onExit: Shutdown);
-        _tray = new TrayIcon(PlaceholderArt.TrayIconPixels(), PlaceholderArt.FrameSize, _menu.Strip);
+        _tray = new TrayIcon(DefaultArt.TrayIconPixels(), DefaultArt.FrameSize, _menu.Strip);
 
         if (settings.Errors.Count > 0)
         {
@@ -122,7 +122,7 @@ public partial class App : Application
     /// <summary>Starts pet <paramref name="id"/> from its save (or fresh). Returns its sprite spec for reporting.</summary>
     private SpriteSheetSpec? StartPet(int id, bool dropIn)
     {
-        var variant = (id - 1) % PlaceholderArt.VariantCount;
+        var variant = (id - 1) % DefaultArt.VariantCount;
         var (atlas, spec) = SpriteAtlas.Load(_data.Sprites, Animations.All, variant);
         var pet = new PetHost(id, _config, new JsonFileSaveStore(_data.SavePath(id)), atlas, _desktop!)
         {
@@ -303,7 +303,7 @@ public partial class App : Application
         {
             if (reloaded)
             {
-                _tray?.Notify("Sprites", "No atlas.json in the sprites folder: using the placeholder art.");
+                _tray?.Notify("Sprites", "No atlas.json in the sprites folder: using the built-in rabbit.");
             }
 
             return;
@@ -311,12 +311,12 @@ public partial class App : Application
 
         if (spec.Problems.Count > 0)
         {
-            ReportProblems("Some sprites couldn't be used (placeholders shown instead)", spec.Problems);
+            ReportProblems("Some sprites couldn't be used (the built-in art is shown instead)", spec.Problems);
         }
         else if (reloaded)
         {
             var custom = spec.Animations.Count;
-            _tray?.Notify("Sprites reloaded", $"{custom} animation{(custom == 1 ? "" : "s")} with your art, {spec.UsingPlaceholder.Count} with placeholders.");
+            _tray?.Notify("Sprites reloaded", $"{custom} animation{(custom == 1 ? "" : "s")} with your art, {spec.UsingDefault.Count} with the built-in art.");
         }
     }
 
