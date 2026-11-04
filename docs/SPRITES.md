@@ -9,6 +9,10 @@ DesktopPet draws every animation with its built-in chibi rabbit unless you give 
 2. Copy both files into `sprites\`.
 3. Paint over the frames and save. The pet updates within a second.
 
+**One pet only:** put the files in that pet's own folder instead, `pets\<n>\sprites\` (menu → About *name* → Open its
+folder). Per animation, the pet's own sprites win over the shared `sprites\`, which win over the built-in rabbit. Each
+atlas keeps its own `facesLeft` and `smooth`, so the layers can mix different art.
+
 Any animation you remove from `atlas.json` goes back to the built-in art, so you can replace one animation at a time.
 Problems (a missing image, a frame outside the image, an unknown animation name) show up as a notification. The full
 list goes to `problems.txt` in the data folder, and the affected animations use the built-in art.

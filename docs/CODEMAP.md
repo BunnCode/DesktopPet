@@ -12,7 +12,7 @@ matching line here.
 
 ## At a glance
 
-- C# / .NET 10 / WPF desktop pet (Shimeji-style), Windows only. About 6,000 lines including tests.
+- C# / .NET 10 / WPF desktop pet (Shimeji-style), Windows only. About 6,700 lines including tests.
 - Build `dotnet build DesktopPet.slnx`, test `dotnet test DesktopPet.slnx`. Warnings are errors (`Directory.Build.props`).
   Tests take well under a second.
 - Exe: `src/DesktopPet.App/bin/Debug/net10.0-windows/DesktopPet.App.exe`. A running pet locks `bin/`.
@@ -51,16 +51,17 @@ One pet. The App talks to Core almost only through this class.
 
 | Member | Purpose |
 |---|---|
-| `new PetSimulation(config, snapshot, random?, clock?, save?)` | Spawns at the top of the primary monitor; catches stats up from the save |
+| `new PetSimulation(config, snapshot, random?, clock?, save?, traits?)` | Spawns at the top of the primary monitor; catches stats up from the save. `config` is the shared one; the pet runs on `traits.ApplyTo(config)` |
 | `Tick(dt, snapshot)` | One fixed step (see flow below) |
 | `Current` / `Previous` : `PetFrame` | What to draw now / last step (renderer interpolates feet) |
 | `PointerDown/Move/Up(pos, time)`, `PointerCancel()` | Mouse gestures: click vs drag (4 DIP threshold), throw on release |
 | `Apply(PetAction)` | Feed / Play / Sleep / WakeUp from the menu |
 | `TakeCommands()` | Drains `WindowCommand(WindowId, Dx, Dy)`s produced by pushing |
-| `Reconfigure(PetConfig)` | Live settings swap; forces platform/wall rebuild |
+| `Reconfigure(PetConfig)` | Live settings swap (shared config; traits re-applied); forces platform/wall rebuild |
+| `Traits`, `SetTraits(PetTraits)` | The pet's name and multipliers; live swap when its traits.json changes |
 | `DropFrom(feet)` | Place an airborne pet (new pets arriving) |
 | `UserAway`, `PushingEnabled` | Set by host / menu |
-| `Stats`, `CreateSave()`, `IsHeld`, `Mode`, `State`, `Platforms`, `Walls`, `GroundKey`, `RespawnCount` | Read-outs for menu, saving, overlay, tests |
+| `Config` (effective, traits applied), `Stats`, `CreateSave()`, `IsHeld`, `Mode`, `State`, `Platforms`, `Walls`, `GroundKey`, `RespawnCount` | Read-outs for menu, saving, overlay, tests |
 | `internal Place(...)`, `internal ForceState(...)` | Test hooks |
 
 **`Tick` order:** `UpdateWorld` (rebuild platforms/walls only when the snapshot object changed) → `UpdateStats`
@@ -95,9 +96,14 @@ physics event forces a state (`Landed`→Land unless Play, `LostGround`→Fall, 
 | `Stats/StatRules.cs`, `StatsSystem.cs` | Decay/restore rates, critical and away floors; pure `Advance`, `CatchUp`, `Apply`, `Petted` |
 | `Persistence/SaveData.cs` | `SaveData` record (versioned), `ISaveStore`, `JsonFileSaveStore` (atomic write) |
 | `Persistence/PetConfigFile.cs` | `settings.json` (de)serialization with comments/trailing commas; returns `ConfigParseResult(Config, Errors)` |
-| `Persistence/PetRoster.cs` | Pet ids ↔ save file names (`save.json`, `save-n.json`), `MaxPets = 8`, `NextId` |
+| `Persistence/PetRoster.cs` | Pet ids ↔ pet folder names (`pets\<n>\`), `MaxPets = 8`, `NextId`, `StartupPets`; legacy `save.json`/`save-n.json` names and `PlanMigration`; `Classify(relative path)` → `(PetId, PetFileKind)` for the watcher |
+| `Traits/PetTraits.cs` | `PetTraits(Name, Neediness, Behavior)`, `Neediness`, `BehaviorTraits` (multipliers, 1 = average), `TraitRange`; `ApplyTo(shared config)` |
+| `Traits/TraitRoller.cs` | `Roll(config, random, takenNames)`: free name + log-uniform multipliers in `NewPetNeediness`/`NewPetBehavior` |
+| `Traits/PetNames.cs` | `Popular`, `Rare`, `All` (200 names); `Pick(random, taken)` |
+| `Traits/PetTraitsFile.cs` | `traits.json` (de)serialization and validation → `TraitsParseResult(Traits, Errors)` |
+| `Traits/Personality.cs` | `personality.txt`: `Describe(traits)` (default sentence from the strongest traits), `Clean` |
 | `Rendering/SpriteSheetSpec.cs` | `SpriteSheetParser.Parse(atlas json, animations, imageSize callback)` → `SpriteSheetSpec(Animations, FacesLeft, Smooth, Problems, UsingDefault)`; `TemplateJson` |
-| `Simulation/PetConfig.cs` | **All tuning** (`PetConfig`, nested `StatRules`, `BehaviorWeights`, `DurationRange`), feature switches `EnableClimbing/Pushing/Hanging` |
+| `Simulation/PetConfig.cs` | **All tuning** (`PetConfig`, nested `StatRules`, `BehaviorWeights`, `DurationRange`), feature switches `EnableClimbing/Pushing/Hanging`, new-pet trait ranges |
 | `Simulation/PetConfigValidator.cs` | Range checks for every setting |
 | `Simulation/PetFrame.cs` | Render output record; `SpriteRect` |
 | `Simulation/FixedStepper.cs` | Accumulator → number of fixed steps, capped |
@@ -126,17 +132,17 @@ Win32 through CsWin32: add API names to `Interop/NativeMethods.txt` (one per lin
 
 | File | Purpose |
 |---|---|
-| `App.xaml.cs` | Composition root: single-instance mutex, data folder, settings, one `PetHost` per save, shared `PetMenu` + `TrayIcon`, `CustomizationWatcher` callbacks (`OnSettingsChanged`, `OnSpritesChanged`), add/remove pets, push toggle, debug overlay timer, problem reporting (tray + `problems.txt`) |
-| `PetHost.cs` | One pet: `PetSimulation` + `PetWindow` + `GameLoop` + save store. `BeginFrame` (snapshot, cursor sampling while pressed) → `Step` (Tick + carry out `WindowCommand`s) → `Render` (interpolate, pick frame from `SpriteAtlas`, autosave each minute). Lock/unlock → `UserAway`. Implements `IPetControls` for the menu |
+| `App.xaml.cs` | Composition root: single-instance mutex, data folder + migration, settings, one `PetHost` per pet folder (`StartPet`: traits rolled/written if missing, personality, layered sprites), shared `PetMenu` + `TrayIcon`, `CustomizationWatcher` callbacks (`OnSettingsChanged`, `OnSpritesChanged`, `OnPetChanged`), add/remove pets, push toggle, debug overlay timer, problem reporting (tray + `problems.txt`) |
+| `PetHost.cs` | One pet: `PetSimulation` + `PetWindow` + `GameLoop` + save store, plus `Name`/`Traits`/`Personality`, `SetTraits`. `BeginFrame` (snapshot, cursor sampling while pressed) → `Step` (Tick + carry out `WindowCommand`s) → `Render` (interpolate, pick frame from `SpriteAtlas`, autosave each minute). Lock/unlock → `UserAway`. Implements `IPetControls` for the menu |
 | `GameLoop.cs` | `CompositionTarget.Rendering` → `FixedStepper` → step/render; re-entrancy guarded |
-| `PetWindow.xaml(.cs)` | Borderless transparent topmost window showing one `Image`; `Present(rect, bitmap, mirror)`; raises `PointerPressed/Released/Canceled`, `MenuRequested`; `SetSmoothing` |
+| `PetWindow.xaml(.cs)` | Borderless transparent topmost window showing one `Image`; `Present(rect, bitmap, mirror, smooth)`; raises `PointerPressed/Released/Canceled`, `MenuRequested` |
 | `SpriteSheet/DefaultArt.cs` | Built-in art: crops 32×32 frames from embedded `rabbit.png`, recolours the jacket per pet (`VariantCount = 5`), `TrayIconPixels()` |
 | `SpriteSheet/rabbit.png` | The built-in sheet (EmbeddedResource `DesktopPet.App.rabbit.png`). Generated; don't hand-edit (see `docs/SPRITE_GENERATOR.md`) |
-| `SpriteSheet/SpriteAtlas.cs` | (animation id, frame) → frozen `BitmapSource`. `Load(folder, animations, variant)`: custom frames from `sprites\atlas.json` where valid, built-in art elsewhere |
+| `SpriteSheet/SpriteAtlas.cs` | (animation id, frame) → `AtlasFrame(Bitmap, FacesLeft, Smooth)`. `Load(folders, animations, variant)` → `(atlas, SpriteLayer[])`: per animation the first folder whose `atlas.json` defines it (pet's own, then shared), built-in art elsewhere; `CustomCount` |
 | `SpriteSheet/SpriteTemplateExporter.cs` | Menu → Export sprite template: the built-in art as `template.png` + `atlas.json` + README |
-| `Customization/DataFolder.cs` | `%LOCALAPPDATA%\DesktopPet\` paths (saves, `settings.json`, `sprites\`, `sprite-template\`, `problems.txt`), settings load, `Open` |
-| `Customization/CustomizationWatcher.cs` | `FileSystemWatcher` on settings and sprites, 400 ms debounce, callbacks on the UI thread |
-| `UI/PetMenu.cs` | WinForms `ContextMenuStrip` shared by all pets: mood header, stat bars, Feed/Play/Sleep, add/remove pet, push toggle, Customize submenu, debug overlay, Exit. Acts on the current `IPetControls` target |
+| `Customization/DataFolder.cs` | `%LOCALAPPDATA%\DesktopPet\` paths (`settings.json`, `sprites\`, `sprite-template\`, `problems.txt`, `pets\<n>\` with save, traits, personality, sprites), `ExistingPets`, `MigrateLegacySaves`, traits/personality load and write, `RecyclePetFolder`, settings load, `Open` |
+| `Customization/CustomizationWatcher.cs` | `FileSystemWatcher` on settings, shared sprites and pet folders (via `PetRoster.Classify`), 400 ms debounce per file kind and pet, callbacks on the UI thread |
+| `UI/PetMenu.cs` | WinForms `ContextMenuStrip` shared by all pets: name + mood header, stat bars, About submenu (personality, traits read-only, Edit traits, Open its folder), Feed/Play/Sleep, add/remove pet, push toggle, Customize submenu, debug overlay, Exit. Acts on the current `IPetControls` target |
 | `UI/IPetControls.cs` | What the menu needs from a pet |
 | `UI/TrayIcon.cs` | `NotifyIcon` with the shared menu; `Notify(title, text, warning)` |
 | `UI/DebugOverlay.cs` | Click-through overlay per monitor drawing floors, window tops, walls, hang bars, pet boxes (`DebugView`, `DebugPet`) |
@@ -146,9 +152,11 @@ Win32 through CsWin32: add API names to `Interop/NativeMethods.txt` (one per lin
 
 ## Flows
 
-**Startup:** `App.OnStartup` → mutex → `DataFolder.EnsureExists` → `LoadSettings` (errors → defaults + toast) →
-`DesktopSource` → for each id in `DataFolder.StartupPets()`: `SpriteAtlas.Load(sprites, Animations.All, variant)` →
-`new PetHost(...)` (loads save, builds `PetSimulation`, window, loop) → `Start` → menu, tray → watcher.
+**Startup:** `App.OnStartup` → mutex → `DataFolder.EnsureExists` → `MigrateLegacySaves` → `LoadSettings` (errors →
+defaults) → `DesktopSource` → read every startup pet's `traits.json` (names first, so rolled ones avoid them) → for
+each id `StartPet`: roll + write traits if missing, write personality if missing,
+`SpriteAtlas.Load(SpriteFolders(id), Animations.All, variant)` → `new PetHost(...)` (loads save, builds
+`PetSimulation` with the traits, window, loop) → `Start` → menu, tray → one problems toast → watcher.
 
 **Per display frame (per pet):** `GameLoop.OnRendering` → `PetHost.BeginFrame` (shared `DesktopSource.GetSnapshot`)
 → N × `PetHost.Step(dt)` = `PetSimulation.Tick` + `WindowManipulator.MoveBy` for each command → `PetHost.Render(alpha)`.
@@ -160,10 +168,16 @@ positions and `Stopwatch` timestamps; while pressed, `BeginFrame` feeds `Pointer
 **Settings edit:** watcher → `App.OnSettingsChanged` → `PetConfigFile.Parse` + validate → on success each
 `PetHost.Reconfigure` → `PetSimulation.Reconfigure`; on error keep the old config and toast.
 
-**Sprites edit:** watcher → `App.OnSpritesChanged` → `SpriteAtlas.Load` per pet (its variant) → `PetHost.SetAtlas`.
+**Sprites edit:** watcher → `App.OnSpritesChanged` → `SpriteAtlas.Load` per pet (its folders, its variant) →
+`PetHost.SetAtlas`.
 
-**Saving:** `PetHost.Save` → `JsonFileSaveStore` each minute, after menu actions, on exit, and on session end.
-Removing a pet deletes its save file.
+**Pet file edit:** watcher → `PetRoster.Classify` → `App.OnPetChanged(id, kind)`: traits → `PetTraitsFile.Parse` →
+`PetHost.SetTraits` (unchanged → nothing; errors → keep old + toast); personality → `PetHost.Personality`; sprites →
+reload that pet's atlas.
+
+**Saving:** `PetHost.Save` → `JsonFileSaveStore` (`pets\<n>\save.json`) each minute, after menu actions, on exit,
+and on session end. Traits and personality are only written when a pet is created. Removing a pet moves its folder to
+the Recycle Bin.
 
 ---
 
@@ -176,10 +190,12 @@ Removing a pet deletes its save file.
 | Add an animation | `Animations.cs` (def + append to `All`; the order is the sheet row order), then the generator (`ORDER` + `frames()`), regenerate `rabbit.png`, play it from a state, add it to the table in `docs/SPRITES.md` |
 | Change the built-in art | `tools/sprites/make_rabbit.py`, regenerate; see `docs/SPRITE_GENERATOR.md` |
 | Change per-pet colours | `DefaultArt.Jackets` (and the jacket colours in the generator's palette must stay unique) |
+| Add a per-pet trait | `Neediness`/`BehaviorTraits` (parameter default 1), `PetTraits.ApplyTo`, `PetTraitsFile.Validate`, `TraitRoller.Roll`, maybe `Personality.Describe` and the About lines in `PetMenu`; tests in `Traits/PetTraitsTests` |
 | Add a menu item | `UI/PetMenu.cs`; pet-specific actions go through `IPetControls` (implemented by `PetHost`), app-wide ones are constructor callbacks wired in `App.OnStartup` |
 | Use a new Win32 API | Add the name to `Interop/NativeMethods.txt`, wrap it in a small static class in Platform.Windows |
 | Change what counts as a window/platform | `WindowSource` filter (Windows side) or `PlatformBuilder`/`WallBuilder` (geometry, tested) |
 | Change the save format | `SaveData` (bump `CurrentVersion`; tolerate old files), `JsonFileSaveStoreTests` |
+| Add a file to the pet folder | `DataFolder` (path, load/write), `PetFileKind` + `PetRoster.Classify` if it reloads live, `App.OnPetChanged` |
 
 ## Tests (`tests/DesktopPet.Core.Tests/`)
 
@@ -195,6 +211,8 @@ Removing a pet deletes its save file.
 ## Gotchas
 
 - A running pet locks `bin/` and the build fails: ask before closing the user's instance.
+- Starting the app migrates old saves in the real data folder for good; back the folder up before live checks that
+  could change it.
 - `DesktopSource` ignores its own process's windows, so live checks need test windows from another process.
 - Don't drive the real mouse in checks without asking.
 - `DesktopSnapshot` reference equality matters: Core rebuilds platforms/walls only when the snapshot object changes.

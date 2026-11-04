@@ -5,6 +5,7 @@ using DesktopPet.Core.Math;
 using DesktopPet.Core.Persistence;
 using DesktopPet.Core.Physics;
 using DesktopPet.Core.Stats;
+using DesktopPet.Core.Traits;
 using DesktopPet.Core.World;
 
 namespace DesktopPet.Core.Simulation;
@@ -20,6 +21,7 @@ public sealed class PetSimulation
     private readonly StateMachine _fsm;
     private ThrowEstimator _throw;
     private readonly IClock _clock;
+    private PetConfig _sharedConfig;
 
     private DesktopSnapshot _snapshot = DesktopSnapshot.Empty;
     private IReadOnlyList<Platform> _platforms = [];
@@ -30,7 +32,7 @@ public sealed class PetSimulation
     private Vec2? _pressAt;
     private Vec2 _grabOffset;
 
-    /// <param name="config">Tuning.</param>
+    /// <param name="config">Shared tuning; the pet's <paramref name="traits"/> are applied on top.</param>
     /// <param name="snapshot">Initial desktop; the pet spawns at the top of its primary monitor.</param>
     /// <param name="random">Randomness for behavior choices; seeded from the clock if omitted.</param>
     /// <param name="clock">Wall clock for stat decay; the system clock if omitted.</param>
@@ -38,10 +40,16 @@ public sealed class PetSimulation
     /// A previous run's save. Its stats are caught up for the time since it was written, counted as time away
     /// (so nothing drops to critical while the app was closed). A fresh pet if omitted.
     /// </param>
-    public PetSimulation(PetConfig config, DesktopSnapshot snapshot, IRandom? random = null, IClock? clock = null, SaveData? save = null)
+    /// <param name="traits">This pet's name and multipliers; an average pet if omitted.</param>
+    public PetSimulation(
+        PetConfig config, DesktopSnapshot snapshot, IRandom? random = null, IClock? clock = null, SaveData? save = null,
+        PetTraits? traits = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(snapshot);
+        _sharedConfig = config;
+        Traits = traits ?? PetTraits.Neutral("Pet");
+        config = Traits.ApplyTo(config);
         _ctx = new PetContext(config, random ?? new SeededRandom(Environment.TickCount));
         _throw = new ThrowEstimator(config.ThrowWindowSeconds);
         _clock = clock ?? SystemClock.Instance;
@@ -89,10 +97,23 @@ public sealed class PetSimulation
     public string? GroundKey =>
         _ctx.Body.Mode is BodyMode.Grounded or BodyMode.Hanging or BodyMode.Clinging ? _ctx.Body.GroundKey : null;
 
+    /// <summary>The settings this pet runs on: the shared ones with its traits applied.</summary>
     public PetConfig Config => _ctx.Config;
 
+    /// <summary>This pet's name and multipliers.</summary>
+    public PetTraits Traits { get; private set; }
+
+    /// <summary>Swaps in edited traits live (the pet's traits.json changed). Stats and behavior carry on.</summary>
+    public void SetTraits(PetTraits traits)
+    {
+        ArgumentNullException.ThrowIfNull(traits);
+        UpdateStats(); // time so far decays at the old rates
+        Traits = traits;
+        ApplyConfig(traits.ApplyTo(_sharedConfig));
+    }
+
     /// <summary>
-    /// Swaps in new tuning without restarting: the pet keeps its position, stats and current behavior; surfaces and walls
+    /// Swaps in new shared tuning without restarting: the pet keeps its position, stats and current behavior; surfaces and walls
     /// are rebuilt on the next tick (so switching off climbing or hanging drops a pet that relied on them).
     /// The menu's push switch follows the new config only if the config's own push setting changed.
     /// The fixed step rate is the host's business and isn't changed here.
@@ -100,6 +121,13 @@ public sealed class PetSimulation
     public void Reconfigure(PetConfig config)
     {
         ArgumentNullException.ThrowIfNull(config);
+        UpdateStats();
+        _sharedConfig = config;
+        ApplyConfig(Traits.ApplyTo(config));
+    }
+
+    private void ApplyConfig(PetConfig config)
+    {
         var old = _ctx.Config;
         _ctx.Config = config;
         _throw = new ThrowEstimator(config.ThrowWindowSeconds);

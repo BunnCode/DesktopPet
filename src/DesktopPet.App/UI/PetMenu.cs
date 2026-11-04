@@ -1,18 +1,23 @@
 ﻿using System.Drawing;
+using System.Text;
 using System.Windows.Forms;
 using DesktopPet.Core.Stats;
+using DesktopPet.Core.Traits;
 
 namespace DesktopPet.App.UI;
 
 /// <summary>
 /// The pets' menu, shared by the tray icon and right-clicking a pet. It's always about one pet, its target: a header
-/// naming it with its mood, live stat bars and care actions for it. Then app-wide items: adding and removing pets,
+/// naming it with its mood, live stat bars, an About submenu (personality and traits, read-only) and care actions for
+/// it. Then app-wide items: adding and removing pets,
 /// pushing, customization, the debug overlay, Exit. Uses WinForms' ContextMenuStrip, which closes properly on outside
 /// clicks even though the pets' windows never activate.
 /// </summary>
 internal sealed class PetMenu : IDisposable
 {
     private const int BarLength = 10;
+    private const int WrapColumn = 52;
+    private const int MaxPersonalityLines = 8;
 
     private readonly Func<IPetControls> _defaultTarget;
     private readonly Func<bool> _canAdd;
@@ -21,6 +26,12 @@ internal sealed class PetMenu : IDisposable
     private readonly ToolStripLabel _hunger;
     private readonly ToolStripLabel _happiness;
     private readonly ToolStripLabel _energy;
+    private readonly ToolStripMenuItem _about;
+    private readonly ToolStripLabel _personality;
+    private readonly ToolStripLabel _neediness;
+    private readonly ToolStripLabel _behavior;
+    private readonly ToolStripMenuItem _editTraits;
+    private readonly ToolStripMenuItem _openFolder;
     private readonly ToolStripMenuItem _sleep;
     private readonly ToolStripMenuItem _add;
     private readonly ToolStripMenuItem _remove;
@@ -32,6 +43,7 @@ internal sealed class PetMenu : IDisposable
     /// <param name="canRemove">Whether a pet may be removed (not the last one).</param>
     /// <param name="onAdd">"Add a pet" chosen.</param>
     /// <param name="onRemove">"Remove this pet" chosen for the target.</param>
+    /// <param name="petFiles">About submenu actions for the target: edit its traits.json, open its folder.</param>
     /// <param name="pushingEnabled">Initial state of "Let it push windows".</param>
     /// <param name="onPushing">"Let it push windows" toggled (applies to all pets).</param>
     /// <param name="customize">Customize submenu actions: edit settings, open data folder, export sprite template.</param>
@@ -39,7 +51,7 @@ internal sealed class PetMenu : IDisposable
     /// <param name="onExit">Exit chosen.</param>
     public PetMenu(
         Func<IPetControls> defaultTarget, Func<bool> canAdd, Func<bool> canRemove, Action onAdd, Action<IPetControls> onRemove,
-        bool pushingEnabled, Action<bool> onPushing, (Action EditSettings, Action OpenDataFolder, Action ExportSpriteTemplate) customize,
+        (Action<IPetControls> EditTraits, Action<IPetControls> OpenFolder) petFiles, bool pushingEnabled, Action<bool> onPushing, (Action EditSettings, Action OpenDataFolder, Action ExportSpriteTemplate) customize,
         Action<bool> onDebugOverlay, Action onExit)
     {
         _defaultTarget = defaultTarget;
@@ -51,6 +63,23 @@ internal sealed class PetMenu : IDisposable
         _hunger = new ToolStripLabel { Font = mono };
         _happiness = new ToolStripLabel { Font = mono };
         _energy = new ToolStripLabel { Font = mono };
+
+        _personality = new ToolStripLabel { TextAlign = ContentAlignment.MiddleLeft };
+        _neediness = new ToolStripLabel { TextAlign = ContentAlignment.MiddleLeft };
+        _behavior = new ToolStripLabel { TextAlign = ContentAlignment.MiddleLeft };
+        _editTraits = new ToolStripMenuItem("Edit traits…", null, (_, _) => petFiles.EditTraits(Target));
+        _openFolder = new ToolStripMenuItem("Open its folder", null, (_, _) => petFiles.OpenFolder(Target));
+        _about = new ToolStripMenuItem("About");
+        _about.DropDownItems.AddRange(
+        [
+            _personality,
+            new ToolStripSeparator(),
+            _neediness,
+            _behavior,
+            new ToolStripSeparator(),
+            _editTraits,
+            _openFolder,
+        ]);
 
         var feed = new ToolStripMenuItem("Feed", null, (_, _) => Target.Apply(PetAction.Feed));
         var play = new ToolStripMenuItem("Play", null, (_, _) => Target.Apply(PetAction.Play));
@@ -76,7 +105,7 @@ internal sealed class PetMenu : IDisposable
         Strip = new ContextMenuStrip();
         Strip.Items.AddRange(
         [
-            _header, _hunger, _happiness, _energy,
+            _header, _hunger, _happiness, _energy, _about,
             new ToolStripSeparator(),
             feed, play, _sleep,
             new ToolStripSeparator(),
@@ -124,9 +153,46 @@ internal sealed class PetMenu : IDisposable
         _happiness.Text = Line("Happy", s.Happiness, pet.Rules);
         _energy.Text = Line("Energy", s.Energy, pet.Rules);
         _sleep.Text = pet.IsAsleep ? "Wake up" : "Sleep";
+        _about.Text = $"About {pet.Name}";
+        _personality.Text = Wrap(pet.Personality.Length > 0 ? pet.Personality : "(no personality.txt)");
+        var n = pet.Traits.Neediness;
+        var b = pet.Traits.Behavior;
+        _neediness.Text = $"Neediness: hunger {X(n.Hunger)}, happiness {X(n.Happiness)}, energy {X(n.Energy)}";
+        _behavior.Text = Wrap(
+            $"Likes: idling {X(b.Idle)}, walking {X(b.Walk)}, sitting {X(b.Sit)}, napping {X(b.Sleep)}, " +
+            $"climbing {X(b.Climb)}, pushing windows {X(b.Push)}");
         _add.Enabled = _canAdd();
         _remove.Enabled = _canRemove();
         _remove.Text = $"Remove {pet.Name}";
+    }
+
+    /// <summary>A multiplier as "×1.25".</summary>
+    private static string X(double multiplier) => $"×{multiplier:0.##}";
+
+    /// <summary>Word-wraps for a menu label (labels don't wrap by themselves), at most a few lines.</summary>
+    private static string Wrap(string text)
+    {
+        var lines = new List<string>();
+        var line = new StringBuilder();
+        foreach (var word in text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (line.Length > 0 && line.Length + 1 + word.Length > WrapColumn)
+            {
+                lines.Add(line.ToString());
+                line.Clear();
+            }
+
+            line.Append(line.Length > 0 ? " " : string.Empty).Append(word);
+        }
+
+        lines.Add(line.ToString());
+        if (lines.Count > MaxPersonalityLines)
+        {
+            lines = [.. lines.Take(MaxPersonalityLines)];
+            lines[^1] += " …";
+        }
+
+        return string.Join(Environment.NewLine, lines);
     }
 
     private static string Mood(PetStats s, StatRules rules)

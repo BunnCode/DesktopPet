@@ -31,6 +31,15 @@ public static class PetConfigValidator
             }
         }
 
+        void TraitRange(string name, Traits.TraitRange r)
+        {
+            var max = Traits.PetTraitsFile.MaxMultiplier;
+            if (!double.IsFinite(r.Min) || !double.IsFinite(r.Max) || r.Min < 0.1 || r.Max < r.Min || r.Max > max)
+            {
+                errors.Add(string.Create(CultureInfo.InvariantCulture, $"{name} needs 0.1 <= Min <= Max <= {max} (it is {r.Min}..{r.Max})."));
+            }
+        }
+
         void Chances(string names, params double[] values)
         {
             if (values.Sum() > 1 + 1e-9)
@@ -86,6 +95,10 @@ public static class PetConfigValidator
         Range(nameof(c.PlayHops), c.PlayHops, 0, 20);
         Range(nameof(c.PlayHopSpeedDip), c.PlayHopSpeedDip, 0, 10_000);
         Range(nameof(c.WalkTurnChance), c.WalkTurnChance, 0, 1);
+
+        // New pets
+        TraitRange(nameof(c.NewPetNeediness), c.NewPetNeediness);
+        TraitRange(nameof(c.NewPetBehavior), c.NewPetBehavior);
 
         // Walls
         Range(nameof(c.ClimbChance), c.ClimbChance, 0, 1);

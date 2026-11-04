@@ -22,6 +22,7 @@ public partial class PetWindow : Window
     private RectI _bounds;
     private BitmapSource? _frame;
     private bool _facingLeft;
+    private bool? _smooth; // unset until the first frame
     private bool _pressed;
     private bool _releasingCapture;
 
@@ -90,8 +91,11 @@ public partial class PetWindow : Window
     }
 
     /// <summary>Nearest-neighbour for pixel art (crisp), high quality for painted art.</summary>
-    public void SetSmoothing(bool smooth) =>
+    private void SetSmoothing(bool smooth)
+    {
+        _smooth = smooth;
         RenderOptions.SetBitmapScalingMode(Sprite, smooth ? BitmapScalingMode.HighQuality : BitmapScalingMode.NearestNeighbor);
+    }
 
     /// <summary>Re-asserts topmost now (e.g. after other topmost windows such as the debug overlay appeared).</summary>
     public void BringToFront()
@@ -110,9 +114,14 @@ public partial class PetWindow : Window
         PetWindowInterop.ApplyPetStyles(_hwnd);
     }
 
-    /// <summary>Updates position (physical pixels), sprite frame and facing; only touches what changed.</summary>
-    public void Present(RectI bounds, BitmapSource frame, bool facingLeft)
+    /// <summary>Updates position (physical pixels), sprite frame, mirroring and smoothing; only touches what changed.</summary>
+    public void Present(RectI bounds, BitmapSource frame, bool facingLeft, bool smooth)
     {
+        if (smooth != _smooth)
+        {
+            SetSmoothing(smooth);
+        }
+
         if (bounds != _bounds && _hwnd != 0)
         {
             _bounds = bounds;

@@ -1,23 +1,80 @@
 using System.Globalization;
+using DesktopPet.Core.Traits;
 
 namespace DesktopPet.Core.Persistence;
 
+/// <summary>Which of a pet's files changed.</summary>
+public enum PetFileKind
+{
+    Traits,
+    Personality,
+    Sprites,
+}
+
 /// <summary>
-/// Which pets exist is simply which save files exist: pet 1 is <c>save.json</c> (the original single-pet file, so old
-/// saves carry over) and pet <i>n</i> is <c>save-n.json</c>.
+/// Which pets exist is which pet folders exist: pet <i>n</i> lives in <c>pets\n\</c> (its save, traits, personality and
+/// sprites), so copying the folder moves the pet. Before M10 pets were bare save files in the data folder
+/// (<c>save.json</c> for pet 1, <c>save-n.json</c> for pet <i>n</i>); <see cref="PlanMigration"/> moves those into folders.
 /// </summary>
 public static class PetRoster
 {
     public const int MaxPets = 8;
 
-    public static string SaveFileName(int petId)
+    /// <summary>The folder (under the data folder) holding one subfolder per pet.</summary>
+    public const string PetsFolderName = "pets";
+
+    /// <summary>A pet's save, inside its folder.</summary>
+    public const string SaveFileName = "save.json";
+
+    /// <summary>A pet's own sprites, inside its folder.</summary>
+    public const string SpritesFolderName = "sprites";
+
+    public static string FolderName(int petId)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(petId, 1);
+        return petId.ToString(CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>Pet ids for the folders present (any order in, ascending out); other names are ignored.</summary>
+    public static IReadOnlyList<int> IdsFromFolderNames(IEnumerable<string> folderNames)
+    {
+        ArgumentNullException.ThrowIfNull(folderNames);
+        var ids = new SortedSet<int>();
+        foreach (var name in folderNames)
+        {
+            if (TryParseId(name, out var id))
+            {
+                ids.Add(id);
+            }
+        }
+
+        return [.. ids];
+    }
+
+    /// <summary>The pets to start with: the existing ones (up to the limit), or pet 1 when there are none.</summary>
+    public static IReadOnlyList<int> StartupPets(IEnumerable<int> existing)
+    {
+        ArgumentNullException.ThrowIfNull(existing);
+        var ids = existing.Distinct().Order().ToList();
+        return ids.Count == 0 ? [1] : [.. ids.Take(MaxPets)];
+    }
+
+    /// <summary>The id for a new pet: one more than any in use (ids are never reused while running).</summary>
+    public static int NextId(IEnumerable<int> inUse)
+    {
+        ArgumentNullException.ThrowIfNull(inUse);
+        return inUse.DefaultIfEmpty(0).Max() + 1;
+    }
+
+    /// <summary>Pre-M10 save file name of pet <paramref name="petId"/>: <c>save.json</c> or <c>save-n.json</c>.</summary>
+    public static string LegacySaveFileName(int petId)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(petId, 1);
         return petId == 1 ? "save.json" : $"save-{petId.ToString(CultureInfo.InvariantCulture)}.json";
     }
 
-    /// <summary>Pet ids for the save files present (any order in, ascending out); unrelated files are ignored.</summary>
-    public static IReadOnlyList<int> IdsFromFileNames(IEnumerable<string> fileNames)
+    /// <summary>Pet ids of pre-M10 save files among <paramref name="fileNames"/>, ascending.</summary>
+    public static IReadOnlyList<int> LegacyIdsFromFileNames(IEnumerable<string> fileNames)
     {
         ArgumentNullException.ThrowIfNull(fileNames);
         var ids = new SortedSet<int>();
@@ -39,17 +96,63 @@ public static class PetRoster
         return [.. ids];
     }
 
-    /// <summary>The pets to start with: the saved ones (up to the limit), or pet 1 when there are none.</summary>
-    public static IReadOnlyList<int> StartupPets(IEnumerable<string> fileNames)
+    /// <summary>
+    /// Where each old save file in the data folder moves: into the folder with the same pet number, or, if that
+    /// folder already exists, into a new one after every id in use. Nothing is ever overwritten.
+    /// </summary>
+    /// <param name="rootFileNames">File names in the data folder.</param>
+    /// <param name="existingFolderIds">Ids of pet folders that already exist.</param>
+    public static IReadOnlyList<(string FileName, int PetId)> PlanMigration(IEnumerable<string> rootFileNames, IEnumerable<int> existingFolderIds)
     {
-        var ids = IdsFromFileNames(fileNames);
-        return ids.Count == 0 ? [1] : [.. ids.Take(MaxPets)];
+        ArgumentNullException.ThrowIfNull(rootFileNames);
+        ArgumentNullException.ThrowIfNull(existingFolderIds);
+        var taken = new HashSet<int>(existingFolderIds);
+        var legacy = LegacyIdsFromFileNames(rootFileNames);
+        var moves = new List<(string, int)>();
+        foreach (var id in legacy)
+        {
+            var target = taken.Contains(id) ? NextId(taken.Concat(legacy)) : id;
+            taken.Add(target);
+            moves.Add((LegacySaveFileName(id), target));
+        }
+
+        return moves;
     }
 
-    /// <summary>The id for a new pet: one more than any in use (ids are never reused while running).</summary>
-    public static int NextId(IEnumerable<int> inUse)
+    /// <summary>
+    /// What a change at <paramref name="relativePath"/> (relative to the pets folder, either slash) means: a pet's
+    /// traits, personality or sprites. Null for anything else, including the save, which only the app writes.
+    /// </summary>
+    public static (int PetId, PetFileKind Kind)? Classify(string relativePath)
     {
-        ArgumentNullException.ThrowIfNull(inUse);
-        return inUse.DefaultIfEmpty(0).Max() + 1;
+        ArgumentNullException.ThrowIfNull(relativePath);
+        var parts = relativePath.Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 2 || !TryParseId(parts[0], out var id))
+        {
+            return null;
+        }
+
+        if (string.Equals(parts[1], SpritesFolderName, StringComparison.OrdinalIgnoreCase))
+        {
+            return (id, PetFileKind.Sprites);
+        }
+
+        if (parts.Length != 2)
+        {
+            return null;
+        }
+
+        if (string.Equals(parts[1], PetTraitsFile.FileName, StringComparison.OrdinalIgnoreCase))
+        {
+            return (id, PetFileKind.Traits);
+        }
+
+        return string.Equals(parts[1], Personality.FileName, StringComparison.OrdinalIgnoreCase)
+            ? (id, PetFileKind.Personality)
+            : null;
     }
+
+    private static bool TryParseId(string name, out int id) =>
+        int.TryParse(name, NumberStyles.None, CultureInfo.InvariantCulture, out id) && id >= 1
+        && string.Equals(name, id.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal); // no "01"
 }

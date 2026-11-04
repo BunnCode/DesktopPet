@@ -7,47 +7,81 @@ using DesktopPet.Core.Rendering;
 
 namespace DesktopPet.App.SpriteSheet;
 
+/// <summary>One drawable frame and how to draw it.</summary>
+/// <param name="Bitmap">The frame.</param>
+/// <param name="FacesLeft">The art faces left (the built-in art faces right).</param>
+/// <param name="Smooth">Scale with smoothing rather than nearest-neighbour.</param>
+internal readonly record struct AtlasFrame(BitmapSource Bitmap, bool FacesLeft, bool Smooth);
+
+/// <summary>A sprites folder that was read, and what was found in it (null spec: the folder has no atlas.json).</summary>
+internal sealed record SpriteLayer(string Folder, SpriteSheetSpec? Spec);
+
 /// <summary>
-/// Maps Core's (animation id, frame index) to frozen bitmaps: custom art from the sprites folder where it's defined,
-/// the built-in rabbit (DefaultArt) everywhere else.
+/// Maps Core's (animation id, frame index) to frozen bitmaps, one animation at a time from layered sprite folders:
+/// the pet's own sprites, then the shared sprites, then the built-in rabbit (DefaultArt). Facing and smoothing are
+/// per animation, since each can come from a different atlas.
 /// </summary>
 internal sealed class SpriteAtlas
 {
     public const string AtlasFileName = "atlas.json";
 
-    private readonly Dictionary<string, BitmapSource[]> _frames;
+    private readonly Dictionary<string, AtlasFrame[]> _frames;
 
-    private SpriteAtlas(Dictionary<string, BitmapSource[]> frames, bool facesLeft, bool smooth)
+    private SpriteAtlas(Dictionary<string, AtlasFrame[]> frames, int customCount)
     {
         _frames = frames;
-        ArtFacesLeft = facesLeft;
-        Smooth = smooth;
+        CustomCount = customCount;
     }
 
-    /// <summary>The custom art is drawn facing left (the built-in art faces right).</summary>
-    public bool ArtFacesLeft { get; }
-
-    /// <summary>Scale with smoothing rather than nearest-neighbour.</summary>
-    public bool Smooth { get; }
+    /// <summary>How many animations use custom art.</summary>
+    public int CustomCount { get; }
 
     public static SpriteAtlas CreateDefault(IEnumerable<AnimationDef> animations, int variant = 0) =>
-        new(animations.ToDictionary(a => a.Id, a => BuiltIn(a, variant)), facesLeft: false, smooth: false);
+        new(animations.ToDictionary(a => a.Id, a => BuiltIn(a, variant)), customCount: 0);
 
     /// <summary>
-    /// Loads <c>atlas.json</c> and its PNGs from <paramref name="folder"/>. Returns the built-in art (and a null spec) if
-    /// there's no atlas. Images are read fully into memory so the files stay free to edit.
+    /// Loads <c>atlas.json</c> and its PNGs from each folder, earlier folders winning per animation. Animations no folder
+    /// defines (correctly) use the built-in art. Images are read fully into memory so the files stay free to edit.
     /// </summary>
-    /// <param name="folder">The sprites folder.</param>
+    /// <param name="folders">Sprite folders, most specific first (the pet's own, then the shared one).</param>
     /// <param name="animations">The game's animations.</param>
     /// <param name="variant">Built-in art colour scheme for animations without custom art (one per pet).</param>
-    public static (SpriteAtlas Atlas, SpriteSheetSpec? Spec) Load(string folder, IReadOnlyList<AnimationDef> animations, int variant = 0)
+    public static (SpriteAtlas Atlas, IReadOnlyList<SpriteLayer> Layers) Load(
+        IReadOnlyList<string> folders, IReadOnlyList<AnimationDef> animations, int variant = 0)
     {
-        var atlasPath = Path.Combine(folder, AtlasFileName);
-        if (!File.Exists(atlasPath))
+        var layers = new List<(SpriteLayer Layer, Func<string, BitmapSource?> Image)>();
+        foreach (var folder in folders)
         {
-            return (CreateDefault(animations, variant), null);
+            layers.Add(LoadLayer(folder, animations));
         }
 
+        var custom = 0;
+        var frames = new Dictionary<string, AtlasFrame[]>();
+        foreach (var a in animations)
+        {
+            var source = layers.FirstOrDefault(l => l.Layer.Spec?.Animations.ContainsKey(a.Id) == true);
+            if (source.Layer?.Spec is { } spec)
+            {
+                frames[a.Id] = [.. spec.Animations[a.Id].Select(f => new AtlasFrame(Crop(source.Image(f.Image)!, f.Rect), spec.FacesLeft, spec.Smooth))];
+                custom++;
+            }
+            else
+            {
+                frames[a.Id] = BuiltIn(a, variant);
+            }
+        }
+
+        return (new SpriteAtlas(frames, custom), [.. layers.Select(l => l.Layer)]);
+    }
+
+    public AtlasFrame Get(string animationId, int frameIndex)
+    {
+        var frames = _frames[animationId];
+        return frames[System.Math.Clamp(frameIndex, 0, frames.Length - 1)];
+    }
+
+    private static (SpriteLayer, Func<string, BitmapSource?>) LoadLayer(string folder, IReadOnlyList<AnimationDef> animations)
+    {
         var images = new Dictionary<string, BitmapSource?>(StringComparer.OrdinalIgnoreCase);
         BitmapSource? Image(string name)
         {
@@ -58,6 +92,12 @@ internal sealed class SpriteAtlas
             }
 
             return bitmap;
+        }
+
+        var atlasPath = Path.Combine(folder, AtlasFileName);
+        if (!File.Exists(atlasPath))
+        {
+            return (new SpriteLayer(folder, null), Image);
         }
 
         string json;
@@ -71,26 +111,12 @@ internal sealed class SpriteAtlas
         }
 
         var spec = SpriteSheetParser.Parse(json, animations, name => Image(name) is { } b ? (b.PixelWidth, b.PixelHeight) : null);
-
-        var frames = animations.ToDictionary(
-            a => a.Id,
-            a => spec.Animations.TryGetValue(a.Id, out var custom)
-                ? custom.Select(f => (BitmapSource)Crop(Image(f.Image)!, f.Rect)).ToArray()
-                : BuiltIn(a, variant));
-
-        return (new SpriteAtlas(frames, spec.FacesLeft, spec.Smooth), spec);
+        return (new SpriteLayer(folder, spec), Image);
     }
 
-    public BitmapSource Get(string animationId, int frameIndex)
-    {
-        var frames = _frames[animationId];
-        return frames[System.Math.Clamp(frameIndex, 0, frames.Length - 1)];
-    }
-
-    private static BitmapSource[] BuiltIn(AnimationDef animation, int variant) =>
-        Enumerable.Range(0, animation.FrameCount)
-            .Select(i => ToBitmap(DefaultArt.Frame(animation.Id, i, variant), DefaultArt.FrameSize))
-            .ToArray();
+    private static AtlasFrame[] BuiltIn(AnimationDef animation, int variant) =>
+        [.. Enumerable.Range(0, animation.FrameCount)
+            .Select(i => new AtlasFrame(ToBitmap(DefaultArt.Frame(animation.Id, i, variant), DefaultArt.FrameSize), FacesLeft: false, Smooth: false))];
 
     private static BitmapFrame? TryDecode(string path)
     {

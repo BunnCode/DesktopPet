@@ -1,12 +1,13 @@
 using System.IO;
 using System.Windows.Threading;
+using DesktopPet.Core.Persistence;
 
 namespace DesktopPet.App.Customization;
 
 /// <summary>
-/// Watches the data folder for edits to settings.json and anything under sprites\, and reports them on the UI thread,
-/// debounced (editors often write a file several times in a row, and art tools save in steps).
-/// Our own writes (the save, problems.txt, the template) are ignored.
+/// Watches the data folder for edits to settings.json, anything under sprites\, and each pet's traits, personality and
+/// sprites, and reports them on the UI thread, debounced (editors often write a file several times in a row, and art
+/// tools save in steps). Our own writes of saves, problems.txt and the template are ignored.
 /// </summary>
 internal sealed class CustomizationWatcher : IDisposable
 {
@@ -16,10 +17,17 @@ internal sealed class CustomizationWatcher : IDisposable
     private readonly FileSystemWatcher _watcher;
     private readonly DispatcherTimer _settingsTimer;
     private readonly DispatcherTimer _spritesTimer;
+    private readonly Dictionary<(int, PetFileKind), DispatcherTimer> _petTimers = [];
+    private readonly Action<int, PetFileKind> _onPetChanged;
 
-    public CustomizationWatcher(DataFolder folder, Action onSettingsChanged, Action onSpritesChanged)
+    /// <param name="folder">The data folder.</param>
+    /// <param name="onSettingsChanged">settings.json changed.</param>
+    /// <param name="onSpritesChanged">The shared sprites folder changed.</param>
+    /// <param name="onPetChanged">One of a pet's files changed (pet id, which kind).</param>
+    public CustomizationWatcher(DataFolder folder, Action onSettingsChanged, Action onSpritesChanged, Action<int, PetFileKind> onPetChanged)
     {
         _folder = folder;
+        _onPetChanged = onPetChanged;
         var dispatcher = Dispatcher.CurrentDispatcher;
         _settingsTimer = OneShot(dispatcher, onSettingsChanged);
         _spritesTimer = OneShot(dispatcher, onSpritesChanged);
@@ -47,6 +55,10 @@ internal sealed class CustomizationWatcher : IDisposable
         _watcher.Dispose();
         _settingsTimer.Stop();
         _spritesTimer.Stop();
+        foreach (var timer in _petTimers.Values)
+        {
+            timer.Stop();
+        }
     }
 
     private static DispatcherTimer OneShot(Dispatcher dispatcher, Action action)
@@ -63,23 +75,39 @@ internal sealed class CustomizationWatcher : IDisposable
     /// <summary>Raised on a thread-pool thread; restart the matching debounce timer on the UI thread.</summary>
     private void Classify(string path, Dispatcher dispatcher)
     {
-        DispatcherTimer? timer = null;
         if (string.Equals(path, _folder.Settings, StringComparison.OrdinalIgnoreCase))
         {
-            timer = _settingsTimer;
+            Restart(dispatcher, () => _settingsTimer);
         }
-        else if (path.StartsWith(_folder.Sprites, StringComparison.OrdinalIgnoreCase))
+        else if (IsIn(path, _folder.Sprites))
         {
-            timer = _spritesTimer;
+            Restart(dispatcher, () => _spritesTimer);
         }
-
-        if (timer is not null)
+        else if (IsIn(path, _folder.Pets) && PetRoster.Classify(Path.GetRelativePath(_folder.Pets, path)) is { } change)
         {
-            dispatcher.BeginInvoke(() =>
+            Restart(dispatcher, () =>
             {
-                timer.Stop();
-                timer.Start();
+                if (!_petTimers.TryGetValue(change, out var timer))
+                {
+                    timer = OneShot(dispatcher, () => _onPetChanged(change.PetId, change.Kind));
+                    _petTimers[change] = timer;
+                }
+
+                return timer;
             });
         }
     }
+
+    private static bool IsIn(string path, string folder) =>
+        path.StartsWith(folder + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(path, folder, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>On the UI thread, (re)starts the debounce timer <paramref name="timer"/> gives.</summary>
+    private static void Restart(Dispatcher dispatcher, Func<DispatcherTimer> timer) =>
+        dispatcher.BeginInvoke(() =>
+        {
+            var t = timer();
+            t.Stop();
+            t.Start();
+        });
 }

@@ -79,6 +79,17 @@ public sealed record PetConfig
     /// <summary>Chance that a new walk heads the other way.</summary>
     public double WalkTurnChance { get; init; } = 0.5;
 
+    // ---- New pets ----
+
+    /// <summary>
+    /// A new pet's neediness multipliers (how fast hunger, happiness and energy drop) are rolled in this range,
+    /// log-uniformly: halving is as likely as doubling.
+    /// </summary>
+    public Traits.TraitRange NewPetNeediness { get; init; } = new(0.5, 2.0);
+
+    /// <summary>A new pet's behavior multipliers (idle, walk, sit, sleep, climb, push) are rolled in this range.</summary>
+    public Traits.TraitRange NewPetBehavior { get; init; } = new(0.5, 2.0);
+
     // ---- Walls: climbing window sides and screen edges, pushing windows ----
 
     public bool EnableClimbing { get; init; } = true;

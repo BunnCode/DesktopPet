@@ -1,4 +1,5 @@
 using DesktopPet.Core.Stats;
+using DesktopPet.Core.Traits;
 
 namespace DesktopPet.App.UI;
 
@@ -6,6 +7,12 @@ namespace DesktopPet.App.UI;
 internal interface IPetControls
 {
     string Name { get; }
+
+    /// <summary>Name and multipliers (read-only here; edited in the pet's traits.json).</summary>
+    PetTraits Traits { get; }
+
+    /// <summary>The pet's personality text.</summary>
+    string Personality { get; }
 
     PetStats Stats { get; }
 

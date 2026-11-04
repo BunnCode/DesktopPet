@@ -8,6 +8,7 @@ using DesktopPet.Core.Math;
 using DesktopPet.Core.Persistence;
 using DesktopPet.Core.Simulation;
 using DesktopPet.Core.Stats;
+using DesktopPet.Core.Traits;
 using DesktopPet.Core.World;
 using DesktopPet.Platform.Windows;
 using Microsoft.Win32;
@@ -34,23 +35,25 @@ internal sealed class PetHost : IPetControls, IDisposable
     private bool _pointerActive;
     private bool _closed;
 
-    /// <param name="id">Pet number (1, 2, …); also picks its jacket colour.</param>
-    /// <param name="config">Tuning.</param>
+    /// <param name="id">Pet number (1, 2, …), its folder name; also picks its jacket colour.</param>
+    /// <param name="config">Shared tuning.</param>
+    /// <param name="traits">This pet's name and multipliers, applied on top of <paramref name="config"/>.</param>
+    /// <param name="personality">This pet's personality text.</param>
     /// <param name="store">Where the pet is loaded from and saved to.</param>
     /// <param name="atlas">Sprites to draw with.</param>
     /// <param name="desktop">The desktop, shared by all pets.</param>
-    public PetHost(int id, PetConfig config, ISaveStore store, SpriteAtlas atlas, DesktopSource desktop)
+    public PetHost(int id, PetConfig config, PetTraits traits, string personality, ISaveStore store, SpriteAtlas atlas, DesktopSource desktop)
     {
         Id = id;
+        Personality = personality;
         _store = store;
         _desktop = desktop;
         _snapshot = _desktop.GetSnapshot();
-        _simulation = new PetSimulation(config, _snapshot, save: _store.Load());
+        _simulation = new PetSimulation(config, _snapshot, save: _store.Load(), traits: traits);
         _atlas = atlas;
 
         _window = new PetWindow();
         _window.CreateHandle();
-        _window.SetSmoothing(atlas.Smooth);
         _window.PointerPressed += OnPointerPressed;
         _window.PointerReleased += OnPointerReleased;
         _window.PointerCanceled += OnPointerCanceled;
@@ -75,7 +78,12 @@ internal sealed class PetHost : IPetControls, IDisposable
     /// <summary>Built-in art colour scheme (jacket colour) for this pet.</summary>
     public int Variant => (Id - 1) % DefaultArt.VariantCount;
 
-    public string Name => $"Pet {Id}";
+    public string Name => _simulation.Traits.Name;
+
+    public PetTraits Traits => _simulation.Traits;
+
+    /// <summary>The personality text from the pet's personality.txt.</summary>
+    public string Personality { get; set; }
 
     public PetStats Stats => _simulation.Stats;
 
@@ -104,11 +112,16 @@ internal sealed class PetHost : IPetControls, IDisposable
     /// <summary>Applies edited settings live (the fixed step rate only changes on restart).</summary>
     public void Reconfigure(PetConfig config) => _simulation.Reconfigure(config);
 
+    /// <summary>How many of its animations use custom art.</summary>
+    public int CustomAnimations => _atlas.CustomCount;
+
+    /// <summary>Applies edited traits live.</summary>
+    public void SetTraits(PetTraits traits) => _simulation.SetTraits(traits);
+
     /// <summary>Switches to reloaded sprites.</summary>
     public void SetAtlas(SpriteAtlas atlas)
     {
         _atlas = atlas;
-        _window.SetSmoothing(atlas.Smooth);
         Render(alpha: 1);
     }
 
@@ -231,10 +244,12 @@ internal sealed class PetHost : IPetControls, IDisposable
             ? current.FeetPos
             : Vec2.Lerp(_simulation.Previous.FeetPos, current.FeetPos, alpha);
 
+        var frame = _atlas.Get(current.AnimationId, current.FrameIndex);
         _window.Present(
             PetFrame.SpriteRect(feet + new Vec2(0, current.SinkY), current.Size),
-            _atlas.Get(current.AnimationId, current.FrameIndex),
-            current.FacingLeft != _atlas.ArtFacesLeft); // mirror when the art faces the other way
+            frame.Bitmap,
+            current.FacingLeft != frame.FacesLeft, // mirror when the art faces the other way
+            frame.Smooth);
 
         if (_sinceSave.Elapsed >= AutosaveInterval)
         {

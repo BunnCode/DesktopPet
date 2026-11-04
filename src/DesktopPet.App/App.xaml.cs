@@ -5,18 +5,20 @@ using System.Windows.Threading;
 using DesktopPet.App.Customization;
 using DesktopPet.App.SpriteSheet;
 using DesktopPet.App.UI;
+using DesktopPet.Core.Abstractions;
 using DesktopPet.Core.Animation;
 using DesktopPet.Core.Math;
 using DesktopPet.Core.Persistence;
-using DesktopPet.Core.Rendering;
 using DesktopPet.Core.Simulation;
+using DesktopPet.Core.Traits;
 using DesktopPet.Platform.Windows;
 
 namespace DesktopPet.App;
 
 /// <summary>
 /// Composition root. No main window: one window per pet plus a tray icon; exit via the menu.
-/// Pets come and go with their save files; settings and sprites come from the data folder and reload live.
+/// Pets come and go with their folders (pets\n\). Settings, shared sprites and each pet's traits, personality and own
+/// sprites come from the data folder and reload live.
 /// </summary>
 [SuppressMessage("Design", "CA1001:Types that own disposable fields should be disposable",
     Justification = "WPF Application can't be IDisposable; fields are disposed in OnExit.")]
@@ -27,6 +29,7 @@ public partial class App : Application
     private readonly DataFolder _data = DataFolder.Default;
     private readonly List<PetHost> _pets = [];
     private readonly Random _random = new();
+    private readonly SeededRandom _traitRandom = new(Environment.TickCount);
     private Mutex? _singleInstance;
     private DesktopSource? _desktop;
     private PetConfig _config = PetConfig.Default;
@@ -52,16 +55,31 @@ public partial class App : Application
         }
 
         _data.EnsureExists();
+        var problems = new List<string>(_data.MigrateLegacySaves());
         var settings = _data.LoadSettings();
         _config = settings.Config ?? PetConfig.Default;
         _pushingEnabled = _config.EnablePushing;
         _desktop = new DesktopSource();
 
-        // The first pet arrives at the top centre as always; the others drop in at random spots instead of in a pile.
-        SpriteSheetSpec? sprites = null;
-        foreach (var id in _data.StartupPets())
+        // Read every pet's traits first, so names rolled for pets without a traits.json avoid all the existing ones.
+        var startup = _data.StartupPets().Select(id => (Id: id, Traits: _data.LoadTraits(id))).ToList();
+        var names = new List<string>();
+        foreach (var (id, loaded) in startup)
         {
-            sprites = StartPet(id, dropIn: _pets.Count > 0);
+            if (loaded?.Traits is { } traits)
+            {
+                names.Add(traits.Name);
+            }
+            else if (loaded is not null)
+            {
+                problems.AddRange(loaded.Errors.Select(error => $@"pets\{id}\traits.json: {error}"));
+            }
+        }
+
+        // The first pet arrives at the top centre as always; the others drop in at random spots instead of in a pile.
+        foreach (var (id, loaded) in startup)
+        {
+            problems.AddRange(StartPet(id, loaded, names, dropIn: _pets.Count > 0));
         }
 
         _menu = new PetMenu(
@@ -70,6 +88,7 @@ public partial class App : Application
             canRemove: () => _pets.Count > 1,
             onAdd: AddPet,
             onRemove: pet => RemovePet((PetHost)pet),
+            petFiles: (pet => EditTraits((PetHost)pet), pet => DataFolder.Open(_data.PetFolder(((PetHost)pet).Id))),
             pushingEnabled: _pushingEnabled,
             onPushing: SetPushing,
             customize: (EditSettings, () => DataFolder.Open(_data.Root), ExportSpriteTemplate),
@@ -79,11 +98,15 @@ public partial class App : Application
 
         if (settings.Errors.Count > 0)
         {
-            ReportProblems("Settings have problems, so the defaults are used", settings.Errors);
+            problems.InsertRange(0, settings.Errors.Select(error => $"settings.json (the defaults are used): {error}"));
         }
 
-        ReportSprites(sprites, reloaded: false);
-        _watcher = new CustomizationWatcher(_data, OnSettingsChanged, OnSpritesChanged);
+        if (problems.Count > 0)
+        {
+            ReportProblems("Some files have problems", [.. problems.Distinct()]);
+        }
+
+        _watcher = new CustomizationWatcher(_data, OnSettingsChanged, OnSpritesChanged, OnPetChanged);
     }
 
     /// <summary>Windows is logging off or shutting down: save now, OnExit may not get the chance.</summary>
@@ -119,12 +142,42 @@ public partial class App : Application
 
     // ---- Pets ----
 
-    /// <summary>Starts pet <paramref name="id"/> from its save (or fresh). Returns its sprite spec for reporting.</summary>
-    private SpriteSheetSpec? StartPet(int id, bool dropIn)
+    /// <summary>
+    /// Starts pet <paramref name="id"/> from its folder: its save (or fresh), its traits (rolled and written if it has
+    /// no traits.json; average ones while that file is broken), its personality (written from the traits if missing)
+    /// and its sprites. Returns the problems found, for reporting.
+    /// </summary>
+    /// <param name="id">The pet's id (its folder name).</param>
+    /// <param name="loaded">Its traits.json as read, or null if it has none.</param>
+    /// <param name="names">Names of all pets, including ones not started yet; a newly rolled name is added.</param>
+    /// <param name="dropIn">Drop in at a random spot rather than at the top centre.</param>
+    private List<string> StartPet(int id, TraitsParseResult? loaded, List<string> names, bool dropIn)
     {
+        var problems = new List<string>();
+        _data.EnsurePetFolder(id);
+        var traits = loaded?.Traits;
+        if (loaded is null)
+        {
+            var rolled = TraitRoller.Roll(_config, _traitRandom, names);
+            names.Add(rolled.Name);
+            TryWrite(() => _data.WriteTraits(id, rolled), problems);
+            traits = rolled;
+        }
+
+        traits ??= PetTraits.Neutral($"Pet {id}"); // traits.json is broken (reported by the caller)
+        var personality = _data.LoadPersonality(id);
+        if (personality is null)
+        {
+            var described = Personality.Describe(traits);
+            TryWrite(() => _data.WritePersonality(id, described), problems);
+            personality = described;
+        }
+
         var variant = (id - 1) % DefaultArt.VariantCount;
-        var (atlas, spec) = SpriteAtlas.Load(_data.Sprites, Animations.All, variant);
-        var pet = new PetHost(id, _config, new JsonFileSaveStore(_data.SavePath(id)), atlas, _desktop!)
+        var (atlas, layers) = SpriteAtlas.Load(_data.SpriteFolders(id), Animations.All, variant);
+        problems.AddRange(SpriteProblems(layers, traits.Name));
+
+        var pet = new PetHost(id, _config, traits, personality, new JsonFileSaveStore(_data.SavePath(id)), atlas, _desktop!)
         {
             PushingEnabled = _pushingEnabled,
         };
@@ -142,7 +195,7 @@ public partial class App : Application
         pet.Start();
         pet.Save(); // a new pet exists from now on, even if the app is killed
         _pets.Add(pet);
-        return spec;
+        return problems;
     }
 
     private void AddPet()
@@ -152,12 +205,22 @@ public partial class App : Application
             return;
         }
 
-        // Also skip ids of save files that exist but weren't loaded (beyond the cap), so none gets overwritten.
-        var id = PetRoster.NextId(_pets.Select(p => p.Id).Concat(_data.StartupPets()));
-        StartPet(id, dropIn: true); // shown last, so it's above the debug overlay if that's on
+        // Also skip ids of pet folders that exist but weren't loaded (beyond the cap), so none gets overwritten.
+        var id = PetRoster.NextId(_pets.Select(p => p.Id).Concat(_data.ExistingPets()));
+        var names = _pets.Select(p => p.Name).ToList();
+        var problems = StartPet(id, loaded: null, names, dropIn: true); // shown last, so it's above the debug overlay if that's on
+        if (problems.Count > 0)
+        {
+            ReportProblems("The new pet's files have problems", problems);
+        }
+        else
+        {
+            var pet = _pets[^1];
+            _tray?.Notify($"Meet {pet.Name}", pet.Personality);
+        }
     }
 
-    /// <summary>Closes the pet and deletes its save, so it doesn't come back next time.</summary>
+    /// <summary>Closes the pet and moves its folder to the Recycle Bin, so it doesn't come back next time.</summary>
     private void RemovePet(PetHost pet)
     {
         if (_pets.Count <= 1 || !_pets.Remove(pet))
@@ -173,11 +236,11 @@ public partial class App : Application
 
         try
         {
-            File.Delete(_data.SavePath(pet.Id));
+            _data.RecyclePetFolder(pet.Id);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or OperationCanceledException)
         {
-            ReportProblems($"{pet.Name}'s save couldn't be deleted", [ex.Message]);
+            ReportProblems($"{pet.Name}'s folder couldn't be removed", [ex.Message]);
         }
     }
 
@@ -271,17 +334,108 @@ public partial class App : Application
         }
     }
 
+    /// <summary>The shared sprites changed: every pet reloads (each pet's own sprites still win).</summary>
     private void OnSpritesChanged()
     {
-        SpriteSheetSpec? spec = null;
+        var problems = new List<string>();
         foreach (var pet in _pets)
         {
-            var (atlas, s) = SpriteAtlas.Load(_data.Sprites, Animations.All, pet.Variant);
+            var (atlas, layers) = SpriteAtlas.Load(_data.SpriteFolders(pet.Id), Animations.All, pet.Variant);
             pet.SetAtlas(atlas);
-            spec = s;
+            problems.AddRange(SpriteProblems(layers, pet.Name));
         }
 
-        ReportSprites(spec, reloaded: true);
+        if (problems.Count > 0)
+        {
+            ReportProblems("Some sprites couldn't be used (the built-in art is shown instead)", [.. problems.Distinct()]);
+        }
+        else if (_pets.Count > 0)
+        {
+            var custom = _pets[0].CustomAnimations;
+            _tray?.Notify("Sprites reloaded", custom == 0
+                ? "No custom art found: using the built-in rabbit."
+                : $"{AnimationCount(custom)} with custom art.");
+        }
+    }
+
+    /// <summary>One of a pet's own files changed: traits.json, personality.txt or its sprites folder.</summary>
+    private void OnPetChanged(int id, PetFileKind kind)
+    {
+        var pet = _pets.FirstOrDefault(p => p.Id == id);
+        if (pet is null)
+        {
+            return; // not running (removed, or beyond the cap)
+        }
+
+        switch (kind)
+        {
+            case PetFileKind.Traits:
+                OnTraitsChanged(pet);
+                break;
+
+            case PetFileKind.Personality:
+                if (_data.LoadPersonality(id) is { } text && text != pet.Personality)
+                {
+                    pet.Personality = text;
+                    _tray?.Notify($"{pet.Name}'s personality updated", text);
+                }
+
+                break;
+
+            case PetFileKind.Sprites:
+                var (atlas, layers) = SpriteAtlas.Load(_data.SpriteFolders(id), Animations.All, pet.Variant);
+                pet.SetAtlas(atlas);
+                var problems = SpriteProblems(layers, pet.Name);
+                if (problems.Count > 0)
+                {
+                    ReportProblems($"Some of {pet.Name}'s sprites couldn't be used", problems);
+                }
+                else
+                {
+                    _tray?.Notify($"{pet.Name}'s sprites reloaded", $"{AnimationCount(atlas.CustomCount)} with custom art.");
+                }
+
+                break;
+        }
+    }
+
+    private void OnTraitsChanged(PetHost pet)
+    {
+        var loaded = _data.LoadTraits(pet.Id);
+        if (loaded is null || loaded.Traits == pet.Traits)
+        {
+            return; // deleted (the current traits stay in force) or unchanged, such as our own write
+        }
+
+        if (loaded.Traits is not { } traits)
+        {
+            ReportProblems($"{pet.Name}'s traits not applied (the previous ones stay)", loaded.Errors);
+            return;
+        }
+
+        var oldName = pet.Name;
+        pet.SetTraits(traits);
+        var renamed = oldName != traits.Name ? $"{oldName} is now called {traits.Name}. " : string.Empty;
+        _tray?.Notify($"{traits.Name}'s traits applied", renamed + "Your changes to traits.json are live.");
+    }
+
+    /// <summary>Opens the pet's traits.json for editing, writing it first if it's missing.</summary>
+    private void EditTraits(PetHost pet)
+    {
+        var path = _data.TraitsPath(pet.Id);
+        var problems = new List<string>();
+        if (!File.Exists(path))
+        {
+            TryWrite(() => _data.WriteTraits(pet.Id, pet.Traits), problems);
+        }
+
+        if (problems.Count > 0)
+        {
+            ReportProblems($"{pet.Name}'s traits.json couldn't be written", problems);
+            return;
+        }
+
+        DataFolder.Open(path);
     }
 
     private void EditSettings()
@@ -294,29 +448,31 @@ public partial class App : Application
     {
         SpriteTemplateExporter.Export(_data.SpriteTemplate, Animations.All);
         DataFolder.Open(_data.SpriteTemplate);
-        _tray?.Notify("Sprite template exported", "Copy template.png and atlas.json into the sprites folder and paint over them.");
+        _tray?.Notify("Sprite template exported",
+            "Copy template.png and atlas.json into the sprites folder (all pets) or a pet's own sprites folder, and paint over them.");
     }
 
-    private void ReportSprites(SpriteSheetSpec? spec, bool reloaded)
-    {
-        if (spec is null)
-        {
-            if (reloaded)
+    /// <summary>Problems in a pet's sprite folders, saying whose folder each one is in.</summary>
+    private List<string> SpriteProblems(IReadOnlyList<SpriteLayer> layers, string petName) =>
+        [.. layers
+            .Where(l => l.Spec is { Problems.Count: > 0 })
+            .SelectMany(l =>
             {
-                _tray?.Notify("Sprites", "No atlas.json in the sprites folder: using the built-in rabbit.");
-            }
+                var shared = string.Equals(l.Folder, _data.Sprites, StringComparison.OrdinalIgnoreCase);
+                return l.Spec!.Problems.Select(p => (shared ? "sprites: " : $"{petName}'s sprites: ") + p);
+            })];
 
-            return;
-        }
+    private static string AnimationCount(int count) => $"{count} animation{(count == 1 ? string.Empty : "s")}";
 
-        if (spec.Problems.Count > 0)
+    private static void TryWrite(Action write, List<string> problems)
+    {
+        try
         {
-            ReportProblems("Some sprites couldn't be used (the built-in art is shown instead)", spec.Problems);
+            write();
         }
-        else if (reloaded)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            var custom = spec.Animations.Count;
-            _tray?.Notify("Sprites reloaded", $"{custom} animation{(custom == 1 ? "" : "s")} with your art, {spec.UsingDefault.Count} with the built-in art.");
+            problems.Add(e.Message);
         }
     }
 
