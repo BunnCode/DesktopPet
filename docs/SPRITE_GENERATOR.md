@@ -1,7 +1,8 @@
 # Sprite generator (`tools/sprites/make_rabbit.py`)
 
 Builds the built-in chibi rabbit sheet, `src/DesktopPet.App/SpriteSheet/rabbit.png`, which is embedded in the exe
-and read by `DefaultArt` (see `docs/CODEMAP.md`). The PNG is checked in, so the generator only runs when the art
+and read by `DefaultArt` (see `docs/CODEMAP.md`), and the default furniture art, `src/DesktopPet.App/Furniture/Art/<kind>.png`
+(embedded, and copied into the user's `furniture` folder on first run). The PNG is checked in, so the generator only runs when the art
 changes. Never hand-edit the PNG: the next run overwrites it.
 
 The character is based on the user's reference sketches of their own rabbit OC: grey fur, dark swept bangs with a
@@ -13,6 +14,7 @@ sketches are greyscale, so colours other than the pink inner ears and blush are 
 ```
 python tools/sprites/make_rabbit.py                     # writes src/DesktopPet.App/SpriteSheet/rabbit.png
 python tools/sprites/make_rabbit.py --out x.png --preview zoom.png   # elsewhere, plus an 8x preview
+python tools/sprites/make_rabbit.py --furniture-preview f.png        # plus an 8x preview of all furniture
 ```
 - Needs Python 3 and Pillow. On this machine: `/f/Users/mrsma/anaconda3/python` (Bash) has Pillow; the `py`
   launcher may not.
@@ -24,7 +26,7 @@ python tools/sprites/make_rabbit.py --out x.png --preview zoom.png   # elsewhere
 
 ## Output contract (what the app relies on)
 
-- 32×32 cells. 16 columns (the most frames any animation has: `idle`) × 16 rows, one row per animation in
+- 32×32 cells. 16 columns (the most frames any animation has: `idle`) × 19 rows, one row per animation in
   **`ORDER`, which must match `Animations.All` in Core** (`DefaultArt` finds the row by the animation's index
   in `Animations.All`). Frame *n* is column *n*. Each animation needs exactly its `AnimationDef.FrameCount` frames;
   unused cells stay transparent.
@@ -50,7 +52,9 @@ characters, painted back to front and converted to RGBA at the end.
 | `P` | inner ear (pink) | `M` / `T` | open mouth / tongue |
 | `J` / `j` / `k` | jacket / shade / highlight (recoloured per pet) | `S` | shirt |
 | `R` / `r` / `L` | apple / apple shine / leaf | `Z` | snooze "z" |
-| `X` | anger mark (unused so far) | | |
+| `X` | anger mark (unused so far) | `G` / `V` | grey plastic / dark screen, mat |
+| `O` / `o` | wood / wood shade | `C` / `c` | couch fabric / shade |
+| `U` / `u` | blanket / shade | `Y` | yellow (game pixels) |
 
 ### Helpers
 - `grid(rows)` pads rows to equal width. `blank()` is an empty 32×32 grid.
@@ -76,14 +80,15 @@ Returns a 22×22 part: 9 ear rows (`EAR_ROWS`) plus the 13-row `HEAD` (hair, ban
 
 ### Bodies
 - `TORSO_ARMS_DOWN` (16×8, arms at the sides) and `TORSO` (no arms; add arms with `limb`).
-- `LEGS` (16×3 each, bottom row = ground): `stand`, `wide` (stride), `lift` (front foot raised), `dangle`, `kick`.
+- `LEGS` (16×3 each, bottom row = ground): `stand`, `wide` (stride), `lift` (front foot raised), `dangle`, `kick`,
+  `back` (back leg only; the kicking leg is a limb).
 - `SIT` (16×9): seated, legs out to the right.
 - Standard placement: body at `x = BX = 8`, bottom-aligned (`y = 32 - height`); head at `(HX, HY) = (5, 0)`, so
   the head bottom (row 21) overlaps the torso's collar. `standing(head_part, legs, torso, head_dy, head_dx)` does
   that. A positive `head_dy` lowers the head (squash, breathing).
 
 ### Props
-`APPLE`, `APPLE_BITTEN` (eat), `Z_SMALL`, `Z_BIG` (sleep).
+`APPLE`, `APPLE_BITTEN` (eat), `Z_SMALL`, `Z_BIG` (sleep), `PAD`, `PAD_PRESSED` (game controller).
 
 ### Frames (`frames()`)
 Returns `{animation id: [grid, ...]}`. One block per animation, each a short local function:
@@ -104,6 +109,25 @@ Returns `{animation id: [grid, ...]}`. One block per animation, each a short loc
 | `climb` / `cling` | 2 / 2 | body shifted right, one arm up past the face and one low, feet on the wall, all ending at column 30; cling holds frame 0 and blinks |
 | `push` | 4 | ears down, straining face, both arms straight out to column 30, legs shuffling |
 | `sit_ledge` | 2 | short torso ending at row 23, legs dangling below and swinging, head raised (ears down so they fit) |
+| `kick` | 4 | front foot lifted, leg kicked out (> < eyes, open mouth), leg up in follow-through, standing |
+| `game` | 2 | `SIT` body, arms to a controller in front, head bobbing, buttons swapping colour |
+| `bounce` | 2 | squashed with happy eyes, then stretched with arms flung wide and tall ears |
+
+### Furniture (`FURNITURE`)
+Each kind is a function returning a list of frames (character grids of any size), drawn with `fill` and `border`
+then `outlined` (K into transparent neighbours), and saved as a horizontal strip by `render_strip`. 1 art pixel =
+2 DIP, so the sizes must match `DefaultFurniture` in Core (DIP = art px × 2), and so must the seat heights (`SeatDip`:
+the couch seat, bed blanket and trampoline mat tops are 9 px up, drawn 16 DIP up so the pet sinks in a little).
+
+| Kind | Art px | Frames |
+|---|---|---|
+| `ball` | 8×8 | 4 (white band rolling round; plays while moving) |
+| `tv` | 24×20 | 3 (off, then a two-frame game; plays while in use) |
+| `couch` | 40×18 | 1 |
+| `trampoline` | 32×10 | 1 |
+| `bed` | 40×16 | 1 |
+| `playpen` | 56×20 | 1 (posts and rails; the inside is transparent) |
+| `trough` | 24×10 | 1 |
 
 ## Common edits
 

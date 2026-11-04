@@ -124,6 +124,26 @@ public static class PetConfigValidator
         Range(nameof(c.HangDropChance), c.HangDropChance, 0, 1);
         Chances("HangShimmyChance and HangDropChance", c.HangShimmyChance, c.HangDropChance);
 
+        var f = c.Furniture;
+        if (f is null)
+        {
+            errors.Add("Furniture is missing.");
+        }
+        else
+        {
+            Range("Furniture.NeedBelow", f.NeedBelow, 0, 100);
+            Range("Furniture.Weight", f.Weight, 0, 1_000);
+            Range("Furniture.CuriosityWeight", f.CuriosityWeight, 0, 1_000);
+            Range("Furniture.ErrandSeconds", f.ErrandSeconds, 1, 3_600);
+            Range("Furniture.RetrySeconds", f.RetrySeconds, 0, 3_600);
+            Range("Furniture.KickSpeedDip", f.KickSpeedDip, 0, 5_000);
+            Range("Furniture.KickLiftDip", f.KickLiftDip, 0, 5_000);
+            Range("Furniture.HopSpeedDip", f.HopSpeedDip, 0, 5_000);
+            Range("Furniture.BounceHops", f.BounceHops, 0, 20);
+            Range("Furniture.BounceHopSpeedDip", f.BounceHopSpeedDip, 0, 10_000);
+            Range("Furniture.BounceLaunchDip", f.BounceLaunchDip, 0, 10_000);
+        }
+
         ValidateStats(c.Stats, errors, Range);
         return errors;
     }

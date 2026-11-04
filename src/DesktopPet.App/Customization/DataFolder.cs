@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.IO;
+using DesktopPet.App.Furniture;
+using DesktopPet.Core.Furniture;
 using DesktopPet.Core.Persistence;
 using DesktopPet.Core.Simulation;
 using DesktopPet.Core.Traits;
@@ -8,8 +10,9 @@ using Microsoft.VisualBasic.FileIO;
 namespace DesktopPet.App.Customization;
 
 /// <summary>
-/// <c>%LOCALAPPDATA%\DesktopPet</c>: settings.json, the shared sprites folder, the exported sprite template, and
-/// <c>pets\n\</c>, one folder per pet with its save, traits.json, personality.txt and own sprites.
+/// <c>%LOCALAPPDATA%\DesktopPet</c>: settings.json, the shared sprites folder, the exported sprite template,
+/// <c>pets\n\</c>, one folder per pet with its save, traits.json, personality.txt and own sprites, the furniture
+/// definitions and art in <c>furniture\</c>, and where the furniture stands in room.json.
 /// </summary>
 internal sealed class DataFolder(string root)
 {
@@ -23,6 +26,8 @@ internal sealed class DataFolder(string root)
     public string SpriteTemplate => Path.Combine(Root, "sprite-template");
     public string Problems => Path.Combine(Root, "problems.txt");
     public string Pets => Path.Combine(Root, PetRoster.PetsFolderName);
+    public string Furniture => Path.Combine(Root, FurnitureSpecFile.FolderName);
+    public string Room => Path.Combine(Root, RoomStore.FileName);
 
     public string PetFolder(int petId) => Path.Combine(Pets, PetRoster.FolderName(petId));
     public string SavePath(int petId) => Path.Combine(PetFolder(petId), PetRoster.SaveFileName);
@@ -147,6 +152,71 @@ internal sealed class DataFolder(string root)
         {
             return new ConfigParseResult(null, [$"settings.json couldn't be read: {e.Message}"]);
         }
+    }
+
+    /// <summary>
+    /// First run (no furniture folder yet): writes the default furniture, a definition and an image per kind. Once the
+    /// folder exists it's the user's: deleted files stay deleted. Returns what went wrong, if anything.
+    /// </summary>
+    public IReadOnlyList<string> WriteDefaultFurniture()
+    {
+        if (Directory.Exists(Furniture))
+        {
+            return [];
+        }
+
+        try
+        {
+            Directory.CreateDirectory(Furniture);
+            foreach (var spec in DefaultFurniture.All)
+            {
+                File.WriteAllText(Path.Combine(Furniture, spec.Kind + FurnitureSpecFile.Extension), FurnitureSpecFile.Serialize(spec));
+                if (FurnitureArt.DefaultPng(spec.Kind) is { } png)
+                {
+                    File.WriteAllBytes(Path.Combine(Furniture, spec.Art), png);
+                }
+            }
+
+            return [];
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return [$"The default furniture couldn't be written: {e.Message}"];
+        }
+    }
+
+    /// <summary>
+    /// Every furniture definition in the furniture folder, the defaults' kinds first (in their order), then the rest
+    /// by name. A file that can't be read right now (being saved) comes back as an error.
+    /// </summary>
+    public IReadOnlyList<(string Kind, FurnitureParseResult Result)> LoadFurniture(IReadOnlyCollection<string> animations)
+    {
+        if (!Directory.Exists(Furniture))
+        {
+            return [];
+        }
+
+        var order = DefaultFurniture.All.Select(s => s.Kind).ToList();
+        var results = new List<(string Kind, FurnitureParseResult Result)>();
+        foreach (var path in Directory.EnumerateFiles(Furniture, "*" + FurnitureSpecFile.Extension))
+        {
+            if (FurnitureSpecFile.KindFromFileName(Path.GetFileName(path)) is not { } kind)
+            {
+                continue;
+            }
+
+            try
+            {
+                results.Add((kind, FurnitureSpecFile.Parse(kind, File.ReadAllText(path), animations)));
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                results.Add((kind, new FurnitureParseResult(null, [$"couldn't be read: {e.Message}"])));
+            }
+        }
+
+        int Rank(string kind) => order.IndexOf(kind) is var i && i >= 0 ? i : int.MaxValue;
+        return [.. results.OrderBy(r => Rank(r.Kind)).ThenBy(r => r.Kind, StringComparer.OrdinalIgnoreCase)];
     }
 
     /// <summary>Writes the full list of problems (notifications only have room for a summary).</summary>

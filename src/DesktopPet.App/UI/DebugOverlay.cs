@@ -16,13 +16,14 @@ namespace DesktopPet.App.UI;
 /// <c>DesktopPet.Platform</c> namespace before using-directives are considered.
 /// </remarks>
 internal sealed record DebugView(
-    IReadOnlyList<Core.World.Platform> Platforms, IReadOnlyList<Wall> Walls, IReadOnlyList<DebugPet> Pets, int WindowCount)
+    IReadOnlyList<Core.World.Platform> Platforms, IReadOnlyList<Wall> Walls, IReadOnlyList<DebugPet> Pets, int WindowCount,
+    IReadOnlyList<DebugPet> Furniture)
 {
-    /// <summary>Surfaces some pet is standing on, hanging from or clinging to (highlighted).</summary>
-    public HashSet<string> InUse { get; } = [.. Pets.Select(p => p.GroundKey).OfType<string>()];
+    /// <summary>Surfaces some pet or furniture is standing on, hanging from or clinging to (highlighted).</summary>
+    public HashSet<string> InUse { get; } = [.. Pets.Concat(Furniture).Select(p => p.GroundKey).OfType<string>()];
 }
 
-/// <summary>One pet's box and state for the overlay.</summary>
+/// <summary>One pet's (or piece of furniture's) box and state for the overlay.</summary>
 internal sealed record DebugPet(string Name, RectI Bounds, string State, BodyMode Mode, string? GroundKey);
 
 /// <summary>
@@ -166,7 +167,7 @@ internal sealed class DebugOverlay : IDisposable
                     pen, ToDip(x, System.Math.Max(w.Top, bounds.Top)), ToDip(x, System.Math.Min(w.Bottom, bounds.Bottom)));
             }
 
-            foreach (var pet in view.Pets)
+            foreach (var pet in view.Pets.Concat(view.Furniture))
             {
                 if (!pet.Bounds.Intersects(bounds))
                 {
@@ -186,7 +187,7 @@ internal sealed class DebugOverlay : IDisposable
                 var tops = view.Platforms.Count - floors - bars;
                 DrawLabel(
                     dc,
-                    $"DesktopPet debug · {view.Pets.Count} pets · {view.WindowCount} windows · {tops} window tops"
+                    $"DesktopPet debug · {view.Pets.Count} pets · {view.Furniture.Count} furniture · {view.WindowCount} windows · {tops} window tops"
                     + $" · {view.Walls.Count} walls · {bars} hang bars · {floors} floors",
                     ToDip(m.WorkArea.Left + 8, m.WorkArea.Top + 8));
             }

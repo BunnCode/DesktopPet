@@ -9,7 +9,7 @@ namespace DesktopPet.App.UI;
 /// <summary>
 /// The pets' menu, shared by the tray icon and right-clicking a pet. It's always about one pet, its target: a header
 /// naming it with its mood, live stat bars, an About submenu (personality and traits, read-only) and care actions for
-/// it. Then app-wide items: adding and removing pets,
+/// it. Then app-wide items: furniture (placed next to the target), adding and removing pets,
 /// pushing, customization, the debug overlay, Exit. Uses WinForms' ContextMenuStrip, which closes properly on outside
 /// clicks even though the pets' windows never activate.
 /// </summary>
@@ -35,6 +35,8 @@ internal sealed class PetMenu : IDisposable
     private readonly ToolStripMenuItem _sleep;
     private readonly ToolStripMenuItem _add;
     private readonly ToolStripMenuItem _remove;
+    private readonly ToolStripMenuItem _furnitureMenu;
+    private readonly FurnitureActions _furniture;
     private IPetControls? _target;
     private bool _openingForPet;
 
@@ -44,6 +46,7 @@ internal sealed class PetMenu : IDisposable
     /// <param name="onAdd">"Add a pet" chosen.</param>
     /// <param name="onRemove">"Remove this pet" chosen for the target.</param>
     /// <param name="petFiles">About submenu actions for the target: edit its traits.json, open its folder.</param>
+    /// <param name="furniture">Furniture submenu: the kinds, adding one beside the target, removing all, the folder.</param>
     /// <param name="pushingEnabled">Initial state of "Let it push windows".</param>
     /// <param name="onPushing">"Let it push windows" toggled (applies to all pets).</param>
     /// <param name="customize">Customize submenu actions: edit settings, open data folder, export sprite template.</param>
@@ -51,12 +54,14 @@ internal sealed class PetMenu : IDisposable
     /// <param name="onExit">Exit chosen.</param>
     public PetMenu(
         Func<IPetControls> defaultTarget, Func<bool> canAdd, Func<bool> canRemove, Action onAdd, Action<IPetControls> onRemove,
-        (Action<IPetControls> EditTraits, Action<IPetControls> OpenFolder) petFiles, bool pushingEnabled, Action<bool> onPushing, (Action EditSettings, Action OpenDataFolder, Action ExportSpriteTemplate) customize,
+        (Action<IPetControls> EditTraits, Action<IPetControls> OpenFolder) petFiles, FurnitureActions furniture, bool pushingEnabled, Action<bool> onPushing, (Action EditSettings, Action OpenDataFolder, Action ExportSpriteTemplate) customize,
         Action<bool> onDebugOverlay, Action onExit)
     {
         _defaultTarget = defaultTarget;
         _canAdd = canAdd;
         _canRemove = canRemove;
+        _furniture = furniture;
+        _furnitureMenu = new ToolStripMenuItem("Furniture");
 
         var mono = new Font("Consolas", 9.5f);
         _header = new ToolStripLabel { Font = new Font(SystemFonts.MenuFont ?? mono, FontStyle.Bold) };
@@ -109,6 +114,7 @@ internal sealed class PetMenu : IDisposable
             new ToolStripSeparator(),
             feed, play, _sleep,
             new ToolStripSeparator(),
+            _furnitureMenu,
             _add, _remove,
             new ToolStripSeparator(),
             pushing,
@@ -161,9 +167,36 @@ internal sealed class PetMenu : IDisposable
         _behavior.Text = Wrap(
             $"Likes: idling {X(b.Idle)}, walking {X(b.Walk)}, sitting {X(b.Sit)}, napping {X(b.Sleep)}, " +
             $"climbing {X(b.Climb)}, pushing windows {X(b.Push)}");
+        RefreshFurniture(pet);
         _add.Enabled = _canAdd();
         _remove.Enabled = _canRemove();
         _remove.Text = $"Remove {pet.Name}";
+    }
+
+    /// <summary>The Furniture submenu: one "Add" per kind (it drops in beside the pet), then remove all, then the folder.</summary>
+    private void RefreshFurniture(IPetControls pet)
+    {
+        var items = _furnitureMenu.DropDownItems;
+        foreach (var old in items.Cast<ToolStripItem>().ToList())
+        {
+            old.Dispose();
+        }
+
+        items.Clear();
+        var canAdd = _furniture.CanAdd();
+        foreach (var (kind, name) in _furniture.Kinds())
+        {
+            items.Add(new ToolStripMenuItem($"Add {name}", null, (_, _) => _furniture.Add(pet, kind)) { Enabled = canAdd });
+        }
+
+        if (items.Count == 0)
+        {
+            items.Add(new ToolStripLabel("(no furniture defined)"));
+        }
+
+        items.Add(new ToolStripSeparator());
+        items.Add(new ToolStripMenuItem("Remove all furniture", null, (_, _) => _furniture.RemoveAll()) { Enabled = _furniture.Count() > 0 });
+        items.Add(new ToolStripMenuItem("Open furniture folder", null, (_, _) => _furniture.OpenFolder()));
     }
 
     /// <summary>A multiplier as "×1.25".</summary>
@@ -223,3 +256,14 @@ internal sealed class PetMenu : IDisposable
         return $"{label,-7}{bar} {value,3:0}%{warning}";
     }
 }
+
+/// <summary>What the Furniture submenu does.</summary>
+/// <param name="Kinds">The kinds that can be placed (kind, display name), in menu order.</param>
+/// <param name="CanAdd">Whether there's room for another piece.</param>
+/// <param name="Count">How many pieces there are.</param>
+/// <param name="Add">Place one of a kind beside a pet.</param>
+/// <param name="RemoveAll">Remove every piece.</param>
+/// <param name="OpenFolder">Open the furniture folder.</param>
+internal sealed record FurnitureActions(
+    Func<IReadOnlyList<(string Kind, string Name)>> Kinds, Func<bool> CanAdd, Func<int> Count, Action<IPetControls, string> Add,
+    Action RemoveAll, Action OpenFolder);

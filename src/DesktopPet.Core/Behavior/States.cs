@@ -25,7 +25,7 @@ internal sealed class LandState : PetState
     // Waits for the squash to play out and for any skid from a throw to stop.
     public override PetStateId? Update(PetContext context, double dt) =>
         context.Animation.IsFinished && context.Body.Velocity.X == 0
-            ? BehaviorPicker.Pick(context.Config, context.Random, context.Stats)
+            ? context.PickNext()
             : null;
 }
 
@@ -210,7 +210,7 @@ internal sealed class PlayState : PetState
         if (body.Mode != BodyMode.Grounded)
         {
             _settle = SettleSeconds;
-            return body.Mode == BodyMode.Airborne ? null : BehaviorPicker.Pick(context.Config, context.Random, context.Stats);
+            return body.Mode == BodyMode.Airborne ? null : context.PickNext();
         }
 
         if ((_settle -= dt) > 0)
@@ -224,7 +224,7 @@ internal sealed class PlayState : PetState
             return null;
         }
 
-        return BehaviorPicker.Pick(context.Config, context.Random, context.Stats);
+        return context.PickNext();
     }
 }
 
@@ -276,6 +276,20 @@ internal sealed class WalkState : TimedState
         var dx = context.Direction * config.WalkSpeedDip * context.Scale * dt;
         var size = context.SizePx;
 
+        if (context.Pen is { } pen)
+        {
+            WalkInPen(context, pen, dx);
+            return null;
+        }
+
+        // Pets never walk into a pen; the user has to put them in.
+        var edge = body.Feet.X + (context.Direction * context.HalfWidthPx);
+        if (context.Furniture.PenAhead(body.GroundKey, edge, edge + dx) is not null)
+        {
+            context.FacingLeft = !context.FacingLeft;
+            return null;
+        }
+
         if (WallAhead(context, dx) is { } wall)
         {
             var roll = context.Random.NextDouble();
@@ -318,6 +332,27 @@ internal sealed class WalkState : TimedState
 
         body.Feet = body.Feet with { X = body.Feet.X + dx };
         return null;
+    }
+
+    /// <summary>Shut in a pen: walks to and fro inside it, turning at its sides (or stands, if there's no room).</summary>
+    private static void WalkInPen(PetContext context, Furniture.FurnitureItem pen, double dx)
+    {
+        var body = context.Body;
+        var margin = 2 * context.Scale;
+        var left = pen.Left + margin;
+        var right = pen.Right - margin;
+        var lead = body.Feet.X + (context.Direction * context.HalfWidthPx) + dx;
+        if (lead >= left && lead <= right)
+        {
+            body.Feet = body.Feet with { X = body.Feet.X + dx };
+            return;
+        }
+
+        var back = body.Feet.X - (context.Direction * context.HalfWidthPx) - dx;
+        if (back >= left && back <= right)
+        {
+            context.FacingLeft = !context.FacingLeft;
+        }
     }
 
     /// <summary>A wall the leading edge reaches this step that's tall enough beside the pet to matter.</summary>
@@ -418,7 +453,8 @@ internal sealed class ClimbState : TimedState
         WallBehavior.FaceWall(context);
     }
 
-    protected override PetStateId Next(PetContext context) => WallBehavior.Pick(context);
+    // On the way to furniture it keeps climbing the same way.
+    protected override PetStateId Next(PetContext context) => context.Errand is not null ? PetStateId.Climb : WallBehavior.Pick(context);
 
     protected override PetStateId? Act(PetContext context, double dt)
     {
@@ -441,7 +477,7 @@ internal sealed class ClimbState : TimedState
                 {
                     body.Land(overX, p);
                     context.FacingLeft = wall.TowardWall < 0;
-                    return PetStateId.Idle;
+                    return context.Errand is not null ? PetStateId.GoToFurniture : PetStateId.Idle;
                 }
             }
 

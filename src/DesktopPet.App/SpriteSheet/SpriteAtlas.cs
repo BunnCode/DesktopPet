@@ -118,7 +118,7 @@ internal sealed class SpriteAtlas
         [.. Enumerable.Range(0, animation.FrameCount)
             .Select(i => new AtlasFrame(ToBitmap(DefaultArt.Frame(animation.Id, i, variant), DefaultArt.FrameSize), FacesLeft: false, Smooth: false))];
 
-    private static BitmapFrame? TryDecode(string path)
+    internal static BitmapFrame? TryDecode(string path)
     {
         try
         {

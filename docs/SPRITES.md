@@ -57,6 +57,9 @@ list goes to `problems.txt` in the data folder, and the affected animations use 
 | `push` | 4 | Pushing a window |
 | `hang` | 2 | Hanging from a title bar (off by default) |
 | `shimmy` | 2 | Moving along a title bar (off by default) |
+| `kick` | 4 | Kicking a ball (plays once per kick) |
+| `game` | 2 | Sitting with a controller, playing games at the TV |
+| `bounce` | 2 | Bouncing on the trampoline or the couch |
 
 ## Conventions
 - **Facing:** draw facing right, or set `"facesLeft": true`. The game mirrors the art when the pet turns.

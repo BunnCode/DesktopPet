@@ -1,10 +1,11 @@
-"""Generates the default rabbit sprite sheet (src/DesktopPet.App/SpriteSheet/rabbit.png).
+"""Generates the default rabbit sprite sheet (src/DesktopPet.App/SpriteSheet/rabbit.png) and the default furniture
+art (src/DesktopPet.App/Furniture/Art/<kind>.png).
 
 Pixel art is composed from ASCII parts (head, face, body poses, props) so frames stay consistent and the art can be
 tweaked in one place. One row per animation in the game's order (Animations.All), 32x32 cells, art facing right,
 feet on the bottom row.
 
-    python tools/sprites/make_rabbit.py [--preview out.png]
+    python tools/sprites/make_rabbit.py [--preview out.png] [--furniture-preview out.png]
 """
 import argparse
 import os
@@ -39,6 +40,16 @@ PAL = {
     'L': (0x4C, 0xAF, 0x50),  # leaf
     'Z': (0x9F, 0xC5, 0xFF),  # snooze
     'X': (0xD8, 0x50, 0x50),  # anger mark
+    # Furniture and props (none of these may equal a jacket colour).
+    'G': (0x5C, 0x5E, 0x6E),  # grey plastic / metal (TV, controller, trampoline)
+    'V': (0x1E, 0x26, 0x34),  # dark screen / trampoline mat
+    'O': (0xB8, 0x82, 0x4E),  # wood
+    'o': (0x8C, 0x5E, 0x36),  # wood shade
+    'C': (0xC8, 0x5C, 0x6C),  # couch fabric
+    'c': (0x9A, 0x42, 0x52),  # couch shade
+    'U': (0x5C, 0x8E, 0xD6),  # blanket
+    'u': (0x41, 0x6A, 0xAE),  # blanket shade
+    'Y': (0xF2, 0xC8, 0x4A),  # yellow (game pixels)
 }
 
 
@@ -254,6 +265,11 @@ LEGS = {
         "...KFFK..KFFK...",
         "...KKK....KKK...",
     ]),
+    'back': grid([  # only the back leg (the front one is a limb)
+        "....KFFK........",
+        "...KFFFK........",
+        "...KKKKK........",
+    ]),
 }
 
 # Sitting on the floor, legs out in front (to the right), feet up. 16 wide, 9 tall.
@@ -351,6 +367,16 @@ Z_BIG = grid([
     "..Z.",
     ".Z..",
     "ZZZZ",
+])
+PAD = grid([  # game controller
+    ".KKKKKK.",
+    "KGRGGLGK",
+    ".KKKKKK.",
+])
+PAD_PRESSED = grid([
+    ".KKKKKK.",
+    "KGLGGRGK",
+    ".KKKKKK.",
 ])
 
 
@@ -522,11 +548,216 @@ def frames():
         return f.grid()
 
     a['sit_ledge'] = [ledge(0), ledge(1)]
+
+    # Kicking a ball on the right: foot up, kick out, follow through, back on both feet.
+    def kick(i):
+        if i == 0:
+            return standing(head(look=1), legs='lift').grid()
+        if i == 3:
+            return standing(head(look=1)).grid()
+        b = TORSO_ARMS_DOWN + LEGS['back']
+        f = F().part(b, BX, CELL - len(b))
+        f.limb([(16, 27), (26, 28) if i == 1 else (25, 25)], fill='F', end_size=3)
+        f.part(head(eye='squeeze' if i == 1 else 'happy', mouth_kind='open' if i == 1 else 'smile', look=1), HX, HY)
+        return f.grid()
+
+    a['kick'] = [kick(i) for i in range(4)]
+
+    # Sitting with a controller, playing games: thumbs on the buttons, head bobbing.
+    def game(i):
+        f = F().part(SIT, BX, CELL - len(SIT))
+        f.part(head(eye='open', mouth_kind='pout' if i == 0 else 'smile', look=1), HX, 2 + i)
+        f.limb([(11, 26), (19, 25)])
+        f.limb([(17, 27), (24, 25)])
+        f.part(PAD if i == 0 else PAD_PRESSED, 18, 23 + i)
+        return f.grid()
+
+    a['game'] = [game(0), game(1)]
+
+    # Bouncing: squashed on landing, then stretched up in the air with arms raised.
+    def bounce(i):
+        if i == 0:
+            return standing(head(eye='happy', mouth_kind='smile', blush=True), legs='wide', head_dy=3).grid()
+        f = F()
+        f.limb([(13, 22), (1, 14)])
+        f.limb([(18, 22), (29, 14)])
+        b = TORSO + LEGS['dangle']
+        f.part(b, BX, CELL - len(b) - 1)
+        f.part(head(ears='tall', eye='happy', mouth_kind='open', blush=True), HX, HY - 1)
+        return f.grid()
+
+    a['bounce'] = [bounce(0), bounce(1)]
     return a
 
 
+# ---------------------------------------------------------------- furniture
+# Each piece is a strip of frames, drawn with fills and then auto-outlined, at 1 art pixel = 2 DIP (like the rabbit).
+# Sizes must match the defaults in Core (DefaultFurniture): width and height in DIP = art pixels x 2.
+def canvas(w, h):
+    return [['.'] * w for _ in range(h)]
+
+
+def fill(c, x0, y0, x1, y1, ch):
+    """Fills the inclusive rectangle (x0, y0)-(x1, y1)."""
+    for y in range(y0, y1 + 1):
+        for x in range(x0, x1 + 1):
+            if 0 <= y < len(c) and 0 <= x < len(c[0]):
+                c[y][x] = ch
+
+
+def border(c, x0, y0, x1, y1, ch='K'):
+    for x in range(x0, x1 + 1):
+        c[y0][x] = c[y1][x] = ch
+    for y in range(y0, y1 + 1):
+        c[y][x0] = c[y][x1] = ch
+
+
+def outlined(c):
+    """Outlines every filled pixel in K (into transparent neighbours only)."""
+    h, w = len(c), len(c[0])
+    filled = {(x, y) for y in range(h) for x in range(w) if c[y][x] != '.'}
+    for (x, y) in filled:
+        for (nx, ny) in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if 0 <= nx < w and 0 <= ny < h and (nx, ny) not in filled:
+                c[ny][nx] = 'K'
+    return c
+
+
+def ball():
+    """8x8, 4 frames: a red ball with a white band rolling round."""
+    out = []
+    for i in range(4):
+        c = canvas(8, 8)
+        for (x0, x1, y) in ((2, 5, 1), (1, 6, 2), (1, 6, 3), (1, 6, 4), (1, 6, 5), (2, 5, 6)):
+            fill(c, x0, y, x1, y, 'R')
+        band = 2 + i
+        for y in range(1, 7):
+            if c[y][band] == 'R':
+                c[y][band] = 'W'
+        c[2][2] = 'r' if band != 2 else 'W'
+        out.append(outlined(c))
+    return out
+
+
+def tv():
+    """24x20, 3 frames: off, then two frames of a little game on screen."""
+    out = []
+    for i in range(3):
+        c = canvas(24, 20)
+        fill(c, 1, 1, 22, 15, 'G')   # body
+        fill(c, 3, 16, 20, 16, 'o')  # shelf
+        fill(c, 5, 17, 6, 19, 'o')   # legs
+        fill(c, 17, 17, 18, 19, 'o')
+        outlined(c)
+        border(c, 2, 2, 21, 13)
+        fill(c, 3, 3, 20, 12, 'V' if i == 0 else 'Z')
+        if i == 0:
+            fill(c, 4, 4, 5, 5, 'h')  # reflection
+        else:
+            fill(c, 3, 11, 20, 12, 'L')            # ground
+            fill(c, 13, 9, 15, 10, 'L')            # a hill
+            x = 6 if i == 1 else 9
+            fill(c, x, 9 - (i - 1), x + 1, 10 - (i - 1), 'R')  # the hero jumps
+            c[5][16] = c[5][17] = 'Y'              # a coin
+        c[14][18] = 'L'
+        c[14][20] = 'R'
+        out.append(c)
+    return out
+
+
+def couch():
+    """40x18: back, two cushions, arms, short legs. The seat top is row 9 (18 DIP up)."""
+    c = canvas(40, 18)
+    fill(c, 3, 1, 36, 8, 'C')     # back
+    fill(c, 1, 5, 5, 13, 'C')     # arms
+    fill(c, 34, 5, 38, 13, 'C')
+    fill(c, 6, 9, 33, 12, 'C')    # seat
+    fill(c, 1, 13, 38, 14, 'c')   # base
+    fill(c, 3, 15, 4, 17, 'o')    # legs
+    fill(c, 35, 15, 36, 17, 'o')
+    outlined(c)
+    for y in range(2, 8):
+        c[y][20] = 'c'            # back cushion seam
+    for y in range(9, 13):
+        c[y][20] = 'K'            # seat cushion seam
+    fill(c, 6, 12, 33, 12, 'c')   # seat shade
+    fill(c, 1, 5, 5, 5, 'c')      # arm tops
+    fill(c, 34, 5, 38, 5, 'c')
+    return [c]
+
+
+def bed():
+    """40x16: headboard, pillow, blanket, footboard. The mattress top is row 7 (18 DIP up)."""
+    c = canvas(40, 16)
+    fill(c, 1, 1, 4, 15, 'O')     # headboard
+    fill(c, 35, 6, 38, 15, 'O')   # footboard
+    fill(c, 5, 11, 34, 13, 'o')   # frame
+    fill(c, 5, 7, 34, 10, 'S')    # sheet
+    fill(c, 15, 6, 34, 10, 'U')   # blanket
+    fill(c, 6, 5, 13, 7, 'W')     # pillow
+    outlined(c)
+    fill(c, 15, 10, 34, 10, 'u')  # blanket shade
+    fill(c, 2, 3, 3, 3, 'o')      # headboard detail
+    return [c]
+
+
+def trampoline():
+    """32x10: a dark mat on a grey frame with springs and legs. The mat top is row 1 (18 DIP up)."""
+    c = canvas(32, 10)
+    fill(c, 2, 1, 29, 2, 'V')     # mat
+    fill(c, 1, 3, 30, 3, 'G')     # frame
+    fill(c, 3, 4, 4, 9, 'G')      # legs
+    fill(c, 27, 4, 28, 9, 'G')
+    outlined(c)
+    for x in range(4, 28, 4):
+        c[3][x] = 'w'             # springs
+    return [c]
+
+
+def playpen():
+    """56x20: wooden posts and two rails. The inside is transparent (pets stand in it, clicks pass through)."""
+    c = canvas(56, 20)
+    for x in (1, 10, 19, 27, 36, 45, 53):
+        fill(c, x, 1, x + 1, 19, 'O')
+    fill(c, 1, 3, 54, 4, 'o')     # top rail
+    fill(c, 1, 14, 54, 15, 'o')   # bottom rail
+    for x in (1, 10, 19, 27, 36, 45, 53):
+        c[1][x] = c[1][x + 1] = 'O'
+    return [outlined(c)]
+
+
+def trough():
+    """24x10: a wooden box heaped with greens and apples."""
+    c = canvas(24, 10)
+    fill(c, 3, 2, 20, 3, 'L')     # greens
+    fill(c, 1, 4, 22, 9, 'O')     # box
+    for x in (5, 11, 17):
+        fill(c, x, 1, x + 1, 2, 'R')  # apples
+    outlined(c)
+    fill(c, 1, 6, 22, 6, 'o')     # plank line
+    c[1][5] = 'r'
+    return [c]
+
+
+FURNITURE = {
+    'ball': ball, 'tv': tv, 'couch': couch, 'trampoline': trampoline, 'bed': bed, 'playpen': playpen, 'trough': trough,
+}
+
+
+def render_strip(frames_):
+    h, w = len(frames_[0]), len(frames_[0][0])
+    img = Image.new('RGBA', (w * len(frames_), h), (0, 0, 0, 0))
+    for i, c in enumerate(frames_):
+        for y in range(h):
+            for x in range(w):
+                col = PAL[c[y][x]]
+                if col is not None:
+                    img.putpixel((i * w + x, y), col + (255,))
+    return img
+
+
 ORDER = ['idle', 'walk', 'sit', 'fall', 'land', 'held', 'happy', 'hang', 'shimmy',
-         'idle_sad', 'sleep', 'eat', 'climb', 'cling', 'push', 'sit_ledge']
+         'idle_sad', 'sleep', 'eat', 'climb', 'cling', 'push', 'sit_ledge', 'kick', 'game', 'bounce']
 
 
 def render(anims):
@@ -542,26 +773,48 @@ def render(anims):
     return sheet
 
 
+def preview(img, path, scale=8):
+    """An upscaled copy on a white/blue checkerboard (4-pixel squares)."""
+    big = img.resize((img.width * scale, img.height * scale), Image.NEAREST)
+    bg = Image.new('RGBA', big.size, (255, 255, 255, 255))
+    for y in range(0, big.height, scale * 4):
+        for x in range(0, big.width, scale * 4):
+            if (x // (scale * 4) + y // (scale * 4)) % 2:
+                bg.paste((228, 236, 244, 255), (x, y, x + scale * 4, y + scale * 4))
+    bg.alpha_composite(big)
+    bg.convert('RGB').save(path)
+
+
 def main():
+    app = os.path.join(os.path.dirname(__file__), '..', '..', 'src', 'DesktopPet.App')
     ap = argparse.ArgumentParser()
-    ap.add_argument('--out', default=os.path.join(os.path.dirname(__file__), '..', '..', 'src', 'DesktopPet.App',
-                                                  'SpriteSheet', 'rabbit.png'))
-    ap.add_argument('--preview', help='also write an 8x upscaled preview with a checkerboard')
-    ap.add_argument('--preview-cols', type=int, default=16)
+    ap.add_argument('--out', default=os.path.join(app, 'SpriteSheet', 'rabbit.png'))
+    ap.add_argument('--furniture-out', default=os.path.join(app, 'Furniture', 'Art'),
+                    help='folder for the furniture PNGs (one per kind)')
+    ap.add_argument('--preview', help='also write an 8x upscaled preview of the sheet with a checkerboard')
+    ap.add_argument('--furniture-preview', help='also write an 8x preview of all furniture, one strip per row')
     args = ap.parse_args()
     sheet = render(frames())
     sheet.save(args.out)
     if args.preview:
-        scale = 8
-        big = sheet.resize((sheet.width * scale, sheet.height * scale), Image.NEAREST)
-        bg = Image.new('RGBA', big.size, (255, 255, 255, 255))
-        for y in range(0, big.height, scale * 4):
-            for x in range(0, big.width, scale * 4):
-                if (x // (scale * 4) + y // (scale * 4)) % 2:
-                    bg.paste((228, 236, 244, 255), (x, y, x + scale * 4, y + scale * 4))
-        bg.alpha_composite(big)
-        bg.convert('RGB').save(args.preview)
+        preview(sheet, args.preview)
     print('wrote', os.path.normpath(args.out), sheet.size)
+
+    os.makedirs(args.furniture_out, exist_ok=True)
+    strips = []
+    for kind, make in FURNITURE.items():
+        strip = render_strip(make())
+        strip.save(os.path.join(args.furniture_out, kind + '.png'))
+        strips.append(strip)
+        print('wrote', os.path.normpath(os.path.join(args.furniture_out, kind + '.png')), strip.size)
+    if args.furniture_preview:
+        gap = 2
+        board = Image.new('RGBA', (max(s.width for s in strips), sum(s.height + gap for s in strips)), (0, 0, 0, 0))
+        y = 0
+        for s_ in strips:
+            board.paste(s_, (0, y))
+            y += s_.height + gap
+        preview(board, args.furniture_preview)
 
 
 if __name__ == '__main__':

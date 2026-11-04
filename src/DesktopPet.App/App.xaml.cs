@@ -1,12 +1,15 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Windows;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using DesktopPet.App.Customization;
+using DesktopPet.App.Furniture;
 using DesktopPet.App.SpriteSheet;
 using DesktopPet.App.UI;
 using DesktopPet.Core.Abstractions;
 using DesktopPet.Core.Animation;
+using DesktopPet.Core.Furniture;
 using DesktopPet.Core.Math;
 using DesktopPet.Core.Persistence;
 using DesktopPet.Core.Simulation;
@@ -17,8 +20,8 @@ namespace DesktopPet.App;
 
 /// <summary>
 /// Composition root. No main window: one window per pet plus a tray icon; exit via the menu.
-/// Pets come and go with their folders (pets\n\). Settings, shared sprites and each pet's traits, personality and own
-/// sprites come from the data folder and reload live.
+/// Pets come and go with their folders (pets\n\). Settings, shared sprites, furniture and each pet's traits, personality
+/// and own sprites come from the data folder and reload live. The furniture is shared by all pets.
 /// </summary>
 [SuppressMessage("Design", "CA1001:Types that own disposable fields should be disposable",
     Justification = "WPF Application can't be IDisposable; fields are disposed in OnExit.")]
@@ -39,6 +42,9 @@ public partial class App : Application
     private TrayIcon? _tray;
     private CustomizationWatcher? _watcher;
     private DebugOverlay? _overlay;
+    private FurnitureHost? _furniture;
+    private Dictionary<string, FurnitureSpec> _furnitureSpecs = new(StringComparer.OrdinalIgnoreCase);
+    private System.Windows.Forms.ContextMenuStrip? _furnitureMenu;
     private DispatcherTimer? _overlayTimer;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -60,6 +66,12 @@ public partial class App : Application
         _config = settings.Config ?? PetConfig.Default;
         _pushingEnabled = _config.EnablePushing;
         _desktop = new DesktopSource();
+
+        // Furniture first: the pets share its world, and its windows go behind theirs.
+        problems.AddRange(_data.WriteDefaultFurniture());
+        _furniture = new FurnitureHost(_config, _desktop, new RoomStore(_data.Room), ShowFurnitureMenu, BringPetsToFront);
+        problems.AddRange(LoadFurniture());
+        _furniture.Start();
 
         // Read every pet's traits first, so names rolled for pets without a traits.json avoid all the existing ones.
         var startup = _data.StartupPets().Select(id => (Id: id, Traits: _data.LoadTraits(id))).ToList();
@@ -89,6 +101,13 @@ public partial class App : Application
             onAdd: AddPet,
             onRemove: pet => RemovePet((PetHost)pet),
             petFiles: (pet => EditTraits((PetHost)pet), pet => DataFolder.Open(_data.PetFolder(((PetHost)pet).Id))),
+            furniture: new FurnitureActions(
+                Kinds: () => [.. _furnitureSpecs.Values.Select(s => (s.Kind, s.Name))],
+                CanAdd: () => _furniture!.Count < FurnitureHost.MaxItems,
+                Count: () => _furniture!.Count,
+                Add: (pet, kind) => AddFurniture((PetHost)pet, kind),
+                RemoveAll: () => _furniture!.RemoveAll(),
+                OpenFolder: () => DataFolder.Open(_data.Furniture)),
             pushingEnabled: _pushingEnabled,
             onPushing: SetPushing,
             customize: (EditSettings, () => DataFolder.Open(_data.Root), ExportSpriteTemplate),
@@ -106,7 +125,7 @@ public partial class App : Application
             ReportProblems("Some files have problems", [.. problems.Distinct()]);
         }
 
-        _watcher = new CustomizationWatcher(_data, OnSettingsChanged, OnSpritesChanged, OnPetChanged);
+        _watcher = new CustomizationWatcher(_data, OnSettingsChanged, OnSpritesChanged, OnPetChanged, OnFurnitureChanged);
     }
 
     /// <summary>Windows is logging off or shutting down: save now, OnExit may not get the chance.</summary>
@@ -117,6 +136,7 @@ public partial class App : Application
             pet.Save();
         }
 
+        _furniture?.Save();
         base.OnSessionEnding(e);
     }
 
@@ -129,6 +149,8 @@ public partial class App : Application
             pet.Dispose(); // saves
         }
 
+        _furniture?.Dispose(); // saves room.json
+        _furnitureMenu?.Dispose();
         _tray?.Dispose();
         _menu?.Dispose();
         if (_singleInstance is not null)
@@ -177,7 +199,7 @@ public partial class App : Application
         var (atlas, layers) = SpriteAtlas.Load(_data.SpriteFolders(id), Animations.All, variant);
         problems.AddRange(SpriteProblems(layers, traits.Name));
 
-        var pet = new PetHost(id, _config, traits, personality, new JsonFileSaveStore(_data.SavePath(id)), atlas, _desktop!)
+        var pet = new PetHost(id, _config, traits, personality, new JsonFileSaveStore(_data.SavePath(id)), atlas, _desktop!, _furniture!.World)
         {
             PushingEnabled = _pushingEnabled,
         };
@@ -271,6 +293,99 @@ public partial class App : Application
         }
     }
 
+    private void BringPetsToFront()
+    {
+        foreach (var pet in _pets)
+        {
+            pet.BringToFront();
+        }
+    }
+
+    // ---- Furniture (shared by all pets) ----
+
+    /// <summary>
+    /// Reads the furniture folder: every definition and its art. A broken definition keeps the last good one (or, for a
+    /// default kind, the default), so a typo doesn't make that furniture vanish. Returns the problems found.
+    /// </summary>
+    private List<string> LoadFurniture()
+    {
+        var problems = new List<string>();
+        var specs = new List<FurnitureSpec>();
+        foreach (var (kind, result) in _data.LoadFurniture([.. Animations.All.Select(a => a.Id)]))
+        {
+            if (result.Spec is { } spec)
+            {
+                specs.Add(spec);
+                continue;
+            }
+
+            problems.AddRange(result.Errors.Select(error => $@"furniture\{kind}.json: {error}"));
+            var fallback = _furnitureSpecs.GetValueOrDefault(kind) ?? DefaultFurniture.All.FirstOrDefault(d => d.Kind == kind);
+            if (fallback is not null)
+            {
+                specs.Add(fallback);
+            }
+        }
+
+        var art = new Dictionary<string, BitmapSource[]>(StringComparer.OrdinalIgnoreCase);
+        foreach (var spec in specs)
+        {
+            var (frames, problem) = FurnitureArt.Load(_data.Furniture, spec);
+            art[spec.Kind] = frames;
+            if (problem is not null)
+            {
+                problems.Add($@"furniture\{spec.Kind}: {problem}");
+            }
+        }
+
+        _furnitureSpecs = specs.ToDictionary(s => s.Kind, StringComparer.OrdinalIgnoreCase);
+        _furniture!.SetSpecs(specs, art);
+        return problems;
+    }
+
+    private void OnFurnitureChanged()
+    {
+        var problems = LoadFurniture();
+        if (problems.Count > 0)
+        {
+            ReportProblems("Some furniture couldn't be used as it is", problems);
+        }
+        else
+        {
+            _tray?.Notify("Furniture reloaded", $"{_furnitureSpecs.Count} kinds of furniture.");
+        }
+    }
+
+    /// <summary>Drops a piece of furniture in just above the pet, so it lands beside it on whatever it's standing on.</summary>
+    private void AddFurniture(PetHost pet, string kind)
+    {
+        var feet = pet.Feet;
+        _furniture!.Add(kind, new Vec2(feet.X, feet.Y - pet.SizePx - 4));
+    }
+
+    /// <summary>Right-clicked furniture: its name and Remove.</summary>
+    private void ShowFurnitureMenu(FurnitureItem item)
+    {
+        _furnitureMenu ??= new System.Windows.Forms.ContextMenuStrip();
+        foreach (var old in _furnitureMenu.Items.Cast<System.Windows.Forms.ToolStripItem>().ToList())
+        {
+            old.Dispose();
+        }
+
+        _furnitureMenu.Items.Clear();
+        var header = new System.Windows.Forms.ToolStripLabel(item.Spec.Name);
+        header.Font = new System.Drawing.Font(header.Font, System.Drawing.FontStyle.Bold);
+        _furnitureMenu.Items.Add(header);
+        if (item.Spec.IsPen)
+        {
+            _furnitureMenu.Items.Add(new System.Windows.Forms.ToolStripLabel("Drop a pet in to keep it safe; drag it out to let it go."));
+        }
+
+        _furnitureMenu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
+        _furnitureMenu.Items.Add(new System.Windows.Forms.ToolStripMenuItem($"Remove {item.Spec.Name}", null, (_, _) => _furniture?.Remove(item)));
+        _furnitureMenu.Show(System.Windows.Forms.Cursor.Position);
+    }
+
     // ---- Debug overlay (one for all pets) ----
 
     private void SetDebugOverlay(bool enabled)
@@ -285,10 +400,8 @@ public partial class App : Application
             _overlay = new DebugOverlay();
             _overlayTimer = new DispatcherTimer(OverlayInterval, DispatcherPriority.Background, (_, _) => UpdateOverlay(), Dispatcher);
             UpdateOverlay();
-            foreach (var pet in _pets)
-            {
-                pet.BringToFront(); // keep pets above the overlay
-            }
+            _furniture?.BringToFront();
+            BringPetsToFront(); // keep pets above the overlay and the furniture
         }
         else
         {
@@ -310,7 +423,8 @@ public partial class App : Application
         var world = infos[0]; // every pet sees the same desktop
         _overlay.Update(
             world.Snapshot.Monitors,
-            new DebugView(world.Platforms, world.Walls, [.. infos.Select(i => i.Pet)], world.Snapshot.Windows.Count));
+            new DebugView(
+                world.Platforms, world.Walls, [.. infos.Select(i => i.Pet)], world.Snapshot.Windows.Count, _furniture?.DebugInfo ?? []));
     }
 
     // ---- Customization ----
@@ -326,6 +440,7 @@ public partial class App : Application
                 pet.Reconfigure(config);
             }
 
+            _furniture?.Reconfigure(config);
             _tray?.Notify("Settings applied", "Your changes to settings.json are live.");
         }
         else

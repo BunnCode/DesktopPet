@@ -16,8 +16,8 @@ internal static class SimulationExtensions
     /// <remarks>The wall clock is frozen unless a <paramref name="clock"/> is passed, so stats don't drift with real time.</remarks>
     public static PetSimulation NewSim(
         DesktopSnapshot snapshot, IRandom? random = null, PetConfig? config = null, FakeClock? clock = null,
-        Core.Persistence.SaveData? save = null) =>
-        new(config ?? PetConfig.Default, snapshot, random ?? new FakeRandom(0.0), clock ?? new FakeClock(), save);
+        Core.Persistence.SaveData? save = null, Core.Furniture.FurnitureWorld? furniture = null) =>
+        new(config ?? PetConfig.Default, snapshot, random ?? new FakeRandom(0.0), clock ?? new FakeClock(), save, furniture: furniture);
 
     public static bool Grounded(PetSimulation sim) => sim.Mode == BodyMode.Grounded;
 

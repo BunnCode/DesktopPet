@@ -54,6 +54,15 @@ public static class Animations
     /// <summary>Sitting on the edge of a title bar, legs dangling over. Drawn sunk by <see cref="LedgeSinkFraction"/>.</summary>
     public static readonly AnimationDef SitLedge = new("sit_ledge", frameCount: 2, fps: 1.5, loop: true);
 
+    /// <summary>Kicking a ball: wind up, kick, follow through, recover. Plays once per kick.</summary>
+    public static readonly AnimationDef Kick = new("kick", frameCount: 4, fps: 10, loop: false);
+
+    /// <summary>Sitting with a game controller, playing video games in front of the TV.</summary>
+    public static readonly AnimationDef Game = new("game", frameCount: 2, fps: 3, loop: true);
+
+    /// <summary>Bouncing (trampoline, jumping on the couch): arms up, legs tucked.</summary>
+    public static readonly AnimationDef Bounce = new("bounce", frameCount: 2, fps: 4, loop: true);
+
     /// <summary>
     /// For <see cref="SitLedge"/>: the sprite is drawn this fraction of its height lower than the feet point, so the
     /// body rests on the edge and the legs hang below it.
@@ -61,5 +70,8 @@ public static class Animations
     public const double LedgeSinkFraction = 9.0 / 32.0;
 
     public static IReadOnlyList<AnimationDef> All { get; } =
-        [Idle, Walk, Sit, Fall, Land, Held, Happy, Hang, Shimmy, IdleSad, Sleep, Eat, Climb, Cling, Push, SitLedge];
+        [Idle, Walk, Sit, Fall, Land, Held, Happy, Hang, Shimmy, IdleSad, Sleep, Eat, Climb, Cling, Push, SitLedge, Kick, Game, Bounce];
+
+    /// <summary>The animation with this id, or null.</summary>
+    public static AnimationDef? Find(string id) => All.FirstOrDefault(a => a.Id == id);
 }

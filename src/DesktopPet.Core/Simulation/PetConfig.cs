@@ -150,6 +150,45 @@ public sealed record PetConfig
 
     /// <summary>...and chance to let go and drop. The rest of the time it keeps hanging.</summary>
     public double HangDropChance { get; init; } = 0.3;
+
+    // ---- Furniture ----
+
+    /// <summary>When pets go and use furniture on their own, and how it moves them.</summary>
+    public FurnitureRules Furniture { get; init; } = new();
+}
+
+/// <summary>Tuning for furniture: when pets choose it, how they get there, and the kick and bounce physics.</summary>
+public sealed record FurnitureRules
+{
+    /// <summary>A need below this makes furniture that meets it attractive, more so the lower it is.</summary>
+    public double NeedBelow { get; init; } = 75;
+
+    /// <summary>Weight of "go use furniture" when a need it meets is empty (scaled down as the need is fuller).</summary>
+    public double Weight { get; init; } = 4;
+
+    /// <summary>Weight of trying out fun furniture (happiness or no need) even when nothing is low.</summary>
+    public double CuriosityWeight { get; init; } = 0.4;
+
+    /// <summary>A trip to furniture that takes longer than this is abandoned.</summary>
+    public double ErrandSeconds { get; init; } = 60;
+
+    /// <summary>Furniture a pet couldn't reach isn't tried again for this long.</summary>
+    public double RetrySeconds { get; init; } = 30;
+
+    /// <summary>How hard a pet kicks a ball: sideways and upward speed, DIP/s.</summary>
+    public double KickSpeedDip { get; init; } = 380;
+
+    public double KickLiftDip { get; init; } = 420;
+
+    /// <summary>Hops on furniture with the Hop effect (the couch), DIP/s of upward speed.</summary>
+    public double HopSpeedDip { get; init; } = 450;
+
+    /// <summary>Trampoline: this many hops, each this fast, then a launch this fast (about 900 DIP high).</summary>
+    public int BounceHops { get; init; } = 3;
+
+    public double BounceHopSpeedDip { get; init; } = 750;
+
+    public double BounceLaunchDip { get; init; } = 2300;
 }
 
 /// <summary>

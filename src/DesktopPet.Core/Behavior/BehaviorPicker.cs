@@ -7,10 +7,30 @@ namespace DesktopPet.Core.Behavior;
 /// <summary>
 /// Chooses the next voluntary behavior by weighted random, shaped by needs:
 /// tired → sleep becomes likely and walking rarer; sad → sits and mopes more, walks less.
-/// With healthy stats the base weights apply unchanged.
+/// With healthy stats the base weights apply unchanged. Furniture is weighed in by <see cref="FurnitureChooser"/>.
 /// </summary>
 internal static class BehaviorPicker
 {
+    /// <summary>
+    /// Picks for a pet, including "go use furniture" (weighted by how low the needs it meets are). If furniture is
+    /// rolled but none can be reached, picks again without it.
+    /// </summary>
+    public static PetStateId Pick(PetContext context)
+    {
+        var furniture = FurnitureChooser.Weight(context);
+        if (furniture > 0)
+        {
+            var (idle, walk, sit, sleep) = Weights(context.Config, context.Stats);
+            var total = idle + walk + sit + sleep + furniture;
+            if (context.Random.NextDouble() * total >= total - furniture && FurnitureChooser.TryStart(context))
+            {
+                return PetStateId.GoToFurniture;
+            }
+        }
+
+        return Pick(context.Config, context.Random, context.Stats);
+    }
+
     public static PetStateId Pick(PetConfig config, IRandom random, PetStats stats)
     {
         var (idle, walk, sit, sleep) = Weights(config, stats);

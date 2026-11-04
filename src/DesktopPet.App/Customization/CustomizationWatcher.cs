@@ -5,9 +5,9 @@ using DesktopPet.Core.Persistence;
 namespace DesktopPet.App.Customization;
 
 /// <summary>
-/// Watches the data folder for edits to settings.json, anything under sprites\, and each pet's traits, personality and
-/// sprites, and reports them on the UI thread, debounced (editors often write a file several times in a row, and art
-/// tools save in steps). Our own writes of saves, problems.txt and the template are ignored.
+/// Watches the data folder for edits to settings.json, anything under sprites\ and furniture\, and each pet's traits,
+/// personality and sprites, and reports them on the UI thread, debounced (editors often write a file several times in a
+/// row, and art tools save in steps). Our own writes of saves, room.json, problems.txt and the template are ignored.
 /// </summary>
 internal sealed class CustomizationWatcher : IDisposable
 {
@@ -17,6 +17,7 @@ internal sealed class CustomizationWatcher : IDisposable
     private readonly FileSystemWatcher _watcher;
     private readonly DispatcherTimer _settingsTimer;
     private readonly DispatcherTimer _spritesTimer;
+    private readonly DispatcherTimer _furnitureTimer;
     private readonly Dictionary<(int, PetFileKind), DispatcherTimer> _petTimers = [];
     private readonly Action<int, PetFileKind> _onPetChanged;
 
@@ -24,13 +25,16 @@ internal sealed class CustomizationWatcher : IDisposable
     /// <param name="onSettingsChanged">settings.json changed.</param>
     /// <param name="onSpritesChanged">The shared sprites folder changed.</param>
     /// <param name="onPetChanged">One of a pet's files changed (pet id, which kind).</param>
-    public CustomizationWatcher(DataFolder folder, Action onSettingsChanged, Action onSpritesChanged, Action<int, PetFileKind> onPetChanged)
+    /// <param name="onFurnitureChanged">Something in the furniture folder changed (a definition or its art).</param>
+    public CustomizationWatcher(
+        DataFolder folder, Action onSettingsChanged, Action onSpritesChanged, Action<int, PetFileKind> onPetChanged, Action onFurnitureChanged)
     {
         _folder = folder;
         _onPetChanged = onPetChanged;
         var dispatcher = Dispatcher.CurrentDispatcher;
         _settingsTimer = OneShot(dispatcher, onSettingsChanged);
         _spritesTimer = OneShot(dispatcher, onSpritesChanged);
+        _furnitureTimer = OneShot(dispatcher, onFurnitureChanged);
 
         _watcher = new FileSystemWatcher(folder.Root)
         {
@@ -55,6 +59,7 @@ internal sealed class CustomizationWatcher : IDisposable
         _watcher.Dispose();
         _settingsTimer.Stop();
         _spritesTimer.Stop();
+        _furnitureTimer.Stop();
         foreach (var timer in _petTimers.Values)
         {
             timer.Stop();
@@ -82,6 +87,10 @@ internal sealed class CustomizationWatcher : IDisposable
         else if (IsIn(path, _folder.Sprites))
         {
             Restart(dispatcher, () => _spritesTimer);
+        }
+        else if (IsIn(path, _folder.Furniture))
+        {
+            Restart(dispatcher, () => _furnitureTimer);
         }
         else if (IsIn(path, _folder.Pets) && PetRoster.Classify(Path.GetRelativePath(_folder.Pets, path)) is { } change)
         {

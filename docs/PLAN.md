@@ -28,12 +28,12 @@ This document describes the design **as built**, the status of each milestone, a
 | M9 | Multiple pets | Done | `634aa82` |
 | — | Default art: chibi pixel rabbit replaces the placeholder blob | Done | |
 | M10 | Per-pet traits: own folder and sprites, names, neediness, personality | Done | `976c95a` |
-| M11 | Furniture, defined in user-editable files | Planned | |
+| M11 | Furniture, defined in user-editable files | Done | |
 | M12 | Chat bubbles and sticky notes from a shared local LLM (Qwen3.5-2B) | Planned | |
 | M13 | Breeding: eggs that hatch into mixed children | Planned | |
 | M14 | Death and gravestones | Planned | |
 
-318 unit tests, all in `DesktopPet.Core.Tests`.
+359 unit tests, all in `DesktopPet.Core.Tests`.
 
 ### Changes from the original plan
 
@@ -60,6 +60,18 @@ This document describes the design **as built**, the status of each milestone, a
   bottom of the list. It's easy to swap (`PetNames`).
 - **Removing a pet** moves its folder to the Recycle Bin instead of deleting the save, since the folder may now hold
   the user's art and personality text.
+- **M11 rates are "points per hour of use, on top of the activity".** Sleeping on the bed or couch still restores
+  energy at the normal sleep rate and adds a small bonus (+12 and +5 an hour). Feed and Play are instant, so they stay
+  well ahead of the trough (about +10 a visit) and the ball or TV. Tucking a pet in (Sleep) isn't instant, so the bed is
+  slightly faster per hour than tucking in, but only lasts 5 to 15 minutes.
+- **M11 getting there also uses drops:** besides climbing window sides, pets walk off the end of a window top (or step
+  across a monitor seam) when that's the way down. Getting *up* always needs a climb, so with climbing off, furniture on
+  a window is out of reach. Pets don't use the trampoline to plan a route; it just happens to land them high.
+- **M11 pens:** walking pets turn at a pen's side, but a pet on its way to other furniture walks past in front of it.
+  Picking the pen up, removing it or its window going lets the pets out. Furniture can't be moved while a pet uses it
+  except by the user (it just carries on or walks back to its slot).
+- **M11 trips give up** after 60 s or when no route exists, and that piece isn't tried again for 30 s.
+- **Furniture windows** are topmost like the pets' but don't re-assert it, so the pets always stay in front.
 
 ---
 
@@ -101,6 +113,7 @@ src/
     Stats/                   PetStats, StatRules, StatsSystem (+ PetAction, StatActivity)
     Persistence/             SaveData, ISaveStore, JsonFileSaveStore
     Simulation/              PetSimulation, PetFrame, PetConfig, FixedStepper, WindowCommand
+    Furniture/               FurnitureSpec (+File, Defaults), FurnitureItem, FurnitureWorld, RoutePlanner, RoomSave
     Abstractions/            IRandom/SeededRandom, IClock/SystemClock
   DesktopPet.Platform.Windows/   net10.0-windows: thin Win32 adapter, no game rules
     Interop/NativeMethods.txt    CsWin32 source generator input (no hand-written DllImports)
@@ -113,14 +126,16 @@ src/
     GameLoop                 CompositionTarget.Rendering -> FixedStepper, re-entrancy guarded
     PetWindow.xaml(.cs)      the sprite window; reports press/release/cancel/right-click
     SpriteSheet/             DefaultArt (built-in rabbit, embedded rabbit.png), SpriteAtlas
+    Furniture/               FurnitureHost (world, loop, windows, room.json), FurnitureArt, Art/*.png (defaults)
     UI/                      PetMenu (shared menu), TrayIcon, DebugOverlay
     app.manifest             PerMonitorV2 DPI awareness
 tests/
   DesktopPet.Core.Tests/     xUnit; Fakes/ has FakeDesktop, FakeRandom, ScriptedRandom, FakeClock
-tools/sprites/make_rabbit.py generates the built-in rabbit sheet (docs/SPRITE_GENERATOR.md)
+tools/sprites/make_rabbit.py generates the built-in rabbit sheet and furniture art (docs/SPRITE_GENERATOR.md)
 docs/PLAN.md                 this file
 docs/CODEMAP.md              file-by-file code map, flows and change recipes
 docs/SPRITES.md              custom sprite format (user-facing)
+docs/FURNITURE.md            furniture and its definition files (user-facing)
 docs/SPRITE_GENERATOR.md     how the built-in sheet is generated
 ```
 
@@ -191,9 +206,12 @@ Body modes: **Airborne, Grounded, Held, Clinging, Hanging**.
 | Climb, Cling | on a wall: climb up/down, hold, or let go; climbs over onto a title bar or higher floor at the top |
 | Push | leans on a window and pushes it, staying against wherever the window actually is |
 | Hang, Shimmy | title-bar hanging (disabled) |
+| GoToFurniture | on the way to furniture: follows a planned route (walk, climb up, climb down, drop) and replans as it goes |
+| UseFurniture | at its slot: the use's animation, rate and effect (hop, bounce and launch, chase and kick the ball) |
 
 **Picker weights** start at Idle 3, Walk 5, Sit 1.5. Below 50 energy, sleep becomes likely and walking slows; below
-30 happiness, the pet sits more and walks less.
+30 happiness, the pet sits more and walks less. "Use furniture" weighs 4 × the urgency of the lowest need some free,
+reachable furniture meets (0 at 75, 1 at empty), plus 0.4 for fun furniture (happiness or no need).
 
 **Walking into a wall:** 35% climb. For window sides only, 25% push (if pushing is on and that window hasn't proved
 immovable). Otherwise it turns at screen edges and walks on past window sides. At the end of a window top: 40% climb
@@ -260,11 +278,13 @@ push a window off screen.
   `personality.txt` and `sprites\`, and reloads them after a 400 ms pause.
 - **Menu** (right-click the pet or the tray icon): the pet's name and mood, stat bars, About *name* (personality,
   neediness and behavior, read-only; Edit traits, Open its folder), Feed / Play / Sleep or Wake up, Add / Remove pet,
-  "Let it push windows", Customize (Edit settings, Open data folder, Export sprite template), Debug overlay, Exit.
+  Furniture (Add each kind beside the pet, Remove all, Open furniture folder), "Let it push windows", Customize (Edit
+  settings, Open data folder, Export sprite template), Debug overlay, Exit. Right-clicking furniture offers Remove.
 - **Debug overlay:** click-through, one per monitor. Floors green, window tops orange, walls blue (screen edges dotted),
   hang bars dashed magenta, the current surface yellow, plus the pet box, state and a summary line.
 - **Data folder** `%LOCALAPPDATA%\DesktopPet\`: `settings.json`, `sprites\` (shared), `sprite-template\`,
-  `problems.txt`, and `pets\<n>\` per pet: `save.json`, `traits.json`, `personality.txt`, `sprites\`.
+  `problems.txt`, `furniture\` (a `.json` and image per kind), `room.json` (where the furniture stands), and
+  `pets\<n>\` per pet: `save.json`, `traits.json`, `personality.txt`, `sprites\`.
 - **Saving:** each pet's `save.json`, written atomically (temp file, then swap) every minute, after
   actions, on exit and on logoff. A missing or corrupt file gives a fresh pet.
 
@@ -280,6 +300,8 @@ push a window off screen.
   `DesktopSource` against test windows from another process. (`DesktopSource` ignores its own process's windows by
   design, so test windows must live elsewhere.)
 - Don't drive the user's real mouse in automated checks without asking.
+- **Starting and stopping the pet app for testing is allowed without asking** (granted by the user 2026-11-03),
+  including closing a running instance to rebuild. Back up the data folder first when a check could change it.
 
 ---
 
@@ -294,6 +316,11 @@ push a window off screen.
 - **No fullscreen detection:** the pet stays on top of games and videos.
 - **Memory** is about 127 MB (WPF plus WinForms for the tray icon and menu).
 - **Two settings need a restart:** `StepSeconds` and `MaxStepsPerFrame`. Everything else applies live.
+- **Furniture is always in front of other windows** (topmost, like the pets), even when its window is behind another.
+- **Furniture positions are screen pixels:** after a monitor layout change, saved furniture drops from where it was and
+  respawns at the top of the nearest monitor if that's off screen.
+- **Pets beside furniture face it from the side** (the art is a side view), so TV watchers stand left and right of the
+  TV rather than in front of it.
 
 ---
 
@@ -363,7 +390,7 @@ jacket colour.
 - The old procedural `PlaceholderArt` was removed. In Core, `SpriteSheetSpec.UsingPlaceholder` became `UsingDefault`.
 
 ## Planned: M10–M14
-Requested 2026-11-03. M10 is done; the rest aren't started. **Suggested order:** M10 first, because M12 and M13 build on per-pet traits. M11
+Requested 2026-11-03. M10 and M11 are done; the rest aren't started. **Suggested order:** M10 first, because M12 and M13 build on per-pet traits. M11
 and M12 don't depend on each other. M13 reuses M11's world objects for the egg. M14 goes last, because its warnings use
 M12's needy chat.
 
@@ -406,35 +433,50 @@ the pets ran. The user then checked the rest by hand (About submenu, per-pet spr
   folder to the Recycle Bin.
 - **Duplicate names** from hand edits or copied-in folders are allowed; only generated names avoid each other.
 
-### M11: furniture (planned)
-Objects in the world that pets use on their own to meet their needs.
-- **Rate rule:** furniture meets a need **more slowly than the user's care actions**, so caring for a pet stays the
-  best option. When a need is low, `BehaviorPicker` gains a "go use furniture" option, weighted by the need.
-- **Definitions:** one JSON file per kind in a `furniture\` folder in the data folder, plus its art. The defaults are
-  written on first run. The files are validated and live-reloaded like `settings.json`. Parsing is pure Core code
-  (`FurnitureSpec`), unit-tested. Each definition gives the name, size, art, slots (how many pets at once) and a list
-  of uses. Each use gives the need it meets, the rate per hour, the animation, the duration and any special effect
-  (bounce, confine).
-- **In the world:** furniture stands on a floor or a window top, rides a moving window and falls when its window goes,
-  like the pet. The user spawns it from the pet menu (a Furniture submenu) and drags it into place. Positions are saved, and all pets share it.
+### M11: furniture (done)
+Built 2026-11-03. Objects in the world that pets use on their own to meet their needs. Checked live: the defaults were
+written on first run, all seven landed on the taskbar, and two pets walked to the trough and ate. User-facing guide:
+`docs/FURNITURE.md`. See "Changes from the original plan" for the rate semantics, drops and pens.
+- **Definitions:** one JSON file per kind in `furniture\` (the file name is the kind) with its image next to it,
+  parsed and validated by Core (`FurnitureSpecFile`), forgiving like `settings.json`, live-reloaded. A broken file keeps
+  its last good version (at startup, the default for a default kind), so a typo doesn't empty the room. Deleting a file
+  removes that kind and its pieces. The defaults (`DefaultFurniture`) are written only when the folder doesn't exist.
+- **A definition** gives name, size (DIP), art (frames side by side, `Animate` Always / Moving / InUse, smoothing),
+  slots and optional slot offsets, bounciness and friction, and uses. **A use** gives the need (Hunger, Happiness,
+  Energy, None), the rate per hour of use, the pet's animation, the duration, the effect (None, Hop, Bounce, Kick,
+  Confine) and a seat height (drawing only).
+- **In the world** (`FurnitureWorld`, shared by all pets, ticked by `FurnitureHost`'s own loop): each piece is a
+  `PetBody` stepped by `PhysicsSystem` with its own size, so it lands on floors and window tops, rides moving windows,
+  falls when its window goes and respawns if lost. A ball bounces and rolls (bounciness 0.5, friction 0.1). Drag to move
+  or throw; click a ball to poke it. Placed from the pet menu (dropped just above the pet), removed by right-click,
+  at most 24 pieces. Positions are saved in `room.json` once things settle and every minute.
+- **Choosing:** see the picker weights above. `FurnitureChooser` ranks the uses by urgency and distance, reserves a
+  slot (slots are per piece; the TV has 4) and plans a route; unreachable pieces are skipped for 30 s.
+- **Getting there** (`RoutePlanner`): Dijkstra over ground segments using the pet's own moves: walk, step across a seam,
+  drop off an end, climb a wall up and over onto the surface at its top, climb down a window side. Climbing costs
+  double. The trip replans every 0.5 s and whenever the pet or the target changes surface.
+- **Using it:** the use's animation at the slot, facing the furniture when beside it, for the duration or until the
+  need is full (energy: well rested). The rate is added in `UpdateStats`. Activity: sleeping for `sleep` uses, active
+  for hops, bounces and kicks. Clicking a pet asleep on furniture wakes it; menu care, grabbing it, or the furniture
+  being removed or picked up calls the trip off.
 - **Defaults:**
 
   | Furniture | Use |
   |---|---|
-  | Ball | play (happiness). A physics object that pets chase and kick |
-  | TV | video games (happiness). Up to 4 pets at once |
-  | Couch | sleep (energy), or jump on it (happiness) |
-  | Trampoline | bounces a pet high, a quick way onto tall window tops |
-  | Bed | sleep (energy) |
-  | Play pen | the user drops pets in. They can't leave until the user takes them out |
-  | Trough | eat (hunger) |
+  | Ball | chase and kick (happiness +1500/h, 15–30 s), 2 pets |
+  | TV | play games (happiness +900/h, 30–90 s), 4 pets |
+  | Couch | nap (energy +5/h, 2–5 min) or jump on it (happiness +1200/h, 6–12 s), 2 pets |
+  | Trampoline | 3 bounces then a launch of about 900 DIP (happiness +600/h) |
+  | Bed | sleep (energy +12/h, 5–15 min) |
+  | Play pen | confine |
+  | Trough | eat (hunger +2400/h, 15–25 s), 2 pets |
 
-- **Default art:** made by the sprite generator in the rabbit's pixel style, with new animations for the uses (kick,
-  play games, bounce).
-- **Getting there:** a pet walks to furniture on its own surface, and climbs window sides to reach furniture on
-  another one. If no climbing route exists, it doesn't go.
-- **Play pen:** pets never walk into it; the user has to drag them in. While a pet is inside, its needs don't drop
-  (a safe place to park it).
+- **Play pen:** a pet the user drops in (released by the mouse, landing inside) is shut in: it walks to and fro inside,
+  never chooses furniture, and its needs don't drop. Dragging it out lets it go. Other pets turn at the pen's sides.
+- **Art:** the generator draws the furniture (`FURNITURE` in `make_rabbit.py`, embedded from
+  `src/DesktopPet.App/Furniture/Art/`) and three new rabbit animations: `kick`, `game`, `bounce`.
+- **Tuning** in `settings.json` under `Furniture`: `NeedBelow`, `Weight`, `CuriosityWeight`, `ErrandSeconds`,
+  `RetrySeconds`, kick, hop and bounce speeds.
 
 ### M12: chat (planned)
 Pets say short things (1–2 sentences) in a speech bubble, kept cheap on resources. This will be expanded later.

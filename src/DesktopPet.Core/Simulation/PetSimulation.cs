@@ -1,5 +1,6 @@
 using DesktopPet.Core.Abstractions;
 using DesktopPet.Core.Behavior;
+using DesktopPet.Core.Furniture;
 using DesktopPet.Core.Input;
 using DesktopPet.Core.Math;
 using DesktopPet.Core.Persistence;
@@ -41,16 +42,17 @@ public sealed class PetSimulation
     /// (so nothing drops to critical while the app was closed). A fresh pet if omitted.
     /// </param>
     /// <param name="traits">This pet's name and multipliers; an average pet if omitted.</param>
+    /// <param name="furniture">The furniture, shared by all pets; none if omitted.</param>
     public PetSimulation(
         PetConfig config, DesktopSnapshot snapshot, IRandom? random = null, IClock? clock = null, SaveData? save = null,
-        PetTraits? traits = null)
+        PetTraits? traits = null, FurnitureWorld? furniture = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(snapshot);
         _sharedConfig = config;
         Traits = traits ?? PetTraits.Neutral("Pet");
         config = Traits.ApplyTo(config);
-        _ctx = new PetContext(config, random ?? new SeededRandom(Environment.TickCount));
+        _ctx = new PetContext(config, random ?? new SeededRandom(Environment.TickCount), furniture ?? new FurnitureWorld(config), this);
         _throw = new ThrowEstimator(config.ThrowWindowSeconds);
         _clock = clock ?? SystemClock.Instance;
         _statsUpdatedAt = _clock.UtcNow;
@@ -139,6 +141,19 @@ public sealed class PetSimulation
         _snapshot = DesktopSnapshot.Empty; // force UpdateWorld to rebuild platforms and walls with the new switches
     }
 
+    /// <summary>The furniture the pet is heading for or using, if any.</summary>
+    public FurnitureItem? FurnitureTarget => _ctx.Errand?.Item;
+
+    /// <summary>The pen the pet is shut in, if any.</summary>
+    public FurnitureItem? Pen => _ctx.Pen;
+
+    /// <summary>Frees any furniture slot the pet holds (it's being removed).</summary>
+    public void LeaveFurniture()
+    {
+        _ctx.CancelErrand();
+        _ctx.Pen = null;
+    }
+
     /// <summary>Whether the pet may push windows (it moves the user's real windows). Starts from config.</summary>
     public bool PushingEnabled
     {
@@ -187,6 +202,10 @@ public sealed class PetSimulation
         UpdateStats();
         _ctx.Stats = StatsSystem.Apply(_ctx.Stats, action, _ctx.Config.Stats);
         var grounded = _ctx.Body.Mode == BodyMode.Grounded;
+        if (action != PetAction.WakeUp || State == PetStateId.UseFurniture)
+        {
+            _ctx.CancelErrand(); // the user's care comes first
+        }
 
         switch (action)
         {
@@ -204,7 +223,7 @@ public sealed class PetSimulation
                 }
 
                 break;
-            case PetAction.WakeUp when State == PetStateId.Sleep:
+            case PetAction.WakeUp when State is PetStateId.Sleep or PetStateId.UseFurniture:
                 _ctx.TuckedIn = false;
                 _fsm.ChangeTo(PetStateId.Idle, _ctx);
                 break;
@@ -215,8 +234,10 @@ public sealed class PetSimulation
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         Previous = Current;
+        _ctx.Time += dt;
         UpdateWorld(snapshot);
         UpdateStats();
+        CheckPen();
 
         var teleported = false;
 
@@ -228,8 +249,8 @@ public sealed class PetSimulation
             var world = new PhysicsWorld(_platforms, _snapshot.Monitors, _ctx.Scale, _ctx.Walls);
             switch (PhysicsSystem.Step(_ctx.Body, world, dt, _ctx.Config))
             {
-                case PhysicsEvent.Landed when State != PetStateId.Play: // play hops land without the squash
-                    _fsm.ChangeTo(PetStateId.Land, _ctx);
+                case PhysicsEvent.Landed:
+                    OnLanded();
                     break;
                 case PhysicsEvent.LostGround:
                     _fsm.ChangeTo(PetStateId.Fall, _ctx);
@@ -291,6 +312,8 @@ public sealed class PetSimulation
 
             // Pick up, keeping the pet where it was relative to the cursor at the press (no jump).
             _grabOffset = _ctx.Body.Feet - pressAt;
+            _ctx.CancelErrand();
+            _ctx.Pen = null; // taken out of its pen
             _ctx.Body.Grab();
             _lostSeconds = 0;
             _fsm.ChangeTo(PetStateId.Held, _ctx);
@@ -335,6 +358,7 @@ public sealed class PetSimulation
             }
 
             _ctx.Body.Release(velocity);
+            _ctx.UserDropped = true; // landing in a pen shuts it in
             if (velocity.X != 0)
             {
                 _ctx.FacingLeft = velocity.X < 0;
@@ -342,9 +366,9 @@ public sealed class PetSimulation
 
             _fsm.ChangeTo(PetStateId.Fall, _ctx);
         }
-        else if (State == PetStateId.Sleep)
+        else if (State == PetStateId.Sleep || (State == PetStateId.UseFurniture && _ctx.ActiveUse?.Animation == Animation.Animations.Sleep.Id))
         {
-            Apply(PetAction.WakeUp); // a click wakes it
+            Apply(PetAction.WakeUp); // a click wakes it (also asleep on furniture)
         }
         else if (_ctx.Body.Mode == BodyMode.Grounded)
         {
@@ -407,10 +431,13 @@ public sealed class PetSimulation
 
         var rules = _ctx.Config.Stats;
         var away = UserAway || elapsed > rules.AwayGap;
+        var use = State == PetStateId.UseFurniture ? _ctx.ActiveUse : null;
         var activity = State switch
         {
             PetStateId.Sleep => StatActivity.Sleeping,
-            PetStateId.Walk or PetStateId.Play or PetStateId.Shimmy or PetStateId.Climb or PetStateId.Push => StatActivity.Active,
+            PetStateId.Walk or PetStateId.Play or PetStateId.Shimmy or PetStateId.Climb or PetStateId.Push
+                or PetStateId.GoToFurniture => StatActivity.Active,
+            PetStateId.UseFurniture when use is not null => UseActivity(use),
             _ => StatActivity.Resting,
         };
 
@@ -420,7 +447,83 @@ public sealed class PetSimulation
             activity = StatActivity.Sleeping;
         }
 
-        _ctx.Stats = StatsSystem.Advance(_ctx.Stats, elapsed, activity, away, rules);
+        var before = _ctx.Stats;
+        var after = StatsSystem.Advance(before, elapsed, activity, away, rules);
+
+        // Furniture meets its need while it's used (not across a frozen-process gap: the pet wasn't using it then).
+        if (use is { Need: not Need.None } && elapsed <= rules.AwayGap)
+        {
+            var gain = use.RatePerHour * elapsed.TotalHours;
+            after = (use.Need switch
+            {
+                Need.Hunger => after with { Hunger = after.Hunger + gain },
+                Need.Happiness => after with { Happiness = after.Happiness + gain },
+                _ => after with { Energy = after.Energy + gain },
+            }).Clamped();
+        }
+
+        // Shut in a pen: needs don't drop.
+        if (_ctx.Pen is not null)
+        {
+            after = new PetStats(
+                System.Math.Max(before.Hunger, after.Hunger),
+                System.Math.Max(before.Happiness, after.Happiness),
+                System.Math.Max(before.Energy, after.Energy));
+        }
+
+        _ctx.Stats = after;
+    }
+
+    private static StatActivity UseActivity(FurnitureUse use) =>
+        use.Animation == Animation.Animations.Sleep.Id ? StatActivity.Sleeping
+        : use.Effect is UseEffect.Kick or UseEffect.Hop or UseEffect.Bounce ? StatActivity.Active
+        : StatActivity.Resting;
+
+    /// <summary>
+    /// Touched down. A squash (Land) unless the hop was part of playing or using furniture. Dropped by the user into a
+    /// pen, it's shut in.
+    /// </summary>
+    private void OnLanded()
+    {
+        var dropped = _ctx.UserDropped;
+        _ctx.UserDropped = false;
+        if (dropped && _ctx.Furniture.PenAt(_ctx.Body.GroundKey, _ctx.Body.Feet.X) is { } pen)
+        {
+            _ctx.CancelErrand();
+            _ctx.Pen = pen;
+            var margin = _ctx.HalfWidthPx + (2 * _ctx.Scale);
+            var x = pen.Right - pen.Left > 2 * margin
+                ? System.Math.Clamp(_ctx.Body.Feet.X, pen.Left + margin, pen.Right - margin)
+                : pen.Feet.X;
+            _ctx.Body.Feet = _ctx.Body.Feet with { X = x };
+            _ctx.Body.Velocity = Vec2.Zero; // no skidding out of it
+        }
+
+        if (State is not (PetStateId.Play or PetStateId.UseFurniture))
+        {
+            _fsm.ChangeTo(PetStateId.Land, _ctx);
+        }
+    }
+
+    /// <summary>
+    /// The pen keeps the pet only while it stands where the pet is: picked up, removed or gone from under it, the
+    /// pet is let out.
+    /// </summary>
+    private void CheckPen()
+    {
+        if (_ctx.Pen is not { } pen)
+        {
+            return;
+        }
+
+        var body = _ctx.Body;
+        var gone = pen.IsRemoved || pen.IsHeld
+            || (body.Mode == BodyMode.Grounded
+                && (pen.GroundKey != body.GroundKey || body.Feet.X < pen.Left - _ctx.HalfWidthPx || body.Feet.X > pen.Right + _ctx.HalfWidthPx));
+        if (gone)
+        {
+            _ctx.Pen = null;
+        }
     }
 
     /// <summary>The nearest wall the pet faces with its side within <paramref name="reach"/>, alongside its middle.</summary>
@@ -523,6 +626,11 @@ public sealed class PetSimulation
     {
         var size = _ctx.SizePx;
         var sink = _ctx.Animation.Current == Animation.Animations.SitLedge ? size * Animation.Animations.LedgeSinkFraction : 0;
+        if (State == PetStateId.UseFurniture && _ctx.ActiveUse is { SeatDip: > 0 } use)
+        {
+            sink = -use.SeatDip * _ctx.Scale; // up on the bed or couch
+        }
+
         return new PetFrame(
             _ctx.Body.Feet, new Vec2(size, size), _ctx.FacingLeft,
             _ctx.Animation.Current.Id, _ctx.Animation.FrameIndex, _fsm.Current.Id, sink);

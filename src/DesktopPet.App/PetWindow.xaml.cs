@@ -31,6 +31,12 @@ public partial class PetWindow : Window
         InitializeComponent();
     }
 
+    /// <summary>
+    /// Re-assert topmost every couple of seconds (pets: they stay above other topmost windows). Furniture windows
+    /// switch it off so the pets' windows stay in front of them.
+    /// </summary>
+    public bool KeepOnTop { get; set; } = true;
+
     /// <summary>Left button went down on the pet. The mouse is captured until release.</summary>
     public event EventHandler? PointerPressed;
 
@@ -140,7 +146,7 @@ public partial class PetWindow : Window
             Flip.ScaleX = facingLeft ? -1 : 1;
         }
 
-        if (_sinceTopmost.Elapsed >= TopmostInterval && _hwnd != 0)
+        if (KeepOnTop && _sinceTopmost.Elapsed >= TopmostInterval && _hwnd != 0)
         {
             _sinceTopmost.Restart();
             PetWindowInterop.BringToTopmost(_hwnd);

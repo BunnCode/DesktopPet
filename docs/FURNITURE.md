@@ -1,0 +1,57 @@
+# Furniture
+
+Furniture is placed from a pet's menu (**Furniture → Add …**). It drops in beside that pet, lands on whatever is
+below (the taskbar or a window), rides windows that move and falls when its window goes. Drag it to move it; right-click
+it to remove it. All pets share it, and where it stands is saved in `room.json`.
+
+Pets use furniture on their own when a need it meets is low (below 75 by default), and now and then just for fun. They
+walk to it, climbing window sides if it stands on another window; if there's no way there, they don't go. Furniture is
+slower than your care: Feed and Play from the menu are still the quickest way to help a pet.
+
+## The defaults
+
+| Furniture | What pets do |
+|---|---|
+| Ball | Chase it and kick it around (happiness). Click it to poke it |
+| TV | Play video games, up to 4 pets at once (happiness) |
+| Couch | Nap on it (energy) or jump on it (happiness) |
+| Trampoline | Bounce, then launch high: a quick way onto tall window tops (happiness) |
+| Bed | Sleep (energy) |
+| Play pen | Pets never go in by themselves. Drop a pet in: it stays inside and its needs don't drop until you drag it out |
+| Trough | Eat (hunger), two pets at once |
+
+## Making your own
+
+Each kind is a JSON file in `%LOCALAPPDATA%\DesktopPet\furniture\` with its image next to it. The file name is the
+kind (`ball.json` is the ball). Edits apply as soon as you save; problems show in a notification and in
+`problems.txt`, and a broken file keeps its last good version. Delete a file to remove that kind (and all of it from the
+room); delete the whole folder to get the defaults back on the next start.
+
+```jsonc
+{
+  "Name": "Trough",            // shown in the menu
+  "WidthDip": 48,              // size; the pet is 64
+  "HeightDip": 20,
+  "Art": "trough.png",         // frames side by side, all the same width
+  "Frames": 1,
+  "Fps": 4,
+  "Animate": "Always",         // Always, Moving (a ball rolling) or InUse (a TV that's on)
+  "Smooth": false,             // true for painted art, false for pixel art
+  "Slots": 2,                  // pets at once
+  "SlotOffsetsDip": [-40, 40], // where each pet stands, from the centre (optional: spread evenly)
+  "Bounciness": 0,             // 0..0.95: how much it bounces when it lands
+  "Friction": 1,               // lower slides further
+  "Uses": [
+    {
+      "Need": "Hunger",        // Hunger, Happiness, Energy or None
+      "RatePerHour": 2400,     // points added per hour of use, on top of normal sleep etc.
+      "Animation": "eat",      // the pet's animation (see SPRITES.md)
+      "Seconds": { "Min": 15, "Max": 25 },
+      "Effect": "None",        // None, Hop, Bounce (launch), Kick (chase it) or Confine (a pen)
+      "SeatDip": 0             // draw the pet this high (on a bed or couch)
+    }
+  ]
+}
+```
+
+When to go and how hard balls are kicked or trampolines launch are in `settings.json` under `Furniture`.

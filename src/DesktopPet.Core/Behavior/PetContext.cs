@@ -1,5 +1,6 @@
 using DesktopPet.Core.Abstractions;
 using DesktopPet.Core.Animation;
+using DesktopPet.Core.Furniture;
 using DesktopPet.Core.Physics;
 using DesktopPet.Core.Simulation;
 using DesktopPet.Core.World;
@@ -9,12 +10,56 @@ namespace DesktopPet.Core.Behavior;
 /// <summary>Shared mutable state that behavior states read and act on. One per pet.</summary>
 internal sealed class PetContext
 {
-    public PetContext(PetConfig config, IRandom random)
+    public PetContext(PetConfig config, IRandom random, FurnitureWorld furniture, object owner)
     {
         Config = config;
         Random = random;
         PushingEnabled = config.EnablePushing;
+        Furniture = furniture;
+        Owner = owner;
     }
+
+    /// <summary>The furniture, shared with the other pets.</summary>
+    public FurnitureWorld Furniture { get; }
+
+    /// <summary>Who holds furniture slots for this pet (its simulation).</summary>
+    public object Owner { get; }
+
+    /// <summary>Simulation time, seconds (for retry timers).</summary>
+    public double Time { get; set; }
+
+    /// <summary>The trip to furniture under way (heading there or using it), if any.</summary>
+    public Errand? Errand { get; set; }
+
+    /// <summary>The use in progress while the pet is using furniture (stats gain from it).</summary>
+    public FurnitureUse? ActiveUse { get; set; }
+
+    /// <summary>The pen the pet is shut in, if the user dropped it into one.</summary>
+    public FurnitureItem? Pen { get; set; }
+
+    /// <summary>The pet was let go by the user and hasn't landed yet (landing in a pen shuts it in).</summary>
+    public bool UserDropped { get; set; }
+
+    /// <summary>Furniture that couldn't be reached, by id, with the time it may be tried again.</summary>
+    public Dictionary<int, double> Unreachable { get; } = [];
+
+    /// <summary>Gives up the current trip to furniture, freeing its slot.</summary>
+    public void CancelErrand()
+    {
+        if (Errand is { } errand)
+        {
+            errand.Item.Release(Owner);
+            Errand = null;
+        }
+
+        ActiveUse = null;
+    }
+
+    /// <summary>
+    /// What to do next when a behavior ends: carry on to the furniture it's heading for, or pick by weight (which may
+    /// start a new trip to furniture).
+    /// </summary>
+    public PetStateId PickNext() => Errand is not null ? PetStateId.GoToFurniture : BehaviorPicker.Pick(this);
 
     /// <summary>Current tuning; replaced live when the settings file changes.</summary>
     public PetConfig Config { get; set; }

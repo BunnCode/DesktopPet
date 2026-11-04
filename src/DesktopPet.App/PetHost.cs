@@ -4,6 +4,7 @@ using System.Windows.Threading;
 using DesktopPet.App.SpriteSheet;
 using DesktopPet.App.UI;
 using DesktopPet.Core.Behavior;
+using DesktopPet.Core.Furniture;
 using DesktopPet.Core.Math;
 using DesktopPet.Core.Persistence;
 using DesktopPet.Core.Simulation;
@@ -42,14 +43,17 @@ internal sealed class PetHost : IPetControls, IDisposable
     /// <param name="store">Where the pet is loaded from and saved to.</param>
     /// <param name="atlas">Sprites to draw with.</param>
     /// <param name="desktop">The desktop, shared by all pets.</param>
-    public PetHost(int id, PetConfig config, PetTraits traits, string personality, ISaveStore store, SpriteAtlas atlas, DesktopSource desktop)
+    /// <param name="furniture">The furniture, shared by all pets.</param>
+    public PetHost(
+        int id, PetConfig config, PetTraits traits, string personality, ISaveStore store, SpriteAtlas atlas, DesktopSource desktop,
+        FurnitureWorld furniture)
     {
         Id = id;
         Personality = personality;
         _store = store;
         _desktop = desktop;
         _snapshot = _desktop.GetSnapshot();
-        _simulation = new PetSimulation(config, _snapshot, save: _store.Load(), traits: traits);
+        _simulation = new PetSimulation(config, _snapshot, save: _store.Load(), traits: traits, furniture: furniture);
         _atlas = atlas;
 
         _window = new PetWindow();
@@ -86,6 +90,12 @@ internal sealed class PetHost : IPetControls, IDisposable
     public string Personality { get; set; }
 
     public PetStats Stats => _simulation.Stats;
+
+    /// <summary>Where the pet's feet are (physical pixels).</summary>
+    public Vec2 Feet => _simulation.Current.FeetPos;
+
+    /// <summary>The pet's sprite size (physical pixels).</summary>
+    public double SizePx => _simulation.Current.Size.Y;
 
     public bool IsAsleep => _simulation.State == PetStateId.Sleep;
 
@@ -176,6 +186,7 @@ internal sealed class PetHost : IPetControls, IDisposable
         }
 
         _closed = true;
+        _simulation.LeaveFurniture();
         SystemEvents.SessionSwitch -= OnSessionSwitch;
         _loop.Dispose();
         _window.Close();
