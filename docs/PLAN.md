@@ -30,7 +30,7 @@ This document describes the design **as built**, the status of each milestone, a
 | M10 | Per-pet traits: own folder and sprites, names, neediness, personality | Done | `976c95a` |
 | M11 | Furniture, defined in user-editable files | Done | `0bcd1d0` |
 | M12 | Speech bubbles and sticky notes (two behaviors) from a shared local LLM (Qwen3.5-2B) | Done | `1045cdf` |
-| M12b | Reading on-screen text (Windows OCR) and referring to it when talking or writing notes | Done | |
+| M12b | Reading on-screen text (Windows OCR) and referring to it when talking or writing notes | Done | `630c904` |
 | M13 | Breeding: eggs that hatch into mixed children | Planned | |
 | M14 | Death and gravestones | Planned | |
 
