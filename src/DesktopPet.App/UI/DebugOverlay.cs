@@ -79,8 +79,11 @@ internal sealed class DebugOverlay : IDisposable
                 var window = new OverlayWindow();
                 var hwnd = new WindowInteropHelper(window).EnsureHandle();
                 PetWindowInterop.ApplyOverlayStyles(hwnd);
+                // The window is born on the primary monitor. Moving it onto a monitor with another DPI makes WPF apply
+                // Windows' suggested size for the DPI change (scaled by old/new DPI), so set the bounds again once it's there.
                 PetWindowInterop.SetBounds(hwnd, monitor.Bounds);
                 window.Show();
+                PetWindowInterop.SetBounds(hwnd, monitor.Bounds);
                 _windows.Add((monitor, window));
             }
         }
@@ -138,8 +141,10 @@ internal sealed class DebugOverlay : IDisposable
                 return;
             }
 
+            // Divide by the DPI WPF renders this window at (normally the monitor's), so lines land on the right pixels.
             var bounds = m.Bounds;
-            Point ToDip(double x, double y) => new((x - bounds.Left) / m.Scale, (y - bounds.Top) / m.Scale);
+            var dpi = VisualTreeHelper.GetDpi(this);
+            Point ToDip(double x, double y) => new((x - bounds.Left) / dpi.DpiScaleX, (y - bounds.Top) / dpi.DpiScaleY);
 
             foreach (var p in view.Platforms)
             {

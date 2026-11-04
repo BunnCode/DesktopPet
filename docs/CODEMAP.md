@@ -166,6 +166,7 @@ Win32 through CsWin32: add API names to `Interop/NativeMethods.txt` (one per lin
 | `WindowSource.cs` | `EnumWindows` filter (visible, not minimized/cloaked/tool/untitled/shell) with DWM frame bounds |
 | `MonitorSource.cs` | Monitors: bounds, work area, DPI scale, device name as id |
 | `CursorSource.cs` | `GetCursorPos` in physical pixels |
+| `DpiAwareness.cs` | `EnsurePerMonitorV2()`: sets PerMonitorV2 in code (called from `App`'s static constructor), for when the manifest doesn't apply (`dotnet DesktopPet.App.dll`) |
 | `PetWindowInterop.cs` | Extended styles (no-activate, tool window), `SetBounds` / `SetPosition` in physical pixels, `BringToTopmost`, `PlaceBelow`, overlay styles |
 | `WindowManipulator.cs` | `MoveBy(windowId, dx, dy)` with `WindowMoveGuard` against the live frame |
 | `NativeIcon.cs` | `DestroyIcon` |
@@ -207,7 +208,7 @@ Win32 through CsWin32: add API names to `Interop/NativeMethods.txt` (one per lin
 | `Chat/SpeechBubble.cs` | Click-through topmost bubble sized to its text; `Say`, `Follow` (fade, follow the head, stack above `taken`), `Silence` |
 | `Chat/ScreenReader.cs` | `IScreenReader` for Core: query window, check `ScreenReading.Allows`, capture the area, OCR, keep `Visible` lines (covers: windows in front + our pets, bubbles, notes); notifies once if there's no OCR |
 | `Chat/StickyNote.cs` | Note window anchored to another window by offset; `Track(state, bounds)`; click → `Dismissed` |
-| `app.manifest` | PerMonitorV2 DPI awareness |
+| `app.manifest` | PerMonitorV2 DPI awareness (only applies when started from the .exe; see `DpiAwareness`) |
 
 ---
 

@@ -10,6 +10,11 @@ MONITORINFOEXW
 MONITORINFOF_PRIMARY
 GetDpiForMonitor
 
+// DPI awareness (when the manifest doesn't apply, e.g. started as `dotnet DesktopPet.App.dll`)
+SetProcessDpiAwarenessContext
+GetThreadDpiAwarenessContext
+AreDpiAwarenessContextsEqual
+
 // Pet window
 GetWindowLong
 SetWindowLong

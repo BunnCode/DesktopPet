@@ -55,6 +55,12 @@ public partial class App : Application
     private System.Windows.Forms.ContextMenuStrip? _furnitureMenu;
     private DispatcherTimer? _overlayTimer;
 
+    /// <summary>Runs before WPF creates any window (Main lives in this class).</summary>
+    static App() => PerMonitorDpi = DpiAwareness.EnsurePerMonitorV2();
+
+    /// <summary>Whether Win32 coordinates are physical pixels on every monitor (see <see cref="DpiAwareness"/>).</summary>
+    private static bool PerMonitorDpi { get; }
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -72,6 +78,11 @@ public partial class App : Application
         _data.EnsureExists();
         var problems = new List<string>(_data.MigrateLegacySaves());
         problems.AddRange(_data.MigrateTraitsFiles());
+        if (!PerMonitorDpi)
+        {
+            problems.Add("Windows didn't make DesktopPet per-monitor DPI aware, so pets may misjudge windows on monitors"
+                + " with a different scale. Start it from DesktopPet.App.exe.");
+        }
         var settings = _data.LoadSettings();
         _config = settings.Config ?? PetConfig.Default;
         _pushingEnabled = _config.EnablePushing;

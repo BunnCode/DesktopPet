@@ -189,7 +189,10 @@ Dependencies: `App -> Platform.Windows -> Core`, `App -> Chat -> Core`, and `App
 
 ### Coordinates
 - Everything in Core is in **physical virtual-screen pixels**, the one space that's consistent across monitors with
-  different scaling. The process is PerMonitorV2-aware, so Win32 reports physical pixels.
+  different scaling. The process is PerMonitorV2-aware, so Win32 reports physical pixels. app.manifest asks for it, and
+  `App`'s static constructor asks again in code (`DpiAwareness`), because the manifest doesn't apply when the app is
+  started as `dotnet DesktopPet.App.dll`. That gives dotnet.exe's system awareness, and window edges come out wrong on
+  monitors whose scale differs from the primary's. The VS Code launch config starts the .exe.
 - Sizes and speeds are configured in **DIPs** and multiplied by the scale of the monitor the pet is on, so it looks and
   moves the same everywhere.
 - **Pixel-exact sizes (2026-11-04):** the drawn size is snapped so every art pixel covers a whole number of screen
