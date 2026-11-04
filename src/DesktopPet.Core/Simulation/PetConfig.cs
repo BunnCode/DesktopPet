@@ -11,6 +11,25 @@ public sealed record PetConfig
     /// <summary>Pet size in device-independent pixels; physical size = this × monitor scale.</summary>
     public double SizeDip { get; init; } = 64;
 
+    /// <summary>
+    /// Width/height in pixels of one sprite frame. The pet's physical size is rounded to a whole multiple of this
+    /// (at least 1×), so every art pixel is drawn as the same number of screen pixels. 0 turns the snapping off
+    /// (use for smooth, painted art or sheets of another frame size you want scaled freely).
+    /// </summary>
+    public double ArtSizePx { get; init; } = 64;
+
+    /// <summary>Physical size of the pet's square sprite box on a monitor with this scale: <see cref="SizeDip"/> × scale, snapped to a whole multiple of <see cref="ArtSizePx"/>.</summary>
+    public double SizePxAt(double scale)
+    {
+        var size = SizeDip * scale;
+        if (ArtSizePx <= 0)
+        {
+            return size;
+        }
+
+        return System.Math.Max(1, System.Math.Round(size / ArtSizePx)) * ArtSizePx;
+    }
+
     /// <summary>Half the visible body width as a fraction of <see cref="SizeDip"/>. Used for wall contact (the sprite has transparent margins).</summary>
     public double BodyHalfWidthFraction { get; init; } = 0.42;
 

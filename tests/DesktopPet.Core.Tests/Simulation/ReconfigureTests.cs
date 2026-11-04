@@ -21,10 +21,10 @@ public class ReconfigureTests
         sim.ForceState(PetStateId.Walk, facingLeft: false);
         var feet = sim.Current.FeetPos;
 
-        sim.Reconfigure(PetConfig.Default with { SizeDip = 96, WalkSpeedDip = 120 });
+        sim.Reconfigure(PetConfig.Default with { SizeDip = 128, WalkSpeedDip = 120 });
         sim.RunSeconds(Desktop, 1);
 
-        Assert.Equal(96, sim.Current.Size.X);
+        Assert.Equal(128, sim.Current.Size.X);
         Assert.Equal(feet.X + 120, sim.Current.FeetPos.X, 0);
         Assert.Equal(1040, sim.Current.FeetPos.Y);
         Assert.Equal(PetStateId.Walk, sim.State);

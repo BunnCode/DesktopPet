@@ -50,6 +50,7 @@ public static class PetConfigValidator
 
         // Size and timing
         Range(nameof(c.SizeDip), c.SizeDip, 16, 512);
+        Range(nameof(c.ArtSizePx), c.ArtSizePx, 0, 512);
         Range(nameof(c.BodyHalfWidthFraction), c.BodyHalfWidthFraction, 0.05, 0.5);
         Range(nameof(c.StepSeconds), c.StepSeconds, 1.0 / 240, 1.0 / 15);
         Range(nameof(c.MaxStepsPerFrame), c.MaxStepsPerFrame, 1, 20);

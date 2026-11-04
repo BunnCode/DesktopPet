@@ -884,7 +884,7 @@ public sealed class PetSimulation
         var sink = _ctx.Animation.Current == Animation.Animations.SitLedge ? size * Animation.Animations.LedgeSinkFraction : 0;
         if (State == PetStateId.UseFurniture && _ctx.ActiveUse is { SeatDip: > 0 } use)
         {
-            sink = -use.SeatDip * _ctx.Scale; // up on the bed or couch
+            sink = -use.SeatDip * (_ctx.Errand?.Item.PixelScale ?? _ctx.Scale); // up on the bed or couch (in its art's pixels)
         }
 
         return new PetFrame(

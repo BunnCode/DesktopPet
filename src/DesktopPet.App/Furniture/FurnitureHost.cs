@@ -237,7 +237,7 @@ internal sealed class FurnitureHost : IDisposable
             var bounds = new FurnitureFrame(feet, current.Size, current.FrameIndex).Bounds;
             if (item.Grave is { } grave)
             {
-                bitmap = GraveBitmap(item.Id, grave, bitmap, (bounds.Width, bounds.Height), item.Scale);
+                bitmap = GraveBitmap(item.Id, grave, bitmap, (bounds.Width, bounds.Height), item.PixelScale);
             }
 
             window.Present(bounds, bitmap, facingLeft: false, item.Spec.Smooth);

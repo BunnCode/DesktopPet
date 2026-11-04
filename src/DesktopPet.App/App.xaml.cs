@@ -578,7 +578,7 @@ public partial class App : Application
         }
 
         var area = primary.WorkArea;
-        var size = _config.SizeDip * primary.Scale;
+        var size = _config.SizePxAt(primary.Scale);
 #pragma warning disable CA5394 // not security-relevant
         var x = area.Left + size + (_random.NextDouble() * System.Math.Max(1, area.Width - (2 * size)));
 #pragma warning restore CA5394

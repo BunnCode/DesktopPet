@@ -118,7 +118,7 @@ public class WalkingTests
         var frames = Record(sim, desktop, 2);
 
         Assert.All(frames.Where(f => f.FeetPos.X < 1920), f => Assert.Equal(64, f.Size.X));
-        Assert.All(frames.Where(f => f.FeetPos.X >= 1920), f => Assert.Equal(96, f.Size.X));
+        Assert.All(frames.Where(f => f.FeetPos.X >= 1920), f => Assert.Equal(128, f.Size.X));
         Assert.All(frames, f => Assert.Equal(1080, f.Bounds.Bottom)); // anchored at the feet: never pops through the floor
     }
 

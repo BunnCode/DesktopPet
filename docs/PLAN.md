@@ -192,6 +192,12 @@ Dependencies: `App -> Platform.Windows -> Core`, `App -> Chat -> Core`, and `App
   different scaling. The process is PerMonitorV2-aware, so Win32 reports physical pixels.
 - Sizes and speeds are configured in **DIPs** and multiplied by the scale of the monitor the pet is on, so it looks and
   moves the same everywhere.
+- **Pixel-exact sizes (2026-11-04):** the drawn size is snapped so every art pixel covers a whole number of screen
+  pixels (fractional scales such as 125% made some pixels wider than others). The pet's box is `SizeDip` × scale
+  rounded to a whole multiple of `ArtSizePx` (default 64, the built-in frame size; 0 = no snapping, for smooth art or
+  other frame sizes) via `PetConfig.SizePxAt`. Furniture (1 art px per DIP) uses `FurnitureItem.PixelScale` = scale
+  rounded to a whole number (smooth art unsnapped), for its size, slots, seat heights and physics. So at 125% things
+  are drawn 1×, at 150–249% 2×. Speeds and distances still use the exact monitor scale.
 - The pet's position is its **feet point** (bottom-centre of the sprite). When the scale changes at a monitor seam, the
   sprite resizes around the feet, so it never pokes through a floor.
 
@@ -355,6 +361,8 @@ push a window off screen.
 - **Idle CPU** is about 3–5% of one core: the loop ticks at the display refresh rate even when nothing moves.
 - **Change detection is polled:** window changes take up to about 33 ms to be seen, and monitor or taskbar changes up
   to 1 s.
+- **Pet size jumps in whole steps:** with pixel snapping, `SizeDip` changes the size only in steps of `ArtSizePx`
+  (e.g. 64 → 128 px), and at 125% the pet is no bigger than at 100%. Set `ArtSizePx` to 0 for free scaling.
 - **Hang bars assume a 32 DIP title bar.** Apps with taller custom title bars (Chrome's tab strip) would grip slightly
   inside it. Hanging is off anyway.
 - **Maximized windows have no platforms or walls,** so with everything maximized the pet lives on the taskbars and
@@ -406,7 +414,8 @@ and an invalid value was rejected while the pet kept running. Everything customi
 - Fewer frames than the game expects cycle; extras are ignored. **Animations not listed use the built-in rabbit,** so art
   can be replaced one animation at a time. Problems (missing image, frame outside the image, unknown animation) are
   reported in a tray notification, and the affected animations fall back to the built-in art.
-- Frames are drawn uniformly scaled into the square sprite box, aligned bottom-centre (the feet point).
+- Frames are drawn uniformly scaled into the square sprite box, aligned bottom-centre (the feet point). Custom
+  sheets whose frames aren't 64 px should set `ArtSizePx` to their frame size (or 0) in settings.json.
 - **Live reload** of `sprites\` like settings.
 - The atlas is parsed and checked by pure Core code (`SpriteSheetSpec`); the App only decodes and crops PNGs.
 - **Menu → Customize:** Edit settings, Open data folder, Export sprite template. The template is the built-in rabbit art as

@@ -23,7 +23,7 @@ public class PetSimulationTests
 
         Assert.Equal(BodyMode.Airborne, sim.Mode);
         Assert.Equal(PetStateId.Fall, sim.State);
-        Assert.Equal(new Vec2(1280, 96), sim.Current.FeetPos); // top of work area + 64 DIP × 1.5
+        Assert.Equal(new Vec2(1280, 128), sim.Current.FeetPos); // top of work area + 64 DIP × 1.5 = 96 px, snapped up to 2× the art
         Assert.Equal(Animations.Fall.Id, sim.Current.AnimationId);
 
         sim.RunUntil(desktop, Grounded);
@@ -54,7 +54,7 @@ public class PetSimulationTests
         sim.RunUntil(desktop, Grounded);
 
         Assert.Equal(1240, sim.Current.FeetPos.Y);
-        Assert.Equal(96, sim.Current.Size.X); // picked up monitor B's scale
+        Assert.Equal(128, sim.Current.Size.X); // picked up monitor B's scale
     }
 
     [Fact]

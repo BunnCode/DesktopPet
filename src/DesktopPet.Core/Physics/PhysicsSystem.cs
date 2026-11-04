@@ -59,7 +59,7 @@ public static class PhysicsSystem
     /// </summary>
     private static PhysicsEvent StepClinging(PetBody body, in PhysicsWorld world, PetConfig config)
     {
-        var size = config.SizeDip * world.Scale;
+        var size = config.SizePxAt(world.Scale);
         var owner = body.WallOwner;
         var feet = body.Feet;
 
@@ -163,7 +163,7 @@ public static class PhysicsSystem
             return PhysicsEvent.LostGround;
         }
 
-        body.Hang(body.Feet.X, bar, config.SizeDip * world.Scale);
+        body.Hang(body.Feet.X, bar, config.SizePxAt(world.Scale));
         return PhysicsEvent.None;
     }
 
@@ -312,7 +312,7 @@ public static class PhysicsSystem
         // Flying into a wall it's facing: grab on if slow enough. (Too fast: screen edges bounce below, window sides are passed.)
         if (config.EnableClimbing && velocity.X != 0 && System.Math.Abs(velocity.X) <= config.ClingMaxSpeedDip * scale)
         {
-            var size = config.SizeDip * scale;
+            var size = config.SizePxAt(scale);
             if (FindWallCrossing(world.WallsOrEmpty, from.X, to.X, to.Y - (size / 2), HalfWidth(world, config)) is { } wall)
             {
                 body.Cling(wall, to.Y, size);
@@ -325,7 +325,7 @@ public static class PhysicsSystem
         {
             var leading = new Vec2(
                 to.X + (System.Math.Sign(velocity.X) * HalfWidth(world, config)),
-                to.Y - (config.SizeDip * scale / 2));
+                to.Y - (config.SizePxAt(scale) / 2));
             if (WorldQuery.IsLost(world.Monitors, leading))
             {
                 velocity = velocity with { X = -velocity.X * config.WallRestitution };
@@ -341,7 +341,7 @@ public static class PhysicsSystem
         }
 
         // Thrown upward: hands catch a hang bar as the head passes up through it.
-        var height = config.SizeDip * scale;
+        var height = config.SizePxAt(scale);
         if (velocity.Y < 0 && FindCatch(world.Platforms, from, to, height) is { } caught)
         {
             body.Hang(caught.X, caught.Bar, height);
@@ -354,7 +354,7 @@ public static class PhysicsSystem
     }
 
     private static double HalfWidth(in PhysicsWorld world, PetConfig config) =>
-        config.SizeDip * world.Scale * config.BodyHalfWidthFraction;
+        config.SizePxAt(world.Scale) * config.BodyHalfWidthFraction;
 
     /// <summary>Swept test for the head moving up through a hang bar: the lowest bar crossed, at the x where it's crossed.</summary>
     private static (Platform Bar, double X)? FindCatch(IReadOnlyList<Platform> platforms, Vec2 from, Vec2 to, double height)

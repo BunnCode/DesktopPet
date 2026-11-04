@@ -36,7 +36,8 @@ tools/models/get-model.ps1   Downloads the chat model into models/ at the repo r
 ## Conventions you need everywhere
 
 - **Coordinates:** Core uses physical virtual-screen pixels (`Vec2` doubles, `Vec2I`/`RectI` ints; `RectI` is
-  half-open like Win32 RECT). Tuning is in DIPs and multiplied by `MonitorInfo.Scale` of the pet's monitor.
+  half-open like Win32 RECT). Tuning is in DIPs and multiplied by `MonitorInfo.Scale` of the pet's monitor. Drawn sizes are snapped to whole art-pixel
+  multiples: `PetConfig.SizePxAt(scale)` (pet) and `FurnitureItem.PixelScale` (furniture); don't use `SizeDip * Scale`.
 - **Feet point:** the pet's position is the bottom-centre of its square sprite box (`PetFrame.SpriteRect(feet, size)`).
 - **Facing:** art faces right; `PetFrame.FacingLeft` mirrors it. `PetContext.Direction` is +1/-1.
 - **Surface identity by string key:** `PlatformBuilder.FloorKey(monitor)`, `WindowKey(id)` (`"window:<id>"`),
@@ -127,7 +128,7 @@ UseFurniture; `LostGround`→Fall, `Grabbed`→Hang, `Clung`→Cling, `HitWall`�
 | `Furniture/FurnitureSpec.cs` | `FurnitureSpec` (a kind: size, art, frames, `Animate`, slots and offsets, bounciness, friction, uses, `Consumable`; `IsPen`, `SlotOffsetDip`), `FurnitureUse` (need, rate, animation, seconds, effect, seat), `Need`, `UseEffect`, `AnimateWhen` |
 | `Furniture/FurnitureSpecFile.cs` | `furniture\<kind>.json` (de)serialization and validation → `FurnitureParseResult`; `KindFromFileName` |
 | `Furniture/DefaultFurniture.cs` | The eight default kinds (`All`, incl. M15's `Pill`); `FirstKinds` and `ToWrite(written)`: which defaults to add to an existing folder |
-| `Furniture/FurnitureItem.cs` | One piece in the world: body (a `PetBody`), scale, slots (`Reserve`/`Release`), `Users`, `Current`/`Previous` `FurnitureFrame`; `Egg` (an `EggInfo` if it's an egg), `Grave` (a `GraveInfo` if it's a gravestone), `IsFurniture` (neither) |
+| `Furniture/FurnitureItem.cs` | One piece in the world: body (a `PetBody`), scale, `PixelScale` (whole-number scale for its size and slots), slots (`Reserve`/`Release`), `Users`, `Current`/`Previous` `FurnitureFrame`; `Egg` (an `EggInfo` if it's an egg), `Grave` (a `GraveInfo` if it's a gravestone), `IsFurniture` (neither) |
 | `Furniture/FurnitureWorld.cs` | **All furniture, shared by pets**: `SetSpecs` (the egg and gravestone specs always stay), `Add`, `AddEgg`, `EggItems`, `AddGrave`, `GraveItems`, `SetGrave`, `Remove`, `Tick` (physics via `PhysicsSystem` with the item's size, bounce, respawn), pointer drag/throw/poke, `Kick`, `PenAt`, `PenAhead`, `CreateSave`/`Load`, `Version` |
 | `Furniture/RoutePlanner.cs` | Dijkstra over ground segments with walk, walk off / drop, climb up, climb down → `RouteStep`s; `SideAt` |
 | `Furniture/RoomSave.cs` | `RoomSave`/`RoomItem` (an egg's `EggInfo` or a gravestone's `GraveInfo` included) and `RoomStore` (`room.json`, atomic write) |

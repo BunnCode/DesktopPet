@@ -280,6 +280,6 @@ public class DragAndThrowTests
         Drag(sim, desktop, new Vec2(960, 1050), [new Vec2(970, 1050), new Vec2(3000, 700)]);
         sim.Tick(Dt, desktop);
 
-        Assert.Equal(96, sim.Current.Size.X);
+        Assert.Equal(128, sim.Current.Size.X); // 64 DIP × 1.5, snapped to 2× the art
     }
 }

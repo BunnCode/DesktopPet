@@ -43,7 +43,17 @@ public sealed class FurnitureItem
 
     public Vec2 Feet => Body.Feet;
 
-    public Vec2 Size => new(Spec.WidthDip * Scale, Spec.HeightDip * Scale);
+    /// <summary>
+    /// Screen pixels per DIP for its size and art: <see cref="Scale"/> rounded to a whole number (at least 1) for
+    /// pixel art, which is drawn one art pixel per DIP, so every art pixel covers the same number of screen pixels.
+    /// Smooth art uses <see cref="Scale"/> as it is.
+    /// </summary>
+    public double PixelScale => PixelScaleFor(Spec, Scale);
+
+    public Vec2 Size => new(Spec.WidthDip * PixelScale, Spec.HeightDip * PixelScale);
+
+    internal static double PixelScaleFor(FurnitureSpec spec, double scale) =>
+        spec.Smooth ? scale : System.Math.Max(1, System.Math.Round(scale));
 
     public double Left => Feet.X - (Size.X / 2);
 
@@ -118,7 +128,7 @@ public sealed class FurnitureItem
     internal bool HasFreeSlot(object pet) => SlotOf(pet) >= 0 || Array.IndexOf(_slots, null) >= 0;
 
     /// <summary>Where slot <paramref name="slot"/>'s pet stands (feet x).</summary>
-    internal double SlotX(int slot) => Feet.X + (Spec.SlotOffsetDip(slot) * Scale);
+    internal double SlotX(int slot) => Feet.X + (Spec.SlotOffsetDip(slot) * PixelScale);
 
     /// <summary>Swaps in an edited definition of the same kind, keeping the reservations that still fit.</summary>
     internal void SetSpec(FurnitureSpec spec)

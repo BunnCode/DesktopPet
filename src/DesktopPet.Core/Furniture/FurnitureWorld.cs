@@ -417,6 +417,7 @@ public sealed class FurnitureWorld
     private PetConfig PhysicsConfigFor(FurnitureSpec spec) => _config with
     {
         SizeDip = spec.HeightDip,
+        ArtSizePx = spec.Smooth ? 0 : spec.HeightDip, // one art pixel per DIP: snaps to the same size as FurnitureItem.Size
         BodyHalfWidthFraction = spec.WidthDip / 2 / spec.HeightDip,
         GroundFrictionDip = _config.GroundFrictionDip * spec.Friction,
         EnableClimbing = false,

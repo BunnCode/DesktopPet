@@ -137,7 +137,7 @@ internal sealed class PetContext
     /// <summary>Set by the menu's "Sleep": sleep until rested rather than a short nap.</summary>
     public bool TuckedIn { get; set; }
 
-    public double SizePx => Config.SizeDip * Scale;
+    public double SizePx => Config.SizePxAt(Scale);
     public double HalfWidthPx => SizePx * Config.BodyHalfWidthFraction;
 
     /// <summary>+1 facing right, -1 facing left.</summary>
