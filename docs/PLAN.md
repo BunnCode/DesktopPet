@@ -33,7 +33,7 @@ This document describes the design **as built**, the status of each milestone, a
 | M12b | Reading on-screen text (Windows OCR) and referring to it when talking or writing notes | Done | `630c904` |
 | M13 | Breeding: courtship, eggs that hatch into mixed children, fixing pets, personality traits list | Done | `d1e00b3` |
 | M14 | Death and gravestones: neglect timers, warnings, gravestones with name and dates, revive or delete | Done | `a9be018` |
-| M15 | Breeding pill: consumable furniture; the pet that swallows it asks every other pet to mate | Done | |
+| M15 | Breeding pill: consumable furniture; the pet that swallows it asks every other pet to mate | Done | `98577cc` |
 
 532 unit tests, all in `DesktopPet.Core.Tests`.
 
