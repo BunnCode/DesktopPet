@@ -34,7 +34,7 @@ This document describes the design **as built**, the status of each milestone, a
 | M13 | Breeding: courtship, eggs that hatch into mixed children, fixing pets, personality traits list | Done | `d1e00b3` |
 | M14 | Death and gravestones: neglect timers, warnings, gravestones with name and dates, revive or delete | Done | `a9be018` |
 | M15 | Breeding pill: consumable furniture; the pet that swallows it asks every other pet to mate | Done | `98577cc` |
-| — | Combined save file: traits.json folded into save.json (version 4), hand edits of the traits kept by autosaves | Done | |
+| — | Combined save file: traits.json folded into save.json (version 4), hand edits of the traits kept by autosaves | Done | `4d9c7a6` |
 
 553 unit tests, all in `DesktopPet.Core.Tests`.
 
