@@ -31,7 +31,7 @@ This document describes the design **as built**, the status of each milestone, a
 | M11 | Furniture, defined in user-editable files | Done | `0bcd1d0` |
 | M12 | Speech bubbles and sticky notes (two behaviors) from a shared local LLM (Qwen3.5-2B) | Done | `1045cdf` |
 | M12b | Reading on-screen text (Windows OCR) and referring to it when talking or writing notes | Done | `630c904` |
-| M13 | Breeding: courtship, eggs that hatch into mixed children, fixing pets, personality traits list | Done | |
+| M13 | Breeding: courtship, eggs that hatch into mixed children, fixing pets, personality traits list | Done | `d1e00b3` |
 | M14 | Death and gravestones | Planned | |
 
 490 unit tests, all in `DesktopPet.Core.Tests`.
