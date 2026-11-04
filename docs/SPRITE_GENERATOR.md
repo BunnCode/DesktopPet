@@ -167,7 +167,7 @@ rabbit's: `rect`, `rrect` (rounded rectangle), `union`, `shifted`.
 | `couch` | 80×36 | 1 (seat top row 18) |
 | `trampoline` | 64×20 | 1 (mat top row 2) |
 | `bed` | 80×32 | 1 (mattress top row 14) |
-| `playpen` | 112×40 | 1 (posts and rails; the inside is transparent) |
+| `playpen` | 112×40 | 1 (posts, rails and a hung sign reading "GAY BABY JAIL" in a 3×5 font; the inside is transparent) |
 | `trough` | 48×20 | 1 |
 | `pill` | 20×12 | 1 |
 | `egg` | 24×26 | 4 (still, still, top leaning left, leaning right; built in, not written to the furniture folder; `Eggs.Spec` in Core) |

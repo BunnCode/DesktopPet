@@ -769,7 +769,26 @@ def playpen():
     rail = solid(W, H, rails, 'O', 'i', 'o', ld=1, sd=1)
     posts = union(*[union(rrect(x, 4, x + 4, 38, 2), ellipse(x + 2, 3, 3.2, 2.6)) for x in xs])
     post = solid(W, H, posts, 'O', 'i', 'o', ld=1, sd=1)
-    return [compose(W, H, rail, post)]
+    sign = solid(W, H, rect(25, 17, 86, 27), 'A', None, 'a', sd=1)
+    text = Part(W, H)
+    x = 31
+    for ch in 'GAY BABY JAIL':
+        if ch != ' ':
+            for (row, bits) in enumerate(PEN_FONT[ch]):
+                for (col, bit) in enumerate(bits):
+                    if bit == '1':
+                        text.g[20 + row][x + col] = 'K'
+        x += 4 if ch != ' ' else 3
+    return [compose(W, H, rail, post, sign, text)]
+
+
+# 3x5 capitals for the play pen's sign.
+PEN_FONT = {
+    'G': ('111', '100', '101', '101', '111'), 'A': ('010', '101', '111', '101', '101'),
+    'Y': ('101', '101', '010', '010', '010'), 'B': ('110', '101', '110', '101', '110'),
+    'J': ('001', '001', '001', '101', '010'), 'I': ('111', '010', '010', '010', '111'),
+    'L': ('100', '100', '100', '100', '111'),
+}
 
 
 def trough():
