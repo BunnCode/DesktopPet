@@ -51,12 +51,21 @@ public static class PetRoster
         return [.. ids];
     }
 
-    /// <summary>The pets to start with: the existing ones (up to the limit), or pet 1 when there are none.</summary>
-    public static IReadOnlyList<int> StartupPets(IEnumerable<int> existing)
+    /// <summary>
+    /// The pets to start with: the existing ones that aren't dead (up to the limit), or pet 1 when there are no pet
+    /// folders at all. When every pet is dead there are none: they have gravestones instead.
+    /// </summary>
+    public static IReadOnlyList<int> StartupPets(IEnumerable<int> existing, IEnumerable<int>? dead = null)
     {
         ArgumentNullException.ThrowIfNull(existing);
         var ids = existing.Distinct().Order().ToList();
-        return ids.Count == 0 ? [1] : [.. ids.Take(MaxPets)];
+        if (ids.Count == 0)
+        {
+            return [1];
+        }
+
+        var gone = new HashSet<int>(dead ?? []);
+        return [.. ids.Where(id => !gone.Contains(id)).Take(MaxPets)];
     }
 
     /// <summary>The id for a new pet: one more than any in use (ids are never reused while running).</summary>

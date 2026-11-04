@@ -10,8 +10,8 @@ namespace DesktopPet.App.UI;
 /// The pets' menu, shared by the tray icon and right-clicking a pet. It's always about one pet, its target: a header
 /// naming it with its mood, live stat bars, an About submenu (personality and traits, read-only) and care actions for
 /// it. Then app-wide items: furniture (placed next to the target), adding and removing pets,
-/// pushing, customization, the debug overlay, Exit. Uses WinForms' ContextMenuStrip, which closes properly on outside
-/// clicks even though the pets' windows never activate.
+/// pushing, customization, the debug overlay, Exit. With no pets at all (every one dead) only the app-wide items show.
+/// Uses WinForms' ContextMenuStrip, which closes properly on outside clicks even though the pets' windows never activate.
 /// </summary>
 internal sealed class PetMenu : IDisposable
 {
@@ -19,7 +19,7 @@ internal sealed class PetMenu : IDisposable
     private const int WrapColumn = 52;
     private const int MaxPersonalityLines = 8;
 
-    private readonly Func<IPetControls> _defaultTarget;
+    private readonly Func<IPetControls?> _defaultTarget;
     private readonly Func<bool> _canAdd;
     private readonly Func<bool> _canRemove;
     private readonly ToolStripLabel _header;
@@ -40,10 +40,11 @@ internal sealed class PetMenu : IDisposable
     private readonly ToolStripMenuItem _remove;
     private readonly ToolStripMenuItem _furnitureMenu;
     private readonly FurnitureActions _furniture;
+    private readonly ToolStripItem[] _petItems;
     private IPetControls? _target;
     private bool _openingForPet;
 
-    /// <param name="defaultTarget">The pet to show when opened from the tray (the last one right-clicked, or the first).</param>
+    /// <param name="defaultTarget">The pet to show when opened from the tray (the last one right-clicked, or the first); null if there are none.</param>
     /// <param name="canAdd">Whether another pet may be added (below the limit).</param>
     /// <param name="canRemove">Whether a pet may be removed (not the last one).</param>
     /// <param name="onAdd">"Add a pet" chosen.</param>
@@ -60,7 +61,7 @@ internal sealed class PetMenu : IDisposable
     /// <param name="onDebugOverlay">Debug overlay toggled.</param>
     /// <param name="onExit">Exit chosen.</param>
     public PetMenu(
-        Func<IPetControls> defaultTarget, Func<bool> canAdd, Func<bool> canRemove, Action onAdd, Action<IPetControls> onRemove,
+        Func<IPetControls?> defaultTarget, Func<bool> canAdd, Func<bool> canRemove, Action onAdd, Action<IPetControls> onRemove,
         (Action<IPetControls> EditTraits, Action<IPetControls> OpenFolder) petFiles, Action<IPetControls, bool> onFixed, FurnitureActions furniture, bool pushingEnabled, Action<bool> onPushing, (bool Enabled, Action<bool> OnChanged) chat,
         (bool Enabled, Action<bool> OnChanged) notes, (bool Enabled, Action<bool> OnChanged) reading,
         (Action EditSettings, Action OpenDataFolder, Action ExportSpriteTemplate) customize,
@@ -83,8 +84,8 @@ internal sealed class PetMenu : IDisposable
         _behavior = new ToolStripLabel { TextAlign = ContentAlignment.MiddleLeft };
         _chat = new ToolStripLabel { TextAlign = ContentAlignment.MiddleLeft };
         _family = new ToolStripLabel { TextAlign = ContentAlignment.MiddleLeft };
-        _editTraits = new ToolStripMenuItem("Edit traits…", null, (_, _) => petFiles.EditTraits(Target));
-        _openFolder = new ToolStripMenuItem("Open its folder", null, (_, _) => petFiles.OpenFolder(Target));
+        _editTraits = new ToolStripMenuItem("Edit traits…", null, (_, _) => ForTarget(petFiles.EditTraits));
+        _openFolder = new ToolStripMenuItem("Open its folder", null, (_, _) => ForTarget(petFiles.OpenFolder));
         _about = new ToolStripMenuItem("About");
         _about.DropDownItems.AddRange(
         [
@@ -100,14 +101,14 @@ internal sealed class PetMenu : IDisposable
         ]);
 
         // Not CheckOnClick: the click handler decides from the pet's traits, so the tick always shows the file's state.
-        _fixed = new ToolStripMenuItem("Fixed (no babies)", null, (_, _) => onFixed(Target, !Target.Traits.Fixed));
+        _fixed = new ToolStripMenuItem("Fixed (no babies)", null, (_, _) => ForTarget(pet => onFixed(pet, !pet.Traits.Fixed)));
 
-        var feed = new ToolStripMenuItem("Feed", null, (_, _) => Target.Apply(PetAction.Feed));
-        var play = new ToolStripMenuItem("Play", null, (_, _) => Target.Apply(PetAction.Play));
-        _sleep = new ToolStripMenuItem("Sleep", null, (_, _) => Target.Apply(Target.IsAsleep ? PetAction.WakeUp : PetAction.Sleep));
+        var feed = new ToolStripMenuItem("Feed", null, (_, _) => ForTarget(pet => pet.Apply(PetAction.Feed)));
+        var play = new ToolStripMenuItem("Play", null, (_, _) => ForTarget(pet => pet.Apply(PetAction.Play)));
+        _sleep = new ToolStripMenuItem("Sleep", null, (_, _) => ForTarget(pet => pet.Apply(pet.IsAsleep ? PetAction.WakeUp : PetAction.Sleep)));
 
         _add = new ToolStripMenuItem("Add a pet", null, (_, _) => onAdd());
-        _remove = new ToolStripMenuItem("Remove this pet", null, (_, _) => onRemove(Target));
+        _remove = new ToolStripMenuItem("Remove this pet", null, (_, _) => ForTarget(onRemove));
 
         var pushing = new ToolStripMenuItem("Let it push windows") { CheckOnClick = true, Checked = pushingEnabled };
         pushing.CheckedChanged += (_, _) => onPushing(pushing.Checked);
@@ -130,11 +131,13 @@ internal sealed class PetMenu : IDisposable
             new ToolStripMenuItem("Export sprite template", null, (_, _) => customize.ExportSpriteTemplate()),
         ]);
 
+        var careSeparator = new ToolStripSeparator();
+        _petItems = [_hunger, _happiness, _energy, _about, careSeparator, feed, play, _sleep, _fixed, _remove];
         Strip = new ContextMenuStrip();
         Strip.Items.AddRange(
         [
             _header, _hunger, _happiness, _energy, _about,
-            new ToolStripSeparator(),
+            careSeparator,
             feed, play, _sleep, _fixed,
             new ToolStripSeparator(),
             _furnitureMenu,
@@ -164,7 +167,7 @@ internal sealed class PetMenu : IDisposable
 
     public ContextMenuStrip Strip { get; }
 
-    private IPetControls Target => _target ?? _defaultTarget();
+    private IPetControls? Target => _target ?? _defaultTarget();
 
     /// <summary>Opens the menu for <paramref name="pet"/> at a screen position (physical pixels).</summary>
     public void ShowFor(IPetControls pet, Point screen)
@@ -176,9 +179,30 @@ internal sealed class PetMenu : IDisposable
 
     public void Dispose() => Strip.Dispose();
 
+    private void ForTarget(Action<IPetControls> action)
+    {
+        if (Target is { } pet)
+        {
+            action(pet);
+        }
+    }
+
     private void Refresh()
     {
         var pet = Target;
+        foreach (var item in _petItems)
+        {
+            item.Visible = pet is not null;
+        }
+
+        _add.Enabled = _canAdd();
+        if (pet is null)
+        {
+            _header.Text = "No pets: add one, or revive one at its gravestone";
+            RefreshFurniture(null);
+            return;
+        }
+
         var s = pet.Stats;
         _header.Text = $"{pet.Name} · {Mood(s, pet.Rules)}";
         _hunger.Text = Line("Fed", s.Hunger, pet.Rules);
@@ -201,13 +225,12 @@ internal sealed class PetMenu : IDisposable
         _fixed.Checked = t.Fixed;
         _fixed.Text = $"{pet.Name} is fixed (no babies)";
         RefreshFurniture(pet);
-        _add.Enabled = _canAdd();
         _remove.Enabled = _canRemove();
         _remove.Text = $"Remove {pet.Name}";
     }
 
     /// <summary>The Furniture submenu: one "Add" per kind (it drops in beside the pet), then remove all, then the folder.</summary>
-    private void RefreshFurniture(IPetControls pet)
+    private void RefreshFurniture(IPetControls? pet)
     {
         var items = _furnitureMenu.DropDownItems;
         foreach (var old in items.Cast<ToolStripItem>().ToList())
@@ -216,10 +239,16 @@ internal sealed class PetMenu : IDisposable
         }
 
         items.Clear();
-        var canAdd = _furniture.CanAdd();
+        var canAdd = _furniture.CanAdd() && pet is not null; // it's placed beside the pet
         foreach (var (kind, name) in _furniture.Kinds())
         {
-            items.Add(new ToolStripMenuItem($"Add {name}", null, (_, _) => _furniture.Add(pet, kind)) { Enabled = canAdd });
+            items.Add(new ToolStripMenuItem($"Add {name}", null, (_, _) =>
+            {
+                if (pet is not null)
+                {
+                    _furniture.Add(pet, kind);
+                }
+            }) { Enabled = canAdd });
         }
 
         if (items.Count == 0)

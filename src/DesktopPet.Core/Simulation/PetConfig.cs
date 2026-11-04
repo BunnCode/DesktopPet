@@ -168,6 +168,11 @@ public sealed record PetConfig
 
     /// <summary>When pets mate and how eggs hatch.</summary>
     public Breeding.BreedingRules Breeding { get; init; } = new();
+
+    // ---- Death ----
+
+    /// <summary>When neglected pets die, and how revived ones come back.</summary>
+    public Death.DeathRules Death { get; init; } = new();
 }
 
 /// <summary>Tuning for furniture: when pets choose it, how they get there, and the kick and bounce physics.</summary>

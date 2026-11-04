@@ -22,6 +22,9 @@ sprite animation.
 - **Eggs and babies:** now and then two happy pets standing together court each other and lay an egg. It hatches
   into a child that takes after both parents: its numbers, a blend of their jacket colours, and one parent's
   sprites. Pets can be fixed from the menu so they don't breed.
+- **Death and gravestones:** a pet neglected for too long while you're at the PC dies (you're warned first, and time
+  away never counts). It leaves a gravestone with its name and dates; right-click it to revive the pet or delete it.
+  This can be switched off in `settings.json`.
 - **Speech bubbles and sticky notes:** pets talk about their needs, banter with each other, tell jokes, react to
   clicks and stick notes on the window they're standing on. The text comes from a local model (Qwen3.5-2B via
   LLamaSharp), and nothing is sent anywhere. See [docs/CHAT.md](docs/CHAT.md).
@@ -99,7 +102,6 @@ platform and behavior rule can be unit-tested against `FakeDesktop`.
 
 ## Status
 
-Milestones M0–M12b are done: movement, windows as platforms, climbing, care, multiple pets, traits, furniture, chat and
-screen reading. Coming next are **breeding** (eggs that hatch into mixed children) and **death and gravestones**
-(pets that are neglected for too long, with an option to revive them). See [docs/PLAN.md](docs/PLAN.md) for details
-and known limitations.
+Milestones M0–M14 are done: movement, windows as platforms, climbing, care, multiple pets, traits, furniture, chat,
+screen reading, breeding, and death and gravestones. See [docs/PLAN.md](docs/PLAN.md) for details, known limitations
+and the leftover ideas.

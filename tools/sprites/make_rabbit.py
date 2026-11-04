@@ -54,6 +54,8 @@ PAL = {
     'q': (0xFF, 0x9E, 0xB4),  # heart shine
     'A': (0xF4, 0xEC, 0xD8),  # egg shell
     'a': (0xD8, 0xCC, 0xB0),  # egg shell shade
+    'D': (0xB4, 0xB2, 0xBC),  # gravestone
+    'd': (0x8A, 0x88, 0x94),  # gravestone shade
 }
 
 
@@ -792,9 +794,32 @@ def egg():
     return out
 
 
+def grave():
+    """32x30: a rounded headstone on a plinth and a grassy mound, a flower each side. The face (x 7-24, y 4-22) is
+    left plain: the app writes the pet's name and dates there (GraveArt), so keep the two in step."""
+    c = canvas(32, 30)
+    for y, (x0, x1) in enumerate([(11, 20), (8, 23), (7, 24), (6, 25)], start=1):
+        fill(c, x0, y, x1, y, 'D')   # rounded top
+    fill(c, 5, 5, 26, 23, 'D')       # stone
+    fill(c, 3, 24, 28, 25, 'd')      # plinth
+    fill(c, 1, 26, 30, 28, 'L')      # grass mound
+    for x in (2, 29):
+        fill(c, x, 22, x, 25, 'L')   # flower stems
+        fill(c, x - 1, 20, x + 1, 20, 'Q')
+        fill(c, x, 19, x, 21, 'Q')
+        c[20][x] = 'Y'
+    outlined(c)
+    for y in range(5, 24):
+        c[y][26] = 'd'               # shade on the right
+    for (x, y) in ((25, 4), (24, 3), (23, 2)):
+        c[y][x] = 'd'
+    fill(c, 3, 24, 28, 24, 'D')      # the plinth's top catches the light
+    return [c]
+
+
 FURNITURE = {
     'ball': ball, 'tv': tv, 'couch': couch, 'trampoline': trampoline, 'bed': bed, 'playpen': playpen, 'trough': trough,
-    'egg': egg,
+    'egg': egg, 'grave': grave,
 }
 
 

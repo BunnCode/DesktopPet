@@ -162,6 +162,18 @@ public static class PetConfigValidator
             Range("Breeding.Variation", breeding.Variation, 0, 1);
         }
 
+        var death = c.Death;
+        if (death is null)
+        {
+            errors.Add("Death is missing.");
+        }
+        else
+        {
+            Range("Death.ZeroHours", death.ZeroHours, 0.01, 10_000);
+            Range("Death.AllCriticalHours", death.AllCriticalHours, 0.01, 10_000);
+            Range("Death.ReviveStat", death.ReviveStat, 1, 100);
+        }
+
         var chat = c.Chat;
         if (chat is null)
         {

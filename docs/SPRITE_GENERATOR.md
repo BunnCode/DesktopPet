@@ -55,6 +55,7 @@ characters, painted back to front and converted to RGBA at the end.
 | `O` / `o` | wood / wood shade | `C` / `c` | couch fabric / shade |
 | `U` / `u` | blanket / shade | `Y` | yellow (game pixels) |
 | `Q` / `q` | heart / heart shine | `A` / `a` | egg shell / speckles and shade |
+| `D` / `d` | gravestone / shade | | |
 
 ### Helpers
 - `grid(rows)` pads rows to equal width. `blank()` is an empty 32×32 grid.
@@ -130,6 +131,7 @@ the couch seat, bed blanket and trampoline mat tops are 9 px up, drawn 16 DIP up
 | `playpen` | 56×20 | 1 (posts and rails; the inside is transparent) |
 | `trough` | 24×10 | 1 |
 | `egg` | 12×13 | 4 (still, still, top half tipped left, tipped right; built in, not written to the furniture folder; `Eggs.Spec` in Core) |
+| `grave` | 32×30 | 1 (headstone, plinth, grass, two flowers; built in, `Graves.Spec` in Core). The face (x 7–24, y 5–21) stays plain: the app's `GraveArt` writes the name and dates there, so keep the two in step |
 
 ## Common edits
 

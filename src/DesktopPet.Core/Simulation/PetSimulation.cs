@@ -1,5 +1,6 @@
 using DesktopPet.Core.Abstractions;
 using DesktopPet.Core.Behavior;
+using DesktopPet.Core.Death;
 using DesktopPet.Core.Furniture;
 using DesktopPet.Core.Input;
 using DesktopPet.Core.Math;
@@ -28,6 +29,8 @@ public sealed class PetSimulation
     private IReadOnlyList<Platform> _platforms = [];
     private double _lostSeconds;
     private DateTimeOffset _statsUpdatedAt;
+    private readonly Mortality _mortality;
+    private readonly List<PetWarning> _warnings = [];
 
     // Pointer gesture in progress.
     private Vec2? _pressAt;
@@ -57,6 +60,8 @@ public sealed class PetSimulation
         _throw = new ThrowEstimator(config.ThrowWindowSeconds);
         _clock = clock ?? SystemClock.Instance;
         _statsUpdatedAt = _clock.UtcNow;
+        BornUtc = save?.BornUtc ?? _statsUpdatedAt;
+        _mortality = new Mortality(save?.Neglect);
         if (save is not null)
         {
             var offline = _statsUpdatedAt - save.SavedAtUtc;
@@ -247,8 +252,41 @@ public sealed class PetSimulation
     /// </summary>
     public bool UserAway { get; set; }
 
-    /// <summary>A snapshot of what should survive a restart.</summary>
-    public SaveData CreateSave() => SaveData.From(_ctx.Stats, _clock.UtcNow, LastMatedUtc);
+    /// <summary>A snapshot of what should survive a restart (marked dead once it has died).</summary>
+    public SaveData CreateSave() => SaveData.From(_ctx.Stats, _clock.UtcNow, LastMatedUtc) with
+    {
+        BornUtc = BornUtc,
+        Neglect = _mortality.Timers.IsZero ? null : _mortality.Timers,
+        DiedUtc = Death?.AtUtc,
+        DiedOf = Death?.Cause,
+    };
+
+    // ---- Death (M14) ----
+
+    /// <summary>When it was born or added (from its save; the first run otherwise). The host may fill in a better guess.</summary>
+    public DateTimeOffset BornUtc { get; set; }
+
+    /// <summary>
+    /// Set once it has died of neglect (<see cref="DeathRules"/>); the host then takes it away and leaves a gravestone.
+    /// Its needs stop changing from then on.
+    /// </summary>
+    public PetDeath? Death { get; private set; }
+
+    /// <summary>How long its needs have been neglected (the countdowns to death).</summary>
+    public NeglectTimers Neglect => _mortality.Timers;
+
+    /// <summary>Warnings since the last call (a need went critical or reached 0), for notifications.</summary>
+    public IReadOnlyList<PetWarning> TakeWarnings()
+    {
+        if (_warnings.Count == 0)
+        {
+            return [];
+        }
+
+        var warnings = _warnings.ToArray();
+        _warnings.Clear();
+        return warnings;
+    }
 
     // ---- Courtship (driven by Breeding.BreedingDirector) ----
 
@@ -545,7 +583,7 @@ public sealed class PetSimulation
         var now = _clock.UtcNow;
         var elapsed = now - _statsUpdatedAt;
         _statsUpdatedAt = now;
-        if (elapsed <= TimeSpan.Zero)
+        if (elapsed <= TimeSpan.Zero || Death is not null)
         {
             return;
         }
@@ -593,6 +631,14 @@ public sealed class PetSimulation
         }
 
         _ctx.Stats = after;
+
+        // Neglect only counts while the user is there and the pet isn't kept safe in a pen.
+        var counting = !away && _ctx.Pen is null;
+        if (_mortality.Update(after, elapsed, counting, _ctx.Config.Death, rules.Critical, _warnings) is { } cause)
+        {
+            Death = new PetDeath(cause, now);
+            _warnings.Clear(); // the death notification says it all
+        }
     }
 
     private static StatActivity UseActivity(FurnitureUse use) =>

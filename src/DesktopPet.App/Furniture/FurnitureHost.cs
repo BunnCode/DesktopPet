@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows.Media.Imaging;
 using DesktopPet.App.UI;
 using DesktopPet.Core.Breeding;
+using DesktopPet.Core.Death;
 using DesktopPet.Core.Furniture;
 using DesktopPet.Core.Math;
 using DesktopPet.Core.Simulation;
@@ -26,6 +27,7 @@ internal sealed class FurnitureHost : IDisposable
     private readonly RoomStore _store;
     private readonly GameLoop _loop;
     private readonly Dictionary<int, PetWindow> _windows = [];
+    private readonly Dictionary<int, (GraveInfo Grave, (int, int) Size, BitmapSource Bitmap)> _graveArt = [];
     private readonly Stopwatch _sinceSave = Stopwatch.StartNew();
     private readonly Action<FurnitureItem> _menuRequested;
     private readonly Action _windowsAdded;
@@ -53,8 +55,8 @@ internal sealed class FurnitureHost : IDisposable
 
     public FurnitureWorld World { get; }
 
-    /// <summary>Pieces of furniture (eggs aren't furniture here: they count toward the pet cap instead).</summary>
-    public int Count => World.Items.Count(i => i.Egg is null);
+    /// <summary>Pieces of furniture (eggs and gravestones aren't furniture here; eggs count toward the pet cap instead).</summary>
+    public int Count => World.Items.Count(i => i.IsFurniture);
 
     /// <summary>Eggs waiting to hatch.</summary>
     public int EggCount => World.EggItems.Count();
@@ -65,6 +67,15 @@ internal sealed class FurnitureHost : IDisposable
         World.AddEgg(feet, egg);
         Render(alpha: 1);
         Save();
+    }
+
+    /// <summary>Puts a gravestone at <paramref name="feet"/> (physical pixels).</summary>
+    public FurnitureItem AddGrave(Vec2 feet, GraveInfo grave)
+    {
+        var item = World.AddGrave(feet, grave);
+        Render(alpha: 1);
+        Save();
+        return item;
     }
 
     /// <summary>The kinds that can be placed, with their art. Furniture of kinds that are gone is removed.</summary>
@@ -104,10 +115,10 @@ internal sealed class FurnitureHost : IDisposable
         Save();
     }
 
-    /// <summary>Removes all the furniture (not the eggs).</summary>
+    /// <summary>Removes all the furniture (not the eggs or gravestones).</summary>
     public void RemoveAll()
     {
-        foreach (var item in World.Items.Where(i => i.Egg is null).ToList())
+        foreach (var item in World.Items.Where(i => i.IsFurniture).ToList())
         {
             World.Remove(item);
         }
@@ -140,7 +151,7 @@ internal sealed class FurnitureHost : IDisposable
     /// <summary>What the debug overlay shows for each piece.</summary>
     public IReadOnlyList<DebugPet> DebugInfo =>
         [.. World.Items.Select(i => new DebugPet(
-            i.Spec.Name, i.Current.Bounds, i.Egg is not null ? "egg" : i.Spec.Slots > 0 ? $"{i.Occupied}/{i.Spec.Slots}" : "pen", i.Mode, i.GroundKey))];
+            i.Spec.Name, i.Current.Bounds, i.Egg is not null ? "egg" : i.Grave is not null ? "grave" : i.Spec.Slots > 0 ? $"{i.Occupied}/{i.Spec.Slots}" : "pen", i.Mode, i.GroundKey))];
 
     /// <summary>Re-asserts that the furniture is on top of ordinary windows (pets go above it afterwards).</summary>
     public void BringToFront()
@@ -223,7 +234,13 @@ internal sealed class FurnitureHost : IDisposable
             var current = item.Current;
             var feet = item.IsHeld ? current.Feet : Vec2.Lerp(item.Previous.Feet, current.Feet, alpha);
             var bitmap = frames[System.Math.Clamp(current.FrameIndex, 0, frames.Length - 1)];
-            window.Present(new FurnitureFrame(feet, current.Size, current.FrameIndex).Bounds, bitmap, facingLeft: false, item.Spec.Smooth);
+            var bounds = new FurnitureFrame(feet, current.Size, current.FrameIndex).Bounds;
+            if (item.Grave is { } grave)
+            {
+                bitmap = GraveBitmap(item.Id, grave, bitmap, (bounds.Width, bounds.Height), item.Scale);
+            }
+
+            window.Present(bounds, bitmap, facingLeft: false, item.Spec.Smooth);
             if (!window.IsVisible)
             {
                 window.Show();
@@ -234,6 +251,7 @@ internal sealed class FurnitureHost : IDisposable
         {
             _windows[id].Close();
             _windows.Remove(id);
+            _graveArt.Remove(id);
         }
 
         if (added)
@@ -247,6 +265,19 @@ internal sealed class FurnitureHost : IDisposable
         {
             Save();
         }
+    }
+
+    /// <summary>The gravestone with its name and dates, drawn once per size (and again if its details change).</summary>
+    private BitmapSource GraveBitmap(int id, GraveInfo grave, BitmapSource stone, (int, int) size, double scale)
+    {
+        if (_graveArt.TryGetValue(id, out var cached) && cached.Grave == grave && cached.Size == size)
+        {
+            return cached.Bitmap;
+        }
+
+        var bitmap = GraveArt.Render(grave, stone, size, scale);
+        _graveArt[id] = (grave, size, bitmap);
+        return bitmap;
     }
 
     private PetWindow CreateWindow(FurnitureItem item)

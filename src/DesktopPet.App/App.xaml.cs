@@ -12,6 +12,7 @@ using DesktopPet.App.UI;
 using DesktopPet.Core.Abstractions;
 using DesktopPet.Core.Animation;
 using DesktopPet.Core.Breeding;
+using DesktopPet.Core.Death;
 using DesktopPet.Core.Furniture;
 using DesktopPet.Core.Math;
 using DesktopPet.Core.Persistence;
@@ -25,7 +26,8 @@ namespace DesktopPet.App;
 /// <summary>
 /// Composition root. No main window: one window per pet plus a tray icon; exit via the menu.
 /// Pets come and go with their folders (pets\n\). Settings, shared sprites, furniture and each pet's traits, personality
-/// and own sprites come from the data folder and reload live. The furniture is shared by all pets.
+/// and own sprites come from the data folder and reload live. The furniture is shared by all pets. A dead pet's folder
+/// stays (its save is marked dead) and it has a gravestone instead of a window, until it's revived or deleted.
 /// </summary>
 [SuppressMessage("Design", "CA1001:Types that own disposable fields should be disposable",
     Justification = "WPF Application can't be IDisposable; fields are disposed in OnExit.")]
@@ -100,9 +102,11 @@ public partial class App : Application
             problems.AddRange(StartPet(id, loaded, names, dropIn: _pets.Count > 0));
         }
 
+        PlaceGraves();
+
         _menu = new PetMenu(
-            defaultTarget: () => _lastClicked ?? _pets[0],
-            canAdd: () => _pets.Count + (_furniture?.EggCount ?? 0) < PetRoster.MaxPets,
+            defaultTarget: () => _lastClicked ?? _pets.FirstOrDefault(),
+            canAdd: () => RoomForPet,
             canRemove: () => _pets.Count > 1,
             onAdd: AddPet,
             onRemove: pet => RemovePet((PetHost)pet),
@@ -234,6 +238,8 @@ public partial class App : Application
             _lastClicked = pet;
             _menu?.ShowFor(pet, System.Windows.Forms.Cursor.Position);
         };
+        pet.Warned += (_, warning) => OnWarned(pet, warning);
+        pet.Died += (_, death) => OnDied(pet, death);
 
         if (dropAt is { } at)
         {
@@ -322,7 +328,7 @@ public partial class App : Application
         var now = DateTimeOffset.UtcNow;
         TryWrite(() => _data.WriteTraits(id, traits), problems);
         TryWrite(() => _data.WritePersonality(id, personality), problems);
-        TryWrite(() => new JsonFileSaveStore(_data.SavePath(id)).Save(SaveData.From(PetStats.Fresh, now, lastMated: now)), problems);
+        TryWrite(() => new JsonFileSaveStore(_data.SavePath(id)).Save(SaveData.From(PetStats.Fresh, now, lastMated: now) with { BornUtc = now }), problems);
         if (egg.SpritesFrom is { } parent && _data.HasOwnSprites(parent))
         {
             TryWrite(() => _data.CopySprites(parent, id), problems);
@@ -396,6 +402,167 @@ public partial class App : Application
         }
     }
 
+    // ---- Death ----
+
+    /// <summary>A need went critical or reached 0: a notification, so the user can step in before it's too late.</summary>
+    private void OnWarned(PetHost pet, PetWarning warning)
+    {
+        var name = pet.Name;
+        var left = InAbout(warning.HoursLeft);
+        var (title, text) = (warning.Kind, warning.Need) switch
+        {
+            (WarningKind.Critical, Need.Hunger) => ($"{name} is very hungry", $"Feed {name} soon."),
+            (WarningKind.Critical, Need.Happiness) => ($"{name} is very unhappy", $"Play with {name}, or give {name} a pat (a click)."),
+            (WarningKind.Critical, _) => ($"{name} is worn out", $"Let {name} sleep (Sleep in the menu)."),
+            (WarningKind.AtZero, Need.Hunger) => ($"{name} is starving!", $"Without food, {name} will die {left}."),
+            (WarningKind.AtZero, Need.Happiness) => ($"{name} is miserable!", $"Without some play, {name} will die {left}."),
+            (WarningKind.AtZero, _) => ($"{name} has no energy left!", $"Without sleep, {name} will die {left}."),
+            _ => ($"{name} is in a bad way", $"Every need is critical: {name} will die {left} without care."),
+        };
+        _tray?.Notify(title, text, warning: warning.Kind != WarningKind.Critical);
+    }
+
+    /// <summary>"in about 2 hours", "in about 40 minutes", "any moment now".</summary>
+    private static string InAbout(double hours)
+    {
+        var minutes = (int)System.Math.Ceiling(hours * 60);
+        return minutes switch
+        {
+            <= 1 => "any moment now",
+            < 90 => $"in about {minutes} minutes",
+            _ => $"in about {System.Math.Round(minutes / 60.0)} hours",
+        };
+    }
+
+    /// <summary>A pet died of neglect: its window goes, its save is marked dead, and a gravestone stands where it was.</summary>
+    private void OnDied(PetHost pet, PetDeath death)
+    {
+        if (!_pets.Remove(pet))
+        {
+            return;
+        }
+
+        _chat?.Forget(pet.Id);
+        _breeding?.Forget(pet.Id);
+        if (_lastClicked == pet)
+        {
+            _lastClicked = null;
+        }
+
+        var feet = pet.Feet;
+        pet.Close(save: true); // the save says it's dead, so it isn't started again
+        var grave = new GraveInfo { PetId = pet.Id, Name = pet.Name, BornUtc = pet.BornUtc, DiedUtc = death.AtUtc, Cause = death.Cause };
+        _furniture?.AddGrave(new Vec2(feet.X, feet.Y - 2), grave);
+        BringPetsToFront();
+        _tray?.Notify($"{pet.Name} has died", $"{grave.Story} Right-click the gravestone to bring {pet.Name} back.", warning: true);
+    }
+
+    /// <summary>
+    /// At startup: every dead pet gets one gravestone (where room.json had it, else dropped in), with its details read
+    /// from its folder. Gravestones of pets that aren't dead any more, or whose folder is gone, are removed.
+    /// </summary>
+    private void PlaceGraves()
+    {
+        var dead = _data.DeadPets().ToDictionary(d => d.Id, d => d.Save);
+        var placed = new HashSet<int>();
+        foreach (var item in _furniture!.World.GraveItems.ToList())
+        {
+            var id = item.Grave!.PetId;
+            if (!dead.TryGetValue(id, out var save) || !placed.Add(id))
+            {
+                _furniture.Remove(item);
+                continue;
+            }
+
+            _furniture.World.SetGrave(item, GraveFor(id, save, item.Grave.Name));
+        }
+
+        foreach (var (id, save) in dead.Where(d => !placed.Contains(d.Key)))
+        {
+            _furniture.AddGrave(RandomDropPoint(), GraveFor(id, save, $"Pet {id}"));
+        }
+    }
+
+    /// <summary>A dead pet's gravestone details: its name from its traits.json (else <paramref name="fallbackName"/>), its dates from its save.</summary>
+    private GraveInfo GraveFor(int id, SaveData save, string fallbackName)
+    {
+        var name = _data.LoadTraits(id)?.Traits?.Name ?? fallbackName;
+        var grave = GraveInfo.From(id, name, save)!;
+        if (grave.BornUtc is null && Directory.Exists(_data.PetFolder(id)))
+        {
+            grave = grave with { BornUtc = Directory.GetCreationTimeUtc(_data.PetFolder(id)) };
+        }
+
+        return grave;
+    }
+
+    /// <summary>Pets plus eggs are below the cap (gravestones don't count).</summary>
+    private bool RoomForPet => _pets.Count + (_furniture?.EggCount ?? 0) < PetRoster.MaxPets;
+
+    /// <summary>
+    /// Brings a dead pet back where its gravestone was: the same folder (traits, personality, art), its save no longer
+    /// dead and every need at a safe level.
+    /// </summary>
+    private void Revive(FurnitureItem item)
+    {
+        if (item.Grave is not { } grave || _furniture is null || !RoomForPet)
+        {
+            return;
+        }
+
+        var id = grave.PetId;
+        var store = new JsonFileSaveStore(_data.SavePath(id));
+        var problems = new List<string>();
+        var revived = (store.Load() ?? new SaveData()).Revived(_config.Death, DateTimeOffset.UtcNow);
+        TryWrite(() => store.Save(revived), problems);
+        if (problems.Count > 0)
+        {
+            ReportProblems($"{grave.Name} couldn't be brought back", problems);
+            return;
+        }
+
+        var feet = item.Feet;
+        _furniture.Remove(item);
+        var loaded = _data.LoadTraits(id);
+        if (loaded is { Traits: null })
+        {
+            problems.AddRange(loaded.Errors.Select(error => $@"pets\{id}\traits.json: {error}"));
+        }
+
+        var names = _pets.Select(p => p.Name).ToList();
+        problems.AddRange(StartPet(id, loaded, names, dropIn: false, dropAt: new Vec2(feet.X, feet.Y - 2)));
+        var pet = _pets[^1];
+        if (problems.Count > 0)
+        {
+            ReportProblems($"{pet.Name} is back, but some files have problems", problems);
+        }
+        else
+        {
+            _tray?.Notify($"{pet.Name} is back!", $"Take good care of {pet.Name} this time.");
+        }
+    }
+
+    /// <summary>Deletes a dead pet for good: its folder goes to the Recycle Bin, then its gravestone goes.</summary>
+    private void DeleteGrave(FurnitureItem item)
+    {
+        if (item.Grave is not { } grave || _furniture is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _data.RecyclePetFolder(grave.PetId);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or OperationCanceledException)
+        {
+            ReportProblems($"{grave.Name}'s folder couldn't be removed (the gravestone stays)", [ex.Message]);
+            return;
+        }
+
+        _furniture.Remove(item);
+    }
+
     /// <summary>Somewhere along the top of the primary monitor's work area, so new pets don't all land in one spot.</summary>
     private Vec2 RandomDropPoint()
     {
@@ -445,9 +612,9 @@ public partial class App : Application
         var specs = new List<FurnitureSpec>();
         foreach (var (kind, result) in _data.LoadFurniture([.. Animations.All.Select(a => a.Id)]))
         {
-            if (string.Equals(kind, Eggs.Kind, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(kind, Eggs.Kind, StringComparison.OrdinalIgnoreCase) || string.Equals(kind, Graves.Kind, StringComparison.OrdinalIgnoreCase))
             {
-                problems.Add($@"furniture\{kind}.json: ""{Eggs.Kind}"" is the built-in egg; rename the file to use it as furniture");
+                problems.Add($@"furniture\{kind}.json: ""{kind}"" is built in (the egg or the gravestone); rename the file to use it as furniture");
                 continue;
             }
 
@@ -477,6 +644,7 @@ public partial class App : Application
         }
 
         art[Eggs.Kind] = FurnitureArt.BuiltIn(Eggs.Spec) ?? [];
+        art[Graves.Kind] = FurnitureArt.BuiltIn(Graves.Spec) ?? [];
         _furnitureSpecs = specs.ToDictionary(s => s.Kind, StringComparer.OrdinalIgnoreCase);
         _furniture!.SetSpecs(specs, art);
         return problems;
@@ -502,7 +670,7 @@ public partial class App : Application
         _furniture!.Add(kind, new Vec2(feet.X, feet.Y - pet.SizePx - 4));
     }
 
-    /// <summary>Right-clicked furniture: its name and Remove.</summary>
+    /// <summary>Right-clicked furniture: its name and Remove. A gravestone: whose it is, Revive and Delete.</summary>
     private void ShowFurnitureMenu(FurnitureItem item)
     {
         _furnitureMenu ??= new System.Windows.Forms.ContextMenuStrip();
@@ -512,9 +680,28 @@ public partial class App : Application
         }
 
         _furnitureMenu.Items.Clear();
-        var header = new System.Windows.Forms.ToolStripLabel(item.Spec.Name);
+        var header = new System.Windows.Forms.ToolStripLabel(item.Grave is { } dead ? $"{dead.Name}'s gravestone" : item.Spec.Name);
         header.Font = new System.Drawing.Font(header.Font, System.Drawing.FontStyle.Bold);
         _furnitureMenu.Items.Add(header);
+        if (item.Grave is { } grave)
+        {
+            var culture = System.Globalization.CultureInfo.CurrentCulture;
+            var died = GraveInfo.Date(grave.DiedUtc, culture);
+            var dates = grave.BornUtc is { } born ? $"{GraveInfo.Date(born, culture)} – {died}" : $"Died {died}";
+            _furnitureMenu.Items.Add(new System.Windows.Forms.ToolStripLabel($"{dates}. {grave.Story}"));
+            _furnitureMenu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
+            var room = RoomForPet;
+            _furnitureMenu.Items.Add(new System.Windows.Forms.ToolStripMenuItem(
+                room ? $"Revive {grave.Name}" : $"Revive {grave.Name} (no room: {PetRoster.MaxPets} pets and eggs already)", null, (_, _) => Revive(item))
+            {
+                Enabled = room,
+            });
+            _furnitureMenu.Items.Add(new System.Windows.Forms.ToolStripMenuItem(
+                $"Delete {grave.Name} for good (folder to the Recycle Bin)", null, (_, _) => DeleteGrave(item)));
+            _furnitureMenu.Show(System.Windows.Forms.Cursor.Position);
+            return;
+        }
+
         if (item.Egg is { } laid)
         {
             _furnitureMenu.Items.Add(new System.Windows.Forms.ToolStripLabel($"Laid by {laid.ParentNames}. It hatches {HatchesIn(laid)}."));

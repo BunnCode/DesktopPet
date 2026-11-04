@@ -62,8 +62,15 @@ internal sealed class DataFolder(string root)
         [.. PetRoster.IdsFromFolderNames(Directory.EnumerateDirectories(Pets).Select(d => Path.GetFileName(d)))
             .Where(id => File.Exists(SavePath(id)) || File.Exists(TraitsPath(id)))];
 
-    /// <summary>Pets to start with: one per pet folder, or pet 1 if there are none.</summary>
-    public IReadOnlyList<int> StartupPets() => PetRoster.StartupPets(ExistingPets());
+    /// <summary>Pets to start with: one per pet folder except the dead ones, or pet 1 if there are no pet folders.</summary>
+    public IReadOnlyList<int> StartupPets() => PetRoster.StartupPets(ExistingPets(), [.. DeadPets().Select(d => d.Id)]);
+
+    /// <summary>The dead pets (their save is marked dead) with their saves, ascending.</summary>
+    public IReadOnlyList<(int Id, SaveData Save)> DeadPets() =>
+        [.. ExistingPets()
+            .Select(id => (Id: id, Save: new JsonFileSaveStore(SavePath(id)).Load()))
+            .Where(p => p.Save is { IsDead: true })
+            .Select(p => (p.Id, p.Save!))];
 
     /// <summary>Creates the folders the user is expected to put things in.</summary>
     public void EnsureExists()

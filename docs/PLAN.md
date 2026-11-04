@@ -32,9 +32,9 @@ This document describes the design **as built**, the status of each milestone, a
 | M12 | Speech bubbles and sticky notes (two behaviors) from a shared local LLM (Qwen3.5-2B) | Done | `1045cdf` |
 | M12b | Reading on-screen text (Windows OCR) and referring to it when talking or writing notes | Done | `630c904` |
 | M13 | Breeding: courtship, eggs that hatch into mixed children, fixing pets, personality traits list | Done | `d1e00b3` |
-| M14 | Death and gravestones | Planned | |
+| M14 | Death and gravestones: neglect timers, warnings, gravestones with name and dates, revive or delete | Done | |
 
-490 unit tests, all in `DesktopPet.Core.Tests`.
+522 unit tests, all in `DesktopPet.Core.Tests`.
 
 ### Changes from the original plan
 
@@ -91,6 +91,17 @@ This document describes the design **as built**, the status of each milestone, a
   before. Hatchlings get a blend of their parents' (half and half, ±14 per channel).
 - **M13 courtship** brings the pair together: both walk to a point beside each other on their surface and face each
   other before the hearts.
+- **M14 both death rules:** each need has its own timer at 0 (`ZeroHours`, 2), and all three critical together have
+  another (`AllCriticalHours`, 4). A need rising off 0 resets its timer; time that doesn't count pauses it.
+- **M14 the pen is safe too:** time shut in a play pen doesn't count toward death (needs can't drop there anyway).
+- **M14 "marked dead"** is the pet's `save.json` (version 3: `DiedUtc`, `DiedOf`), not a separate file. Version 3
+  also saves the neglect timers, so a restart doesn't reset a countdown, and `BornUtc` for the gravestone's dates
+  (pets from before it get their folder's creation time).
+- **M14 warnings only with death on:** with `Death.Enabled` off there are no new notifications at all. Each need warns
+  once when it goes critical (again only after climbing 5 back above it) and once when it reaches 0.
+- **M14 no dying animation:** the pet's window just goes and the gravestone drops in where it was, with a
+  notification saying what happened.
+- **M14 Delete** moves the folder to the Recycle Bin, like removing a pet, rather than deleting it outright.
 
 ---
 
@@ -358,6 +369,8 @@ push a window off screen.
 - **Only one courtship at a time,** and only between pets on the same surface.
 - **Pets beside furniture face it from the side** (the art is a side view), so TV watchers stand left and right of the
   TV rather than in front of it.
+- **A dead pet's files aren't watched:** renaming it in its traits.json shows on the gravestone after a restart.
+- **Gravestone dates** use the PC's culture for month names, and a long name is shrunk, then cut short with "…".
 
 ---
 
@@ -427,7 +440,7 @@ jacket colour.
 - The old procedural `PlaceholderArt` was removed. In Core, `SpriteSheetSpec.UsingPlaceholder` became `UsingDefault`.
 
 ## Planned: M10–M14
-Requested 2026-11-03. M10, M11, M12, M12b and M13 are done; M14 isn't started. **Suggested order:** M10 first, because M12 and M13 build on per-pet traits. M11
+Requested 2026-11-03. All done (M14 on 2026-11-04). **Suggested order:** M10 first, because M12 and M13 build on per-pet traits. M11
 and M12 don't depend on each other. M13 reuses M11's world objects for the egg. M14 goes last, because its warnings use
 M12's needy chat.
 
@@ -637,21 +650,37 @@ live check found furniture windows being doubled when an egg was added from a ti
 - **Pet cap:** pets plus eggs are at most 8: no mating and no *Add a pet* at the cap.
 - **Off switch and tuning:** `settings.json` under `Breeding` (`Enabled` and the numbers above).
 
-### M14: death (planned)
-Pets whose needs go unmet for long enough die, leaving a gravestone.
-- **Rule:** a pet dies when a stat stays at 0 (or all stats stay critical) for a set time from `settings.json`. There
-  is an off switch.
-- **Warnings first:** sad looks, needy chat (M12), and a tray notification when a stat goes critical.
-- **The away rule stays:** stats can't fall below 20 while the user is away, so a pet can only die of neglect while the
-  user is at the PC. Closing the app, sleeping the PC or locking the screen never kills a pet.
-- **Gravestone:** a world object where the pet died, showing its name and dates. The pet's folder stays, marked dead,
-  so the gravestone survives restarts. Right-clicking it offers:
-  - **Revive:** the pet comes back where the gravestone was, with its traits, personality and art, and stats reset to a
-    safe level (set in `settings.json`).
-  - **Delete:** removes the gravestone and the pet's folder.
-- **The last pet dying** is nothing special: it leaves a gravestone like any other, and the user can revive it or add a
-  new pet.
-- **Pet cap:** gravestones don't count toward the cap of 8. Reviving is disabled while at the cap.
+### M14: death (done)
+Built 2026-11-04. Pets whose needs go unmet for long enough die, leaving a gravestone. Checked live with
+`ZeroHours` at 0.01 and furniture-seeking off: a pet at hunger 0 died after 36 s, its save was marked dead, a
+gravestone with its name and dates engraved dropped onto the taskbar where it was, and after a restart the pet stayed
+dead (not started, save untouched) with its one gravestone. The user's data folder was restored afterwards. Revive,
+Delete and the menu with no pets haven't been clicked through live yet.
+- **Rule** (Core `Mortality`, inside `PetSimulation.UpdateStats`): a pet dies when one need stays at 0 for
+  `ZeroHours` (2), or all three stay below critical for `AllCriticalHours` (4). Each need has its own timer; it resets
+  when the need rises off 0. Only time with the user there counts: not locked, not across a frozen-process gap, not with
+  the app closed, and not shut in a pen. The timers are saved, so a restart doesn't reset them. The cause is the need
+  that ran out (hunger, sadness, exhaustion) or neglect. A dead pet's needs stop changing.
+- **Warnings first:** the sad looks and needy chat from before, plus tray notifications (`PetSimulation.TakeWarnings`
+  → `PetHost.Warned`): a need goes critical ("Mia is very hungry. Feed Mia soon."), a need reaches 0 ("Mia is
+  starving! Without food, Mia will die in about 2 hours."), all three critical. Each fires once until the need
+  recovers.
+- **The away rule stays:** stats can't fall below 20 while the user is away, and away time doesn't count, so closing
+  the app, sleeping the PC or locking the screen never kills a pet.
+- **Dying** (`PetHost.Died` → `App.OnDied`): the pet's window closes, its save is written marked dead (`DiedUtc`,
+  `DiedOf`), and a gravestone drops in where it was. Chat and breeding forget it.
+- **Gravestone** (`Graves.Spec`, built-in furniture like the egg, 64×60 DIP; not in the Furniture menu, never removed
+  by "Remove all furniture" or furniture files): the stone art from the generator with the name and dates (born –
+  died) engraved by the app (`GraveArt`), drawn at the exact pixel size so the small text stays sharp. Saved in
+  `room.json` with whose it is. The pet's folder is what counts: at startup every dead pet gets one gravestone (where
+  `room.json` had it, else dropped in at the top), and gravestones without a dead pet are removed. It can be dragged.
+  Right-clicking it shows the dates and what happened, and offers:
+  - **Revive:** the save is rewritten alive with every need at `ReviveStat` (60), no neglect, its birthday and mating
+    cooldown kept; the gravestone goes and the pet drops in there with its traits, personality and art.
+  - **Delete … for good:** the pet's folder goes to the Recycle Bin, then the gravestone goes.
+- **The last pet dying** is nothing special: with no pets the menu shows only the app-wide items, with "Add a pet".
+- **Pet cap:** gravestones don't count toward the cap of 8. Revive is disabled while pets and eggs are at the cap.
+- **Off switch and tuning:** `settings.json` under `Death` (`Enabled`, `ZeroHours`, `AllCriticalHours`, `ReviveStat`).
 
 ## Leftovers (not started)
 Candidates, none chosen yet:

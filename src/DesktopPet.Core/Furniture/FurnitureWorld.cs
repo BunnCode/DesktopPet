@@ -1,5 +1,6 @@
 using DesktopPet.Core.Abstractions;
 using DesktopPet.Core.Breeding;
+using DesktopPet.Core.Death;
 using DesktopPet.Core.Input;
 using DesktopPet.Core.Math;
 using DesktopPet.Core.Physics;
@@ -45,11 +46,14 @@ public sealed class FurnitureWorld
     /// <summary>The furniture in the world, oldest first.</summary>
     public IReadOnlyList<FurnitureItem> Items => _items;
 
-    /// <summary>The kinds that can be placed, in menu order (not the egg).</summary>
-    public IReadOnlyList<FurnitureSpec> Specs => [.. _specs.Values.Where(s => s.Kind != Eggs.Kind)];
+    /// <summary>The kinds that can be placed, in menu order (not the egg or the gravestone).</summary>
+    public IReadOnlyList<FurnitureSpec> Specs => [.. _specs.Values.Where(s => s.Kind != Eggs.Kind && s.Kind != Graves.Kind)];
 
     /// <summary>The eggs in the world, oldest first.</summary>
     public IEnumerable<FurnitureItem> EggItems => _items.Where(i => i.Egg is not null);
+
+    /// <summary>The gravestones in the world, oldest first.</summary>
+    public IEnumerable<FurnitureItem> GraveItems => _items.Where(i => i.Grave is not null);
 
     /// <summary>Goes up whenever furniture is added, removed or put down somewhere new, so the host knows to save.</summary>
     public int Version { get; private set; }
@@ -71,7 +75,7 @@ public sealed class FurnitureWorld
 
     /// <summary>
     /// The current definitions (live reload). Furniture of a kind that's still defined takes the new definition;
-    /// furniture of a kind that's gone is removed. The egg is built in and always stays.
+    /// furniture of a kind that's gone is removed. The egg and the gravestone are built in and always stay.
     /// </summary>
     public void SetSpecs(IEnumerable<FurnitureSpec> specs)
     {
@@ -83,6 +87,7 @@ public sealed class FurnitureWorld
         }
 
         _specs[Eggs.Kind] = Eggs.Spec;
+        _specs[Graves.Kind] = Graves.Spec;
 
         foreach (var item in _items.ToList())
         {
@@ -127,6 +132,28 @@ public sealed class FurnitureWorld
         var item = Add(Eggs.Kind, feet)!;
         item.Egg = egg;
         return item;
+    }
+
+    /// <summary>Puts a gravestone at <paramref name="feet"/>; it drops onto whatever is below.</summary>
+    public FurnitureItem AddGrave(Vec2 feet, GraveInfo grave)
+    {
+        ArgumentNullException.ThrowIfNull(grave);
+        _specs[Graves.Kind] = Graves.Spec;
+        var item = Add(Graves.Kind, feet)!;
+        item.Grave = grave;
+        return item;
+    }
+
+    /// <summary>Updates whose gravestone it is (its pet's details were reread).</summary>
+    public void SetGrave(FurnitureItem item, GraveInfo grave)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(grave);
+        if (item.Grave is not null && item.Grave != grave)
+        {
+            item.Grave = grave;
+            Version++;
+        }
     }
 
     public void Remove(FurnitureItem item)
@@ -312,7 +339,7 @@ public sealed class FurnitureWorld
     // ---- Saving ----
 
     public RoomSave CreateSave() =>
-        new() { Items = [.. _items.Select(i => new RoomItem(i.Kind, System.Math.Round(i.Feet.X), System.Math.Round(i.Feet.Y), i.Egg))] };
+        new() { Items = [.. _items.Select(i => new RoomItem(i.Kind, System.Math.Round(i.Feet.X), System.Math.Round(i.Feet.Y), i.Egg, i.Grave))] };
 
     /// <summary>Puts saved furniture back (dropped from where it was, so it settles on whatever is there now).</summary>
     public void Load(RoomSave save)
@@ -331,6 +358,13 @@ public sealed class FurnitureWorld
                 if (saved.Egg is { Child: not null, Parents: not null } egg)
                 {
                     AddEgg(feet, egg);
+                }
+            }
+            else if (string.Equals(kind, Graves.Kind, StringComparison.OrdinalIgnoreCase))
+            {
+                if (saved.Grave is { PetId: >= 1, Name: not null } grave)
+                {
+                    AddGrave(feet, grave);
                 }
             }
             else

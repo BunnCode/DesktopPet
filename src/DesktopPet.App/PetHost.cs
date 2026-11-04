@@ -7,6 +7,7 @@ using DesktopPet.Core.Animation;
 using DesktopPet.Core.Behavior;
 using DesktopPet.Core.Breeding;
 using DesktopPet.Core.Chat;
+using DesktopPet.Core.Death;
 using DesktopPet.Core.Furniture;
 using DesktopPet.Core.Math;
 using DesktopPet.Core.Persistence;
@@ -39,6 +40,7 @@ internal sealed class PetHost : IPetControls, IDisposable
     private DesktopSnapshot _snapshot;
     private bool _pointerActive;
     private bool _closed;
+    private bool _deathRaised;
 
     /// <param name="id">Pet number (1, 2, …), its folder name; also picks its jacket colour.</param>
     /// <param name="config">Shared tuning.</param>
@@ -57,7 +59,12 @@ internal sealed class PetHost : IPetControls, IDisposable
         _store = store;
         _desktop = desktop;
         _snapshot = _desktop.GetSnapshot();
-        _simulation = new PetSimulation(config, _snapshot, save: _store.Load(), traits: traits, furniture: furniture);
+        var save = _store.Load();
+        _simulation = new PetSimulation(config, _snapshot, save: save, traits: traits, furniture: furniture);
+        if (save is { BornUtc: null } && _store is JsonFileSaveStore file && Path.GetDirectoryName(file.Path) is { } folder)
+        {
+            _simulation.BornUtc = Directory.GetCreationTimeUtc(folder); // a pet from before birthdays: its folder's age will do
+        }
         _atlas = atlas;
 
         _window = new PetWindow();
@@ -80,6 +87,15 @@ internal sealed class PetHost : IPetControls, IDisposable
 
     /// <summary>The pet was right-clicked.</summary>
     public event EventHandler? MenuRequested;
+
+    /// <summary>A need went critical or reached 0: tell the user.</summary>
+    public event EventHandler<PetWarning>? Warned;
+
+    /// <summary>The pet died of neglect (raised once, after the step it happened in).</summary>
+    public event EventHandler<PetDeath>? Died;
+
+    /// <summary>When it was born or added.</summary>
+    public DateTimeOffset BornUtc => _simulation.BornUtc;
 
     public int Id { get; }
 
@@ -305,6 +321,17 @@ internal sealed class PetHost : IPetControls, IDisposable
         foreach (var command in _simulation.TakeCommands())
         {
             WindowManipulator.MoveBy(command.WindowId, command.Dx, command.Dy);
+        }
+
+        foreach (var warning in _simulation.TakeWarnings())
+        {
+            Warned?.Invoke(this, warning);
+        }
+
+        if (_simulation.Death is { } death && !_deathRaised)
+        {
+            _deathRaised = true;
+            _dispatcher.BeginInvoke(() => Died?.Invoke(this, death)); // not from inside our own loop, which it closes
         }
     }
 }

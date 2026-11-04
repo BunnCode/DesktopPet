@@ -61,6 +61,12 @@ public sealed class FurnitureItem
     /// <summary>What the egg holds, if this is an egg (<see cref="Breeding.Eggs"/>).</summary>
     public Breeding.EggInfo? Egg { get; internal set; }
 
+    /// <summary>Whose gravestone this is, if it's a gravestone (<see cref="Death.Graves"/>).</summary>
+    public Death.GraveInfo? Grave { get; internal set; }
+
+    /// <summary>Furniture proper: not an egg or a gravestone (those are built in and don't count as furniture).</summary>
+    public bool IsFurniture => Egg is null && Grave is null;
+
     /// <summary>Taken out of the world; pets heading for it give up.</summary>
     public bool IsRemoved { get; internal set; }
 
