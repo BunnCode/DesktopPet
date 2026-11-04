@@ -27,7 +27,7 @@ This document describes the design **as built**, the status of each milestone, a
 | M8 | Settings file and real sprite sheets (live reload) | Done | |
 | M9 | Multiple pets | Done | `634aa82` |
 | — | Default art: chibi pixel rabbit replaces the placeholder blob | Done | |
-| M10 | Per-pet traits: own folder and sprites, names, neediness, personality | Done | |
+| M10 | Per-pet traits: own folder and sprites, names, neediness, personality | Done | `976c95a` |
 | M11 | Furniture, defined in user-editable files | Planned | |
 | M12 | Chat bubbles and sticky notes from a shared local LLM (Qwen3.5-2B) | Planned | |
 | M13 | Breeding: eggs that hatch into mixed children | Planned | |
