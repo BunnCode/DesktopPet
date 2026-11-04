@@ -54,7 +54,7 @@ public static class Graves
     /// <summary>The gravestone's furniture kind; a furniture file of this name is ignored.</summary>
     public const string Kind = "grave";
 
-    /// <summary>32×30 art pixels at 2 DIP each, drawn by the sprite generator; the app writes the name and dates on it.</summary>
+    /// <summary>64×60 art pixels (1 DIP each), drawn by the sprite generator; the app writes the name and dates on it.</summary>
     public static FurnitureSpec Spec { get; } = new()
     {
         Kind = Kind, Name = "Gravestone", WidthDip = 64, HeightDip = 60, Art = "grave.png", Frames = 1, Slots = 0,

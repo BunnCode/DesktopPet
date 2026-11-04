@@ -12,11 +12,11 @@ namespace DesktopPet.App.Furniture;
 /// </summary>
 internal static class GraveArt
 {
-    // The stone's plain face, in art pixels of grave.png (tools/sprites/make_rabbit.py, grave()).
-    private const double FaceLeft = 7;
-    private const double FaceTop = 5;
-    private const double FaceWidth = 18;
-    private const double FaceHeight = 17;
+    // The stone's plain face, in art pixels of grave.png (tools/sprites/make_rabbit.py, grave(): 64×60).
+    private const double FaceLeft = 14;
+    private const double FaceTop = 10;
+    private const double FaceWidth = 36;
+    private const double FaceHeight = 34;
 
     private const double NameDip = 9;
     private const double DateDip = 6.5;

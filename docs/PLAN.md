@@ -447,7 +447,7 @@ jacket colour.
   digitigrade legs with ankle tufts, and a fluffy white tail. The generator now draws from shapes (ellipses, polygons,
   tapered strokes, each part auto-outlined) instead of 32×32 ASCII grids. `DefaultArt.FrameSize` became 64; at the
   default `SizeDip` of 64 one art pixel is one DIP. The pose conventions scale (ledge seat at row 46 = 9/32). The
-  exported template is now 64×64 cells too. Furniture stays at 1 art px = 2 DIP, so it looks chunkier than the pet.
+  exported template is now 64×64 cells too. (Furniture was still at 1 art px = 2 DIP then; redrawn below.)
 - **Restyled 2026-11-04** after the user found the 64 px version still off: a chunky chibi sprite style (big round
   head about as tall as body plus legs, small pear-shaped body, stubby limbs, tall oval eyes, bold outlines), following
   a sprite sheet the user gave as a style reference, with details from their updated turnaround: the hands hide in
@@ -455,6 +455,13 @@ jacket colour.
   Then fixed: the walk cycle ran backwards (it lifted the leading foot), and the climb stretched the limbs to the
   wall (now the body moves to the wall instead). The arms' depth was backwards: in the 3/4 view the image-left arm
   is the near one, so it is now drawn over the body and the right one behind it.
+- **Furniture redrawn at the rabbit's resolution (2026-11-04):** every default piece, the egg and the gravestone are now
+  drawn at 1 art px = 1 DIP in the rabbit's style (shape-built parts, bold outlines, a light and a shade tone), so the
+  art is twice the old pixel size (`grave.png` 64×60, `tv.png` 144×40, ...). The DIP sizes, slots, seat heights and
+  physics are unchanged. The TV got rabbit-ear antennas and a tiny pet in its game; the playpen got round post tops;
+  the couch, bed and trampoline are padded. `GraveArt`'s face rectangle doubled to match (14,10, 36×34). Existing
+  `furniture\*.png` files in a data folder keep the old low-resolution art (they are only written on first run);
+  they still display, scaled up, until replaced with the new ones. The egg and gravestone are built in, so they update at once.
 - **More characters (2026-11-04):** the process is saved in `docs/CHARACTER_SPRITES.md` and the `character-sprites`
   project skill. A character is `tools/sprites/characters/<name>.py`, whose `apply(base)` overrides parts of
   `make_rabbit` (anything: palette, head, ears, face, clothing, legs, layout, `frames()`); `make_character.py`

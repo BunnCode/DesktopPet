@@ -43,7 +43,7 @@ public static class Eggs
     /// <summary>The egg's furniture kind; a furniture file of this name is ignored.</summary>
     public const string Kind = "egg";
 
-    /// <summary>12×13 art pixels at 2 DIP each, drawn by the sprite generator: two still frames, then a wobble.</summary>
+    /// <summary>24×26 art pixels (1 DIP each), drawn by the sprite generator: two still frames, then a wobble.</summary>
     public static FurnitureSpec Spec { get; } = new()
     {
         Kind = Kind, Name = "Egg", WidthDip = 24, HeightDip = 26, Art = "egg.png", Frames = 4, Fps = 1.5,

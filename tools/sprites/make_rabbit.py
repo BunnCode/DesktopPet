@@ -60,6 +60,14 @@ PAL = {
     'a': (0xD8, 0xCC, 0xB0),  # egg shell shade
     'D': (0xB4, 0xB2, 0xBC),  # gravestone
     'd': (0x8A, 0x88, 0x94),  # gravestone shade
+    'x': (0xA0, 0x28, 0x20),  # apple / ball shade
+    'I': (0xE8, 0x84, 0x92),  # couch light
+    'i': (0xD6, 0xA0, 0x6A),  # wood light
+    'n': (0x82, 0xB0, 0xEC),  # blanket light
+    'b': (0x7E, 0x81, 0x96),  # grey plastic light
+    'v': (0x44, 0x46, 0x56),  # grey plastic shade
+    'l': (0x7F, 0xCB, 0x82),  # leaf light
+    'm': (0x35, 0x7A, 0x3A),  # leaf shade
 }
 
 
@@ -566,216 +574,284 @@ def frames():
 
 
 # ---------------------------------------------------------------- furniture
-# Each piece is a strip of frames, drawn with fills and then auto-outlined, at 1 art pixel = 2 DIP (like the rabbit).
-# Sizes must match the defaults in Core (DefaultFurniture): width and height in DIP = art pixels x 2.
-def canvas(w, h):
-    return [['.'] * w for _ in range(h)]
+# Each piece is a strip of frames at 1 art pixel = 1 DIP, the same pixel grid as the rabbit, and built the same way:
+# parts drawn from shapes (a flat colour, a light tone on the upper-left edge, a shade on the lower-right edge), each
+# outlined in K, painted back to front. Sizes must match the defaults in Core (DefaultFurniture, Eggs, Graves): width
+# and height in DIP = art pixels.
+class Part:
+    """One part of a piece: a w x h grid of palette keys (None = empty)."""
+
+    def __init__(self, w, h):
+        self.w, self.h = w, h
+        self.g = [[None] * w for _ in range(h)]
+
+    def fill(self, shape, ch, only=None):
+        """Paints ch where shape holds; with only, just over pixels already holding one of those keys."""
+        for y in range(self.h):
+            row = self.g[y]
+            for x in range(self.w):
+                if (only is None or (row[x] is not None and row[x] in only)) and shape(x, y):
+                    row[x] = ch
+        return self
+
+    def outline(self):
+        hits = [(x + dx, y + dy) for y in range(self.h) for x in range(self.w) if self.g[y][x] is not None
+                for (dx, dy) in ((1, 0), (-1, 0), (0, 1), (0, -1))]
+        for (x, y) in hits:
+            if 0 <= x < self.w and 0 <= y < self.h and self.g[y][x] is None:
+                self.g[y][x] = 'K'
+        return self
 
 
-def fill(c, x0, y0, x1, y1, ch):
-    """Fills the inclusive rectangle (x0, y0)-(x1, y1)."""
-    for y in range(y0, y1 + 1):
-        for x in range(x0, x1 + 1):
-            if 0 <= y < len(c) and 0 <= x < len(c[0]):
-                c[y][x] = ch
-
-
-def border(c, x0, y0, x1, y1, ch='K'):
-    for x in range(x0, x1 + 1):
-        c[y0][x] = c[y1][x] = ch
-    for y in range(y0, y1 + 1):
-        c[y][x0] = c[y][x1] = ch
-
-
-def outlined(c):
-    """Outlines every filled pixel in K (into transparent neighbours only)."""
-    h, w = len(c), len(c[0])
-    filled = {(x, y) for y in range(h) for x in range(w) if c[y][x] != '.'}
-    for (x, y) in filled:
-        for (nx, ny) in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
-            if 0 <= nx < w and 0 <= ny < h and (nx, ny) not in filled:
-                c[ny][nx] = 'K'
+def compose(w, h, *parts):
+    c = [['.'] * w for _ in range(h)]
+    for p in parts:
+        for y in range(h):
+            for x in range(w):
+                if p.g[y][x] is not None:
+                    c[y][x] = p.g[y][x]
     return c
 
 
+def rect(x0, y0, x1, y1):
+    """The inclusive rectangle (x0, y0)-(x1, y1)."""
+    return lambda x, y: x0 <= x <= x1 and y0 <= y <= y1
+
+
+def rrect(x0, y0, x1, y1, r):
+    """The inclusive rectangle with corners rounded to radius r."""
+    def inside(x, y):
+        if not (x0 <= x <= x1 and y0 <= y <= y1):
+            return False
+        cx, cy = min(max(x, x0 + r), x1 - r), min(max(y, y0 + r), y1 - r)
+        return (x - cx) ** 2 + (y - cy) ** 2 <= (r + 0.4) ** 2
+    return inside
+
+
+def union(*shapes):
+    return lambda x, y: any(s(x, y) for s in shapes)
+
+
+def shifted(shape, dx, dy):
+    return lambda x, y: shape(x - dx, y - dy)
+
+
+def lit(shape, d=2):
+    """The strip along the upper-left edge of a shape, d pixels deep."""
+    return minus(shape, shifted(shape, d, d))
+
+
+def shaded(shape, d=2):
+    """The strip along the lower-right edge of a shape, d pixels deep."""
+    return minus(shape, shifted(shape, -d, -d))
+
+
+def solid(w, h, shape, base, light=None, dark=None, ld=2, sd=2):
+    """An outlined part: a flat colour, a light upper-left edge and a dark lower-right edge."""
+    p = Part(w, h).fill(shape, base)
+    if light:
+        p.fill(lit(shape, ld), light)
+    if dark:
+        p.fill(shaded(shape, sd), dark)
+    return p.outline()
+
+
 def ball():
-    """8x8, 4 frames: a red ball with a white band rolling round."""
+    """16x16, 4 frames: a red ball with a white band rolling round (the band turns 45 degrees a frame, the light stays)."""
     out = []
+    circle = ellipse(7.5, 7.5, 6.6, 6.6)
     for i in range(4):
-        c = canvas(8, 8)
-        for (x0, x1, y) in ((2, 5, 1), (1, 6, 2), (1, 6, 3), (1, 6, 4), (1, 6, 5), (2, 5, 6)):
-            fill(c, x0, y, x1, y, 'R')
-        band = 2 + i
-        for y in range(1, 7):
-            if c[y][band] == 'R':
-                c[y][band] = 'W'
-        c[2][2] = 'r' if band != 2 else 'W'
-        out.append(outlined(c))
+        a = math.radians(45 * i)
+        nx, ny = -math.sin(a), math.cos(a)
+        p = Part(16, 16).fill(circle, 'R')
+        p.fill(lambda x, y: abs((x - 7.5) * nx + (y - 7.5) * ny) <= 1.8, 'W', only='R')
+        p.fill(shaded(circle, 3), 'x', only='R')
+        p.fill(shaded(circle, 3), 'S', only='W')
+        p.fill(ellipse(5, 4.6, 1.7, 1.2), 'w')
+        out.append(compose(16, 16, p.outline()))
     return out
 
 
 def tv():
-    """24x20, 3 frames: off, then two frames of a little game on screen."""
+    """48x40, 3 frames: a chunky set with rabbit-ear antennas, off, then two frames of a little game on its screen."""
+    W, H = 48, 40
+    feet = solid(W, H, union(rrect(7, 32, 14, 38, 2), rrect(33, 32, 40, 38, 2)), 'o', 'O')
+    antennas = Part(W, H)
+    antennas.fill(union(stroke([(17, 9), (10, 2.5)], [1.0, 0.9]), stroke([(30, 9), (37, 2.5)], [1.0, 0.9])), 'G')
+    antennas.fill(union(ellipse(10, 2.5, 1.6, 1.6), ellipse(37, 2.5, 1.6, 1.6)), 'Y').outline()
+    case = solid(W, H, rrect(2, 8, 45, 34, 5), 'G', 'b', 'v')
+    screen_shape = rrect(6, 12, 33, 29, 3)
+    knobs = Part(W, H).fill(ellipse(40, 16.5, 2.4, 2.4), 'Y').fill(ellipse(40, 22.5, 2.4, 2.4), 'S').outline()
+    slits = Part(W, H)
+    for y in (26, 28, 30):
+        slits.fill(rect(37, y, 43, y), 'K')
     out = []
     for i in range(3):
-        c = canvas(24, 20)
-        fill(c, 1, 1, 22, 15, 'G')   # body
-        fill(c, 3, 16, 20, 16, 'o')  # shelf
-        fill(c, 5, 17, 6, 19, 'o')   # legs
-        fill(c, 17, 17, 18, 19, 'o')
-        outlined(c)
-        border(c, 2, 2, 21, 13)
-        fill(c, 3, 3, 20, 12, 'V' if i == 0 else 'Z')
+        screen = Part(W, H).fill(screen_shape, 'V')
         if i == 0:
-            fill(c, 4, 4, 5, 5, 'h')  # reflection
+            screen.fill(stroke([(9, 23), (17, 14)], [1.3, 1.3]), 'G', only='V')
+            screen.fill(stroke([(13, 27), (18, 21)], [0.9, 0.9]), 'G', only='V')
         else:
-            fill(c, 3, 11, 20, 12, 'L')            # ground
-            fill(c, 13, 9, 15, 10, 'L')            # a hill
-            x = 6 if i == 1 else 9
-            fill(c, x, 9 - (i - 1), x + 1, 10 - (i - 1), 'R')  # the hero jumps
-            c[5][16] = c[5][17] = 'Y'              # a coin
-        c[14][18] = 'L'
-        c[14][20] = 'R'
-        out.append(c)
+            screen.fill(screen_shape, 'Z')
+            screen.fill(union(ellipse(12.5, 17, 3.2, 1.5), ellipse(16, 16, 2.6, 1.8)), 'W', only='Z')
+            screen.fill(rect(6, 27, 33, 29), 'L', only='Z')
+            screen.fill(ellipse(27, 27, 6.5, 4.5), 'L', only='ZL')
+            screen.fill(rect(6, 27, 33, 27), 'l', only='L')
+            screen.fill(ellipse(26, 16, 1.8, 1.8), 'Y', only='Z')
+            screen.fill(rect(25, 15, 25, 15), 'w', only='Y')
+            hx, lift = (12, 0) if i == 1 else (15, 2)
+            hero = union(
+                ellipse(hx + 1.5, 20.2 - lift, 3.0, 2.6),
+                stroke([(hx + 0.2, 18 - lift), (hx - 0.4, 15.8 - lift)], [0.8, 0.8]),
+                stroke([(hx + 2.8, 18 - lift), (hx + 3.4, 15.8 - lift)], [0.8, 0.8]))
+            screen.fill(both(hero, screen_shape), 'F')
+            screen.fill(rect(hx + 2, 20 - lift, hx + 2, 20 - lift), 'E', only='F')
+            screen.fill(both(rect(hx - 0.5, 23 - lift, hx + 3.5, 26 - lift), screen_shape), 'R')
+        screen.outline()
+        out.append(compose(W, H, feet, antennas, case, screen, knobs, slits))
     return out
 
 
 def couch():
-    """40x18: back, two cushions, arms, short legs. The seat top is row 9 (18 DIP up)."""
-    c = canvas(40, 18)
-    fill(c, 3, 1, 36, 8, 'C')     # back
-    fill(c, 1, 5, 5, 13, 'C')     # arms
-    fill(c, 34, 5, 38, 13, 'C')
-    fill(c, 6, 9, 33, 12, 'C')    # seat
-    fill(c, 1, 13, 38, 14, 'c')   # base
-    fill(c, 3, 15, 4, 17, 'o')    # legs
-    fill(c, 35, 15, 36, 17, 'o')
-    outlined(c)
-    for y in range(2, 8):
-        c[y][20] = 'c'            # back cushion seam
-    for y in range(9, 13):
-        c[y][20] = 'K'            # seat cushion seam
-    fill(c, 6, 12, 33, 12, 'c')   # seat shade
-    fill(c, 1, 5, 5, 5, 'c')      # arm tops
-    fill(c, 34, 5, 38, 5, 'c')
-    return [c]
+    """80x36: two back cushions, two seat cushions and arms, in a soft pink. The seat top is row 18 (18 DIP up)."""
+    W, H = 80, 36
+    legs = solid(W, H, union(rrect(6, 30, 12, 34, 1), rrect(67, 30, 73, 34, 1)), 'o', 'O')
+    frame = solid(W, H, rrect(12, 26, 67, 31, 2), 'c')
+    back = solid(W, H, rrect(7, 1, 72, 25, 7), 'C', 'I', 'c')
+    back.fill(rect(39, 5, 39, 20), 'c')
+    for x in (22, 57):
+        for y in (9, 15):
+            back.fill(rect(x, y, x, y + 1), 'c')
+    seat_l = solid(W, H, rrect(14, 18, 39, 29, 3), 'C', 'I', 'c')
+    seat_r = solid(W, H, rrect(40, 18, 65, 29, 3), 'C', 'I', 'c')
+    arm_l = solid(W, H, rrect(1, 11, 13, 29, 5), 'C', 'I', 'c')
+    arm_r = solid(W, H, rrect(66, 11, 78, 29, 5), 'C', 'I', 'c')
+    return [compose(W, H, legs, frame, back, seat_l, seat_r, arm_l, arm_r)]
 
 
 def bed():
-    """40x16: headboard, pillow, blanket, footboard. The mattress top is row 7 (18 DIP up)."""
-    c = canvas(40, 16)
-    fill(c, 1, 1, 4, 15, 'O')     # headboard
-    fill(c, 35, 6, 38, 15, 'O')   # footboard
-    fill(c, 5, 11, 34, 13, 'o')   # frame
-    fill(c, 5, 7, 34, 10, 'S')    # sheet
-    fill(c, 15, 6, 34, 10, 'U')   # blanket
-    fill(c, 6, 5, 13, 7, 'W')     # pillow
-    outlined(c)
-    fill(c, 15, 10, 34, 10, 'u')  # blanket shade
-    fill(c, 2, 3, 3, 3, 'o')      # headboard detail
-    return [c]
+    """80x32: wooden head- and footboard, a pillow and a starry blanket. The mattress top is row 14 (18 DIP up)."""
+    W, H = 80, 32
+    head = solid(W, H, rrect(1, 1, 9, 30, 3), 'O', 'i', 'o')
+    for y in (9, 19):
+        head.fill(rect(2, y, 8, y), 'o', only='Oi')
+    foot = solid(W, H, rrect(70, 13, 78, 30, 3), 'O', 'i', 'o')
+    foot.fill(rect(71, 19, 77, 19), 'o', only='Oi')
+    frame = solid(W, H, rrect(9, 21, 70, 30, 2), 'o', 'O')
+    mattress = solid(W, H, rrect(9, 14, 70, 25, 3), 'S', 'W', 'D')
+    pillow = solid(W, H, rrect(13, 8, 31, 18, 4), 'W', 'w', 'S', ld=1)
+    blanket = solid(W, H, rrect(32, 12, 70, 26, 4), 'U', 'n', 'u')
+    blanket.fill(rect(33, 12, 36, 26), 'S', only='Unu')
+    blanket.fill(rect(37, 12, 37, 26), 'u', only='Un')
+    for (cx, cy) in ((47, 17), (58, 21), (66, 16)):
+        blanket.fill(union(rect(cx - 1, cy, cx + 1, cy), rect(cx, cy - 1, cx, cy + 1)), 'n', only='U')
+    return [compose(W, H, head, foot, frame, mattress, pillow, blanket)]
 
 
 def trampoline():
-    """32x10: a dark mat on a grey frame with springs and legs. The mat top is row 1 (18 DIP up)."""
-    c = canvas(32, 10)
-    fill(c, 2, 1, 29, 2, 'V')     # mat
-    fill(c, 1, 3, 30, 3, 'G')     # frame
-    fill(c, 3, 4, 4, 9, 'G')      # legs
-    fill(c, 27, 4, 28, 9, 'G')
-    outlined(c)
-    for x in range(4, 28, 4):
-        c[3][x] = 'w'             # springs
-    return [c]
+    """64x20: a dark mat in a padded blue rim on splayed grey legs. The mat top is row 2 (18 DIP up)."""
+    W, H = 64, 20
+    back_legs = solid(W, H, union(rect(23, 11, 25, 17), rect(39, 11, 41, 17)), 'v')
+    legs = solid(W, H, union(stroke([(11, 11), (8, 17.5)], [2.2, 2.2]), stroke([(53, 11), (56, 17.5)], [2.2, 2.2])),
+                 'G', 'b', 'v', ld=1, sd=1)
+    mat = solid(W, H, rrect(4, 2, 59, 8, 3), 'V', 'G', None, ld=1)
+    rim = solid(W, H, rrect(1, 8, 62, 12, 2), 'U', 'n', 'u', ld=1, sd=1)
+    for x in range(6, 60, 6):
+        rim.fill(rect(x, 10, x, 10), 'u', only='U')
+    return [compose(W, H, back_legs, legs, mat, rim)]
 
 
 def playpen():
-    """56x20: wooden posts and two rails. The inside is transparent (pets stand in it, clicks pass through)."""
-    c = canvas(56, 20)
-    for x in (1, 10, 19, 27, 36, 45, 53):
-        fill(c, x, 1, x + 1, 19, 'O')
-    fill(c, 1, 3, 54, 4, 'o')     # top rail
-    fill(c, 1, 14, 54, 15, 'o')   # bottom rail
-    for x in (1, 10, 19, 27, 36, 45, 53):
-        c[1][x] = c[1][x + 1] = 'O'
-    return [outlined(c)]
+    """112x40: wooden posts with round tops and two rails. The inside is transparent (pets stand in it, clicks pass through)."""
+    W, H = 112, 40
+    xs = (1, 19, 37, 54, 72, 90, 106)
+    rails = union(rrect(1, 11, 110, 15, 2), rrect(1, 28, 110, 32, 2))
+    rail = solid(W, H, rails, 'O', 'i', 'o', ld=1, sd=1)
+    posts = union(*[union(rrect(x, 4, x + 4, 38, 2), ellipse(x + 2, 3, 3.2, 2.6)) for x in xs])
+    post = solid(W, H, posts, 'O', 'i', 'o', ld=1, sd=1)
+    return [compose(W, H, rail, post)]
 
 
 def trough():
-    """24x10: a wooden box heaped with greens and apples."""
-    c = canvas(24, 10)
-    fill(c, 3, 2, 20, 3, 'L')     # greens
-    fill(c, 1, 4, 22, 9, 'O')     # box
-    for x in (5, 11, 17):
-        fill(c, x, 1, x + 1, 2, 'R')  # apples
-    outlined(c)
-    fill(c, 1, 6, 22, 6, 'o')     # plank line
-    c[1][5] = 'r'
-    return [c]
+    """48x20: a wooden box heaped with greens and three apples."""
+    W, H = 48, 20
+    heap = solid(W, H, ellipse(24, 6.5, 20, 5.6), 'L', 'l', 'm')
+    for (x, y) in ((7, 6), (17, 4), (29, 4), (41, 6), (22, 7), (33, 7)):
+        heap.fill(rect(x, y, x + 1, y), 'l', only='L')
+    apples = union(*[ellipse(x, 4.3, 3.3, 3.1) for x in (12, 24, 36)])
+    apple = solid(W, H, apples, 'R', None, 'x')
+    for x in (12, 24, 36):
+        apple.fill(rect(x - 2, 2, x - 1, 2), 'r', only='R')
+        apple.fill(rect(x - 2, 3, x - 2, 3), 'r', only='R')
+    box = solid(W, H, polygon([(1, 8), (46, 8), (43, 19), (4, 19)]), 'O', 'i', 'o')
+    box.fill(rect(0, 14, 47, 14), 'o', only='O')
+    rim = solid(W, H, rrect(0, 7, 47, 10, 2), 'O', 'i', 'o', ld=1, sd=1)
+    return [compose(W, H, heap, apple, box, rim)]
 
 
 def pill():
-    """10x6: a blue breeding pill, a capsule in two shades of blue with a shine."""
-    c = canvas(10, 6)
-    fill(c, 2, 1, 7, 1, 'U')
-    fill(c, 1, 2, 8, 3, 'U')
-    fill(c, 2, 4, 7, 4, 'U')
-    for y in range(1, 5):
-        for x in range(5, 9):
-            if c[y][x] == 'U':
-                c[y][x] = 'Z'           # the lighter half
-    outlined(c)
-    fill(c, 2, 4, 4, 4, 'u')            # shade underneath
-    fill(c, 5, 4, 7, 4, 'U')
-    fill(c, 2, 2, 3, 2, 'w')            # shine
-    return [c]
+    """20x12: a capsule, blue on the left and pale blue on the right, with a shine."""
+    W, H = 20, 12
+    shape = rrect(1, 1, 18, 10, 4.5)
+    p = Part(W, H).fill(shape, 'U')
+    p.fill(rect(10, 0, 19, 11), 'Z', only='U')
+    p.fill(lit(shape, 1), 'n', only='U')
+    p.fill(lit(shape, 1), 'w', only='Z')
+    p.fill(shaded(shape, 2), 'u', only='U')
+    p.fill(shaded(shape, 2), 'U', only='Z')
+    p.fill(rect(9, 2, 9, 9), 'u', only='Un')
+    p.fill(rect(3, 3, 6, 3), 'w', only='Un')
+    p.fill(rect(3, 4, 3, 4), 'w', only='Un')
+    return [compose(W, H, p.outline())]
 
 
 def egg():
-    """12x13, 4 frames: a speckled egg standing still, then wobbling left and right (its top half shifted)."""
-    rows = [(5, 6), (4, 7), (3, 8), (3, 8), (2, 9), (2, 9), (2, 9), (2, 9), (2, 9), (3, 8), (4, 7)]  # rows 1-11
+    """24x26, 4 frames: a speckled egg standing still, then wobbling left and right (its top leans over)."""
+    W, H = 24, 26
+    base = union(ellipse(12, 16, 9.6, 8.6), ellipse(12, 11, 7.4, 9.6))
     out = []
-    for i in range(4):
-        tilt = [0, 0, -1, 1][i]
-        c = canvas(12, 13)
+    for tilt in (0, 0, -4.5, 4.5):
+        def dx(y, tilt=tilt):
+            return tilt * max(0.0, (14 - y) / 13)
 
-        def shift(y):
-            return tilt if y <= 5 else 0
+        def shape(x, y, dx=dx):
+            return base(x - dx(y), y)
 
-        for y, (x0, x1) in enumerate(rows, start=1):
-            fill(c, x0 + shift(y), y, x1 + shift(y), y, 'A')
-        for y, (x0, x1) in enumerate(rows, start=1):
-            if y >= 6:
-                c[y][x1] = 'a'                   # shade on the right
-        for (x, y) in ((6, 4), (4, 6), (7, 8), (5, 10)):
-            c[y][x + shift(y)] = 'a'             # speckles
-        outlined(c)
-        c[3][5 + tilt] = 'w'                     # shine
-        out.append(c)
+        p = Part(W, H).fill(shape, 'A')
+        p.fill(shaded(shape, 3), 'a', only='A')
+        for (x, y, k) in ((8, 9, 'a'), (15, 7, 'B'), (16, 14, 'a'), (9, 17, 'a'), (13, 20, 'B'), (6, 13, 'B')):
+            sx = x + round(dx(y))
+            p.fill(rect(sx, y, sx + 1, y), k, only='A')
+        sx = 8 + round(dx(7))
+        p.fill(ellipse(sx + 0.5, 7, 1.3, 2.4), 'w', only='A')
+        out.append(compose(W, H, p.outline()))
     return out
 
 
 def grave():
-    """32x30: a rounded headstone on a plinth and a grassy mound, a flower each side. The face (x 7-24, y 4-22) is
-    left plain: the app writes the pet's name and dates there (GraveArt), so keep the two in step."""
-    c = canvas(32, 30)
-    for y, (x0, x1) in enumerate([(11, 20), (8, 23), (7, 24), (6, 25)], start=1):
-        fill(c, x0, y, x1, y, 'D')   # rounded top
-    fill(c, 5, 5, 26, 23, 'D')       # stone
-    fill(c, 3, 24, 28, 25, 'd')      # plinth
-    fill(c, 1, 26, 30, 28, 'L')      # grass mound
-    for x in (2, 29):
-        fill(c, x, 22, x, 25, 'L')   # flower stems
-        fill(c, x - 1, 20, x + 1, 20, 'Q')
-        fill(c, x, 19, x, 21, 'Q')
-        c[20][x] = 'Y'
-    outlined(c)
-    for y in range(5, 24):
-        c[y][26] = 'd'               # shade on the right
-    for (x, y) in ((25, 4), (24, 3), (23, 2)):
-        c[y][x] = 'd'
-    fill(c, 3, 24, 28, 24, 'D')      # the plinth's top catches the light
-    return [c]
+    """64x60: a rounded headstone on a plinth in a grassy mound, a flower each side. The face (x 14-49, y 10-43) is left
+    plain: the app writes the pet's name and dates there (GraveArt), so keep the two in step."""
+    W, H = 64, 60
+    stone_shape = union(rect(10, 17, 53, 46), ellipse(31.5, 17.5, 21.5, 15.5))
+    flowers = Part(W, H)
+    for (cx, cy, petal) in ((5, 38, 'Q'), (58, 42, 'Z')):
+        flowers.fill(stroke([(cx, cy), (cx, 51)], [0.8, 0.8]), 'L')
+        flowers.fill(ellipse(cx + (2 if cx < 30 else -2), 46, 2.4, 1.1), 'L')
+        flowers.fill(union(*[ellipse(cx + dx, cy + dy, 1.9, 1.9) for (dx, dy) in ((0, -2), (2, 0), (0, 2), (-2, 0))]), petal)
+        flowers.fill(ellipse(cx, cy, 1.5, 1.5), 'Y')
+    flowers.outline()
+    plinth = solid(W, H, rrect(5, 45, 58, 52, 2), 'D', 'S', 'd', ld=1)
+    stone = solid(W, H, stone_shape, 'D', 'S', 'd', ld=2, sd=3)
+    moss = both(ellipse(15, 46.5, 6, 2.6), stone_shape)
+    mound_shape = both(ellipse(32, 58, 31, 8.5), rect(1, 0, 62, 58))
+    mound = Part(W, H).fill(mound_shape, 'L').fill(lit(mound_shape, 2), 'l').fill(shaded(mound_shape, 2), 'm')
+    for x in (17, 27, 44, 52):
+        top = int(58 - 8.5 * math.sqrt(1 - ((x - 32) / 31) ** 2))
+        mound.fill(rect(x, top - 2, x, top), 'l')
+    mound.outline()
+    stone.fill(moss, 'L')                    # moss at the foot, below the face
+    stone.fill(both(moss, rect(0, 46, 63, 46)), 'm')
+    return [compose(W, H, flowers, plinth, stone, mound)]
 
 
 FURNITURE = {
@@ -832,7 +908,7 @@ def main():
     ap.add_argument('--furniture-out', default=os.path.join(app, 'Furniture', 'Art'),
                     help='folder for the furniture PNGs (one per kind)')
     ap.add_argument('--preview', help='also write an 8x upscaled preview of the sheet with a checkerboard')
-    ap.add_argument('--furniture-preview', help='also write an 8x preview of all furniture, one strip per row')
+    ap.add_argument('--furniture-preview', help='also write a 4x preview of all furniture, one strip per row')
     args = ap.parse_args()
     sheet = render(frames())
     sheet.save(args.out)
@@ -854,7 +930,7 @@ def main():
         for s_ in strips:
             board.paste(s_, (0, y))
             y += s_.height + gap
-        preview(board, args.furniture_preview)
+        preview(board, args.furniture_preview, scale=4)
 
 
 if __name__ == '__main__':

@@ -2,7 +2,7 @@ namespace DesktopPet.Core.Furniture;
 
 /// <summary>
 /// The furniture written to the <c>furniture</c> folder on first run. Each art file is drawn by the sprite generator
-/// (<c>tools/sprites/make_rabbit.py</c>) at 1 art pixel = 2 DIP, like the rabbit.
+/// (<c>tools/sprites/make_rabbit.py</c>) at 1 art pixel = 1 DIP, like the rabbit.
 /// Rates stay below the care actions (Feed is +35 at once, Play +22), so caring for a pet stays the best option.
 /// </summary>
 public static class DefaultFurniture
