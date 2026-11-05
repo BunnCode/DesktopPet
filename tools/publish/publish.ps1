@@ -1,8 +1,8 @@
-# Builds, tests and publishes DesktopPet, then copies the repo's data\ folder next to the published exe.
+# Builds, tests and publishes Deskling, then copies the repo's data\ folder next to the published exe.
 # Usage: powershell -ExecutionPolicy Bypass -File tools\publish\publish.ps1 [-SkipTests] [-Mirror]
 #   -SkipTests  skip dotnet test
 #   -Mirror     make publish\data an exact copy of data\ (also deletes files only the publish copy has)
-# The old publish\data is always backed up to %TEMP%\DesktopPet-backups\ first.
+# The old publish\data is always backed up to %TEMP%\Deskling-backups\ first.
 param([switch]$SkipTests, [switch]$Mirror)
 
 $ErrorActionPreference = 'Stop'
@@ -18,22 +18,22 @@ function Run($exe, [string[]]$arguments) {
 
 # A running pet locks bin\ (or publish\ when it was started from there).
 Step 'Stopping running pets'
-$procs = @(Get-Process DesktopPet.App -ErrorAction SilentlyContinue)
+$procs = @(Get-Process Deskling.App -ErrorAction SilentlyContinue)
 $running = @($procs | ForEach-Object { $_.Path })  # read before they exit; Path is gone afterwards
 foreach ($p in $procs) { Write-Host "stopping $($p.Id) $($p.Path)"; Stop-Process -Id $p.Id -Force }
 if ($running.Count -gt 0) { Start-Sleep -Milliseconds 800 } else { Write-Host 'none running' }
 
 Step 'Build'
-Run dotnet @('build', (Join-Path $repo 'DesktopPet.slnx'), '-nologo')
+Run dotnet @('build', (Join-Path $repo 'Deskling.slnx'), '-nologo')
 
 if (-not $SkipTests) {
     Step 'Test'
-    Run dotnet @('test', (Join-Path $repo 'DesktopPet.slnx'), '-nologo')
+    Run dotnet @('test', (Join-Path $repo 'Deskling.slnx'), '-nologo')
 }
 
 # Same arguments as the VS Code 'publish' task.
 Step 'Publish'
-Run dotnet @('publish', (Join-Path $repo 'src\DesktopPet.App\DesktopPet.App.csproj'), '-nologo',
+Run dotnet @('publish', (Join-Path $repo 'src\Deskling.App\Deskling.App.csproj'), '-nologo',
     '-c', 'Release', '-r', 'win-x64', '--self-contained', 'true',
     '-p:PublishSingleFile=true', '-p:IncludeNativeLibrariesForSelfExtract=true', '-o', $publish)
 
@@ -41,7 +41,7 @@ Step 'Copying data'
 if (-not (Test-Path $data)) { throw "No data folder at $data" }
 $target = Join-Path $publish 'data'
 if (Test-Path $target) {
-    $backup = Join-Path $env:TEMP ("DesktopPet-backups\publish-data-" + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+    $backup = Join-Path $env:TEMP ("Deskling-backups\publish-data-" + (Get-Date -Format 'yyyyMMdd-HHmmss'))
     New-Item -ItemType Directory -Force $backup | Out-Null
     Copy-Item (Join-Path $target '*') $backup -Recurse -Force
     Write-Host "backed up old publish\data to $backup"
@@ -57,6 +57,6 @@ $extra = Get-ChildItem $target -Recurse -File | ForEach-Object { $_.FullName.Sub
 if ($extra) { Write-Host "`nIn publish\data but not in data\ (kept):" -ForegroundColor Yellow; $extra | ForEach-Object { "  $_" } }
 
 Step 'Done'
-Write-Host "exe:  $(Join-Path $publish 'DesktopPet.App.exe')"
+Write-Host "exe:  $(Join-Path $publish 'Deskling.App.exe')"
 Write-Host "data: $target"
 if ($running.Count -gt 0) { Write-Host "stopped: $($running -join ', ')" }

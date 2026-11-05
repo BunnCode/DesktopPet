@@ -9,7 +9,7 @@ See docs/CHARACTER_SPRITES.md.
     python tools/sprites/make_character.py <name> [--out folder]
 
 Writes <out>/sheet.png (64x64 cells, one row per animation, same layout as rabbit.png) and <out>/atlas.json.
-Copy both into %LOCALAPPDATA%\\DesktopPet\\pets\\<n>\\sprites\\ (one pet) or ...\\sprites\\ (all pets).
+Copy both into the data folder's pets\\<n>\\sprites\\ (one pet) or sprites\\ (all pets).
 """
 import argparse
 import importlib

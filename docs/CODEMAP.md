@@ -1,4 +1,4 @@
-# DesktopPet code map
+# Deskling code map
 
 A navigation guide to the source: what lives where, how a frame flows, and which files to touch for common changes.
 Read this instead of exploring the tree. **`docs/PLAN.md`** remains the source of truth for design decisions, status,
@@ -13,26 +13,26 @@ matching line here.
 ## At a glance
 
 - C# / .NET 10 / WPF desktop pet (Shimeji-style), Windows only. About 11,000 lines including tests.
-- Build `dotnet build DesktopPet.slnx`, test `dotnet test DesktopPet.slnx`. Warnings are errors (`Directory.Build.props`).
+- Build `dotnet build Deskling.slnx`, test `dotnet test Deskling.slnx`. Warnings are errors (`Directory.Build.props`).
   Tests take well under a second.
-- Exe: `src/DesktopPet.App/bin/Debug/net10.0-windows10.0.19041.0/DesktopPet.App.exe`. A running pet locks `bin/`.
-  Single instance (named mutex `Local\DesktopPet.SingleInstance`).
+- Exe: `src/Deskling.App/bin/Debug/net10.0-windows10.0.19041.0/Deskling.App.exe`. A running pet locks `bin/`.
+  Single instance (named mutex `Local\Deskling.SingleInstance`).
 - Projects (dependencies point down):
 
 ```
-DesktopPet.App               net10.0-windows10.0.19041.0 WPF exe (+WinForms for the tray/menu only). Composition root, glue.
-  ├─ DesktopPet.Platform.Windows   net10.0-windows10.0.19041.0. Thin Win32 adapter via CsWin32 (+ Windows OCR); no game rules.
-  │    └─ DesktopPet.Core
-  ├─ DesktopPet.Chat          net10.0 (win-x64). The local language model via LLamaSharp; implements Core's IChatModel.
-  │    └─ DesktopPet.Core
-  └─ DesktopPet.Core         net10.0, NO WPF/Win32. All game logic. InternalsVisibleTo the tests.
-tests/DesktopPet.Core.Tests  xUnit, Core only (no App/Platform tests).
+Deskling.App               net10.0-windows10.0.19041.0 WPF exe (+WinForms for the tray/menu only). Composition root, glue.
+  ├─ Deskling.Platform.Windows   net10.0-windows10.0.19041.0. Thin Win32 adapter via CsWin32 (+ Windows OCR); no game rules.
+  │    └─ Deskling.Core
+  ├─ Deskling.Chat          net10.0 (win-x64). The local language model via LLamaSharp; implements Core's IChatModel.
+  │    └─ Deskling.Core
+  └─ Deskling.Core         net10.0, NO WPF/Win32. All game logic. InternalsVisibleTo the tests.
+tests/Deskling.Core.Tests  xUnit, Core only (no App/Platform tests).
 tools/sprites/make_rabbit.py Python generator for the built-in sprite sheet and furniture art (not part of the build).
 tools/sprites/make_character.py  Renders characters/<name>.py (overrides on the rabbit's rig) to a drop-in sheet + atlas.json.
 tools/sprites/sprite_preview.py  overview / zoom / check (pose conventions) for any generated sheet.
 tools/models/get-model.ps1   Downloads the chat model into models/ at the repo root (gitignored); the build copies it.
 tools/publish/publish.ps1    Stops running pets, builds, tests, publishes, then copies data/ into publish/data/ (backs
-                             the old copy up to %TEMP%\DesktopPet-backups first). The `publish` Claude skill runs it.
+                             the old copy up to %TEMP%\Deskling-backups first). The `publish` Claude skill runs it.
 tools/demo/                  README screenshots: forest.py (pixel-art backdrop), make_demo.py (staged data), stage.py
                              (backdrop + demo windows), grab/sheet/click.py. See docs/how_to_make_demo.md.
 ```
@@ -55,7 +55,7 @@ tools/demo/                  README screenshots: forest.py (pixel-art backdrop),
 
 ---
 
-## Core (`src/DesktopPet.Core/`)
+## Core (`src/Deskling.Core/`)
 
 ### Public entry point: `Simulation/PetSimulation.cs`
 One pet. The App talks to Core almost only through this class.
@@ -164,7 +164,7 @@ UseFurniture; `LostGround`→Fall, `Grabbed`→Hang, `Clung`→Cling, `HitWall`�
 
 ---
 
-## Platform.Windows (`src/DesktopPet.Platform.Windows/`)
+## Platform.Windows (`src/Deskling.Platform.Windows/`)
 
 Win32 through CsWin32: add API names to `Interop/NativeMethods.txt` (one per line); never hand-write DllImports.
 
@@ -174,14 +174,14 @@ Win32 through CsWin32: add API names to `Interop/NativeMethods.txt` (one per lin
 | `WindowSource.cs` | `EnumWindows` filter (visible, not minimized/cloaked/tool/untitled/shell) with DWM frame bounds |
 | `MonitorSource.cs` | Monitors: bounds, work area, DPI scale, device name as id |
 | `CursorSource.cs` | `GetCursorPos` in physical pixels |
-| `DpiAwareness.cs` | `EnsurePerMonitorV2()`: sets PerMonitorV2 in code (called from `App`'s static constructor), for when the manifest doesn't apply (`dotnet DesktopPet.App.dll`) |
+| `DpiAwareness.cs` | `EnsurePerMonitorV2()`: sets PerMonitorV2 in code (called from `App`'s static constructor), for when the manifest doesn't apply (`dotnet Deskling.App.dll`) |
 | `PetWindowInterop.cs` | Extended styles (no-activate, tool window), `SetBounds` / `SetPosition` in physical pixels, `BringToTopmost`, `PlaceBelow`, overlay styles |
 | `WindowManipulator.cs` | `MoveBy(windowId, dx, dy)` with `WindowMoveGuard` against the live frame |
 | `NativeIcon.cs` | `DestroyIcon` |
 | `ScreenText.cs` | M12b: `WindowIdentity` (`Describe` → title + process name; `CoversOf` → other processes' windows in front), `ScreenCapture.Capture(area)` (GDI BitBlt → BGRA), `TextRecognizer` (`Windows.Media.Ocr`, 2× below 150% scale, lines with screen bounds) |
 | `WindowTracker.cs` | For sticky notes: `Query(id)` → `TrackedWindowState` (Gone, Hidden, Shown) + frame; `PlaceAbove(ours, id)` keeps our window just above another in z-order |
 
-## Chat (`src/DesktopPet.Chat/`)
+## Chat (`src/Deskling.Chat/`)
 
 | File | Purpose |
 |---|---|
@@ -189,7 +189,7 @@ Win32 through CsWin32: add API names to `Interop/NativeMethods.txt` (one per lin
 
 ---
 
-## App (`src/DesktopPet.App/`)
+## App (`src/Deskling.App/`)
 
 | File | Purpose |
 |---|---|
@@ -201,10 +201,10 @@ Win32 through CsWin32: add API names to `Interop/NativeMethods.txt` (one per lin
 | `Breeding/BreedingHost.cs` | M13: ticks `BreedingDirector` every 100 ms with each `PetHost.BreedingInfo`; `RoomForEgg` (pets + eggs below the cap); hands matings to `App.LayEgg`, due eggs to `App.Hatch` and pill-round sayings to `ChatHost.Say`; `Forget` |
 | `Furniture/GraveArt.cs` | M14: `Render(grave, stone, size, scale)`: the stone art scaled to the exact pixel size with the name and dates engraved on its face (FurnitureHost caches one per gravestone and size) |
 | `Furniture/FurnitureArt.cs` | A kind's frames from its PNG (cut into `Frames`), else the embedded default for that kind, else a plain box; `DefaultPng(kind)` |
-| `Furniture/Art/*.png` | The default furniture art (EmbeddedResource `DesktopPet.App.Furniture.<kind>.png`). Generated; don't hand-edit |
+| `Furniture/Art/*.png` | The default furniture art (EmbeddedResource `Deskling.App.Furniture.<kind>.png`). Generated; don't hand-edit |
 | `SpriteSheet/DefaultArt.cs` | Built-in art: crops 64×64 frames (`FrameSize`) from a character's embedded sheet (`Frame(character, animation, frame, jacket)`), recolours the rabbit's jacket to the pet's `JacketShades`; `SheetPng(character)` (the PNG bytes, to write into a pet folder), `TrayIconPixels()` (`AppCharacter`) |
-| `SpriteSheet/rabbit.png` | The rabbit's sheet (EmbeddedResource `DesktopPet.App.rabbit.png`; for pets set to `"rabbit"` and the exported template). Generated; don't hand-edit (see `docs/SPRITE_GENERATOR.md`) |
-| `SpriteSheet/Fakemon/<character>.png` | The default characters' sheets (same layout as `rabbit.png`; EmbeddedResource `DesktopPet.App.Characters.<file name>`), generated from `tools/sprites/characters/<character>.py` (`Botrosa.png` from `ringbot.py`). Listed in Core's `Characters.Defaults`. Generated; don't hand-edit |
+| `SpriteSheet/rabbit.png` | The rabbit's sheet (EmbeddedResource `Deskling.App.rabbit.png`; for pets set to `"rabbit"` and the exported template). Generated; don't hand-edit (see `docs/SPRITE_GENERATOR.md`) |
+| `SpriteSheet/Fakemon/<character>.png` | The default characters' sheets (same layout as `rabbit.png`; EmbeddedResource `Deskling.App.Characters.<file name>`), generated from `tools/sprites/characters/<character>.py` (`Botrosa.png` from `ringbot.py`). Listed in Core's `Characters.Defaults`. Generated; don't hand-edit |
 | `SpriteSheet/SpriteAtlas.cs` | (animation id, frame) → `AtlasFrame(Bitmap, FacesLeft, Smooth)`. `Load(folders, animations, look)` → `(atlas, SpriteLayer[])`: per animation the first folder whose `atlas.json` defines it (pet's own, then shared), the pet's built-in art elsewhere (`BuiltInLook(Character, Jacket)`); `CustomCount` |
 | `SpriteSheet/SpriteTemplateExporter.cs` | Menu → Export sprite template: the built-in art as `template.png` + `atlas.json` + README |
 | `Customization/DataFolder.cs` | `data\` paths (`settings.json`, `personality-traits.json` (`LoadPersonalityTraits`, written with the defaults if missing), `HasOwnSprites`, `CopySprites`, `WriteCharacterSprites` (a new pet's own copy of its character's sheet + atlas.json), `sprites\`, `sprite-template\`, `problems.txt`, `furniture\` (+ `defaults-written.txt`), `room.json`, `pets\<n>\` with save (and traits), personality, sprites), `ExistingPets`, `StartupPets` and `DeadPets` (saves marked dead), `MigrateLegacySaves`, `MigrateTraitsFiles` (old traits.json → save.json), `LoadTraits` (from the save), personality load and write, `RecyclePetFolder`, `FindModel` (chat model: next to the exe, then `models\` in the data folder), settings load, `WriteDefaultFurniture` (first run: all; later: defaults added since, per `defaults-written.txt`), `LoadFurniture`, `Open` |
@@ -301,7 +301,7 @@ the Recycle Bin.
 | Add a default personality trait | `PersonalityTraits.Defaults` (only written when the user has no `personality-traits.json`) |
 | Add a file to the pet folder | `DataFolder` (path, load/write), `PetFileKind` + `PetRoster.Classify` if it reloads live, `App.OnPetChanged` |
 
-## Tests (`tests/DesktopPet.Core.Tests/`)
+## Tests (`tests/Deskling.Core.Tests/`)
 
 - `Fakes/FakeDesktop`: fluent `.Monitor(x, y, w, h, scale = 1, taskbar = 0, primary?, id?, workArea?)` (first is
   primary), `.Window(id, x, y, w, h, maximized)` (front to back), `.Snapshot()`.

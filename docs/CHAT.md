@@ -92,7 +92,7 @@ New pets get random ones (between 0.5 and 2 by default, `NewPetChat` in `setting
 
 ## The model
 
-The model file (`Qwen3.5-2B-Q6_K.gguf`, 1.5 GB) lives in a `models` folder next to `DesktopPet.App.exe`. It's loaded
+The model file (`Qwen3.5-2B-Q6_K.gguf`, 1.5 GB) lives in a `models` folder next to `Deskling.App.exe`. It's loaded
 once at startup and stays loaded: about 1.5–2 GB of graphics memory (or RAM on the processor). If the file is missing,
 the pets carry on without words and a notification says where it was looked for.
 

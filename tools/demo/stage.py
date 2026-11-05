@@ -1,4 +1,4 @@
-"""Demo stage for DesktopPet screenshots: a backdrop (maximized, so the pets ignore it) plus titled demo windows.
+"""Demo stage for Deskling screenshots: a backdrop (maximized, so the pets ignore it) plus titled demo windows.
 
 Usage: python stage.py <scene> [backdrop.png]   scenes: hero, windows, chat, plain
 The backdrop image (make one with forest.py) is pinned to the bottom of the work area, where the pets stand; without

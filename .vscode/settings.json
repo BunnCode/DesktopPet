@@ -1,5 +1,5 @@
 {
-  "dotnet.defaultSolution": "DesktopPet.slnx",
+  "dotnet.defaultSolution": "Deskling.slnx",
   "files.exclude": {
     "**/bin": true,
     "**/obj": true

@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Deskling.App/Deskling.App.csproj" />
+    <Project Path="src/Deskling.Chat/Deskling.Chat.csproj" />
+    <Project Path="src/Deskling.Core/Deskling.Core.csproj" />
+    <Project Path="src/Deskling.Platform.Windows/Deskling.Platform.Windows.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Deskling.Core.Tests/Deskling.Core.Tests.csproj" />
+  </Folder>
+</Solution>

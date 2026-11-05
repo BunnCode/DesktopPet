@@ -1,4 +1,4 @@
-"""Writes a staged DesktopPet data folder. Usage: python make_demo.py <folder> <variant>
+"""Writes a staged Deskling data folder. Usage: python make_demo.py <folder> <variant>
 
 Six pets, one per default (Fakemon) character, drawing the built-in art, plus a dead pet for the gravestone.
 variants:

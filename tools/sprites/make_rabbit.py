@@ -1,5 +1,5 @@
-"""Generates the default rabbit sprite sheet (src/DesktopPet.App/SpriteSheet/rabbit.png) and the default furniture
-art (src/DesktopPet.App/Furniture/Art/<kind>.png).
+"""Generates the default rabbit sprite sheet (src/Deskling.App/SpriteSheet/rabbit.png) and the default furniture
+art (src/Deskling.App/Furniture/Art/<kind>.png).
 
 Pixel art is composed from ASCII parts (head, face, body poses, props) so frames stay consistent and the art can be
 tweaked in one place. One row per animation in the game's order (Animations.All), 32x32 cells, art facing right,
@@ -955,7 +955,7 @@ def preview(img, path, scale=8):
 
 
 def main():
-    app = os.path.join(os.path.dirname(__file__), '..', '..', 'src', 'DesktopPet.App')
+    app = os.path.join(os.path.dirname(__file__), '..', '..', 'src', 'Deskling.App')
     ap = argparse.ArgumentParser()
     ap.add_argument('--out', default=os.path.join(app, 'SpriteSheet', 'rabbit.png'))
     ap.add_argument('--furniture-out', default=os.path.join(app, 'Furniture', 'Art'),

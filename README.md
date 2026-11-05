@@ -1,4 +1,4 @@
-# DesktopPet
+# Deskling
 
 A Shimeji-style desktop pet for Windows. Small pixel-art critters live on your desktop: they walk along the taskbar,
 climb and ride your windows, nap on furniture, play video games together, chat with each other and leave you sticky
@@ -64,17 +64,17 @@ to join friends who are already hanging out there.
 ## Getting started
 
 ```powershell
-dotnet build DesktopPet.slnx
-dotnet test DesktopPet.slnx
+dotnet build Deskling.slnx
+dotnet test Deskling.slnx
 
 # Optional: download the chat model into models\ (the build copies it next to the exe)
 .\tools\models\get-model.ps1
 ```
 
-The app is built to `src/DesktopPet.App/bin/Debug/net10.0-windows10.0.19041.0/DesktopPet.App.exe`.
+The app is built to `src/Deskling.App/bin/Debug/net10.0-windows10.0.19041.0/Deskling.App.exe`.
 
 In VS Code, press **F5** to run with the debugger, or use the tasks `build`, `test`, `watch tests`, `run` and
-`publish`. The `publish` task builds a self-contained single-file `publish/DesktopPet.App.exe`.
+`publish`. The `publish` task builds a self-contained single-file `publish/Deskling.App.exe`.
 
 Only one copy runs at a time, and a running pet locks `bin/`, so quit it (**Exit** in the menu) before rebuilding.
 Without the model file the pets still work; they just don't talk.

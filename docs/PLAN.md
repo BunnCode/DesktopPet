@@ -1,9 +1,9 @@
-# DesktopPet: Architecture & Plan
+# Deskling: Architecture & Plan
 
 A Shimeji-style desktop pet for Windows, built like a small 2D game: a fixed-timestep loop, a behavior state machine
 and sprite animation, in C# / .NET 10 / WPF.
 
-**The one hard rule:** all game logic lives in `DesktopPet.Core`, a plain `net10.0` library with no WPF or Win32
+**The one hard rule:** all game logic lives in `Deskling.Core`, a plain `net10.0` library with no WPF or Win32
 references. The desktop (monitors, work areas, other windows, cursor, lock state) reaches it only as plain data, and it
 answers with plain data (what to draw, which windows to move). Every physics, platform and behavior rule is
 unit-tested against a fake desktop.
@@ -40,13 +40,15 @@ This document describes the design **as built**, the status of each milestone, a
 | — | Nearby toys and group games: toys close by tempt pets a little more; pets join a nearby pet's game for a while | Done | |
 | — | Living Tower (Verner Panton, 1969): a four-seat lounge, one seat per level; per-slot seat heights and facing | Done | |
 
-587 unit tests, all in `DesktopPet.Core.Tests`.
+587 unit tests, all in `Deskling.Core.Tests`.
 
 ### Changes from the original plan
 
 - **Order:** drag and throw (M4) came before window platforms (M5), so the pet could be dropped onto windows by hand
   while building M5.
-- **Solution file** is `DesktopPet.slnx` (the .NET 10 default), not `.sln`.
+- **Name:** the project was called DesktopPet until it was renamed to Deskling (solution, projects, namespaces,
+  exe `Deskling.App.exe`). The one-time data migration still looks in the old `%LOCALAPPDATA%\DesktopPet`.
+- **Solution file** is `Deskling.slnx` (the .NET 10 default), not `.sln`.
 - **Input** isn't passed into `Tick`; the host calls `PointerDown/Move/Up/Cancel` between ticks.
 - **Stats popup** became live stat bars at the top of the pet's menu.
 - **Hanging from title bars** (maximized windows, windows pinned to the screen top) is built and tested but switched
@@ -126,11 +128,11 @@ From VS Code (`.vscode/`):
 | Ctrl+Shift+B | Build |
 | Task `test` / `watch tests` | Run the tests once / on every save |
 | Task `run` | Run without the debugger |
-| Task `publish` | Self-contained single-file `publish/DesktopPet.App.exe` (no .NET install needed) |
+| Task `publish` | Self-contained single-file `publish/Deskling.App.exe` (no .NET install needed) |
 
 `tools/publish/publish.ps1` (Claude skill `publish`) does build + test + publish in one go and copies the repo's
 `data/` into `publish/data/`, so a copied or zipped `publish` folder carries the current pets and settings. It
-backs the old `publish/data` up to `%TEMP%\DesktopPet-backups\` and deletes nothing unless run with `-Mirror`.
+backs the old `publish/data` up to `%TEMP%\Deskling-backups\` and deletes nothing unless run with `-Mirror`.
 
 Only one pet can run at a time (named mutex). A running pet locks `bin/`, so stop it (Shift+F5 or Exit in the menu)
 before rebuilding.
@@ -140,12 +142,12 @@ before rebuilding.
 ## Solution layout
 
 ```
-DesktopPet.slnx
+Deskling.slnx
 Directory.Build.props        nullable, latest analyzers, warnings as errors, code style enforced in the build
 .editorconfig                formatting and naming rules (see "Coding standards")
 global.json                  pins the .NET 10 SDK
 src/
-  DesktopPet.Core/           net10.0, no Windows references: the whole game
+  Deskling.Core/           net10.0, no Windows references: the whole game
     Math/                    Vec2, Vec2I, RectI (physical pixels; RectI is half-open like Win32 RECT)
     World/                   DesktopSnapshot, MonitorInfo, WindowInfo
                              Platform + PlatformBuilder     floors, window tops, (hang bars)
@@ -163,14 +165,14 @@ src/
     Chat/                    ChatRules, ChatDirector (speech and notes), ChatPrompts, ChatText (+ChatMl), IChatModel,
                              ScreenReading (+IScreenReader), TextList
     Abstractions/            IRandom/SeededRandom, IClock/SystemClock
-  DesktopPet.Platform.Windows/   net10.0-windows10.0.19041.0: thin Win32 adapter (and Windows OCR), no game rules
+  Deskling.Platform.Windows/   net10.0-windows10.0.19041.0: thin Win32 adapter (and Windows OCR), no game rules
     Interop/NativeMethods.txt    CsWin32 source generator input (no hand-written DllImports)
     MonitorSource, WindowSource, DesktopSource    the desktop -> DesktopSnapshot
     CursorSource, PetWindowInterop, NativeIcon    our own window and cursor
     WindowManipulator                             moves other windows (pushing), guarded
     ScreenText (ScreenCapture, TextRecognizer, WindowIdentity)   reading the screen (M12b)
-  DesktopPet.Chat/           net10.0: LlamaChatModel (LLamaSharp, Vulkan + CPU backends), behind Core's IChatModel
-  DesktopPet.App/            net10.0-windows10.0.19041.0 WPF exe: composition root
+  Deskling.Chat/           net10.0: LlamaChatModel (LLamaSharp, Vulkan + CPU backends), behind Core's IChatModel
+  Deskling.App/            net10.0-windows10.0.19041.0 WPF exe: composition root
     App.xaml(.cs)            startup, single instance, menu + tray wiring, save path
     PetHost                  owns one pet: simulation, window, loop, saving, lock detection
     GameLoop                 CompositionTarget.Rendering -> FixedStepper, re-entrancy guarded
@@ -181,7 +183,7 @@ src/
     Chat/                    ChatHost (model, director, bubbles, notes), SpeechBubble, StickyNote, ScreenReader
     app.manifest             PerMonitorV2 DPI awareness
 tests/
-  DesktopPet.Core.Tests/     xUnit; Fakes/ has FakeDesktop, FakeRandom, ScriptedRandom, FakeClock
+  Deskling.Core.Tests/     xUnit; Fakes/ has FakeDesktop, FakeRandom, ScriptedRandom, FakeClock
 tools/sprites/make_rabbit.py generates the built-in rabbit sheet and furniture art (docs/SPRITE_GENERATOR.md)
 tools/sprites/make_character.py, characters/, sprite_preview.py   other characters in the same style (docs/CHARACTER_SPRITES.md)
 tools/models/get-model.ps1   downloads the chat model into models/ (gitignored)
@@ -204,7 +206,7 @@ Dependencies: `App -> Platform.Windows -> Core`, `App -> Chat -> Core`, and `App
 - Everything in Core is in **physical virtual-screen pixels**, the one space that's consistent across monitors with
   different scaling. The process is PerMonitorV2-aware, so Win32 reports physical pixels. app.manifest asks for it, and
   `App`'s static constructor asks again in code (`DpiAwareness`), because the manifest doesn't apply when the app is
-  started as `dotnet DesktopPet.App.dll`. That gives dotnet.exe's system awareness, and window edges come out wrong on
+  started as `dotnet Deskling.App.dll`. That gives dotnet.exe's system awareness, and window edges come out wrong on
   monitors whose scale differs from the primary's. The VS Code launch config starts the .exe.
 - Sizes and speeds are configured in **DIPs** and multiplied by the scale of the monitor the pet is on, so it looks and
   moves the same everywhere.
@@ -393,7 +395,7 @@ to follow by hand. The rules live in `.editorconfig` and `Directory.Build.props`
 - Files are UTF-8 with CRLF line endings, 4-space indents (2 for XML, project and JSON files) and end with a newline.
   Git stores LF (`.gitattributes`).
 - File-scoped namespaces, and the namespace is the project name plus the folder path
-  (`DesktopPet.Core.Behavior` in `src/DesktopPet.Core/Behavior/`). **Enforced** (IDE0161, IDE0130).
+  (`Deskling.Core.Behavior` in `src/Deskling.Core/Behavior/`). **Enforced** (IDE0161, IDE0130).
 - Usings go above the namespace, `System.*` first, in one group with no blank lines, and none unused. **Enforced**
   (IDE0005, IDE0055).
 - Allman braces (each `{` on its own line), and braces on every `if`, `else`, `for`, `foreach` and `while` body,
@@ -445,7 +447,7 @@ House naming, beyond the analyzer:
 - Comments say why, not what.
 
 **Architecture rules** (from "The one hard rule" above and CLAUDE.md)
-- `DesktopPet.Core` has no WPF, WinForms or Win32 references; game logic goes there, with unit tests against
+- `Deskling.Core` has no WPF, WinForms or Win32 references; game logic goes there, with unit tests against
   `FakeDesktop`. Platform.Windows and App stay thin glue.
 - Randomness only from `IRandom`, wall-clock time only from `IClock`, so tests are exact and instant.
 - Win32 only through CsWin32 (`Interop/NativeMethods.txt`), never hand-written `DllImport`s.
@@ -575,7 +577,7 @@ jacket colour.
   `make_rabbit` (anything: palette, head, ears, face, clothing, legs, layout, `frames()`); `make_character.py`
   renders it to `sheet.png` + `atlas.json` for a pet's `sprites\` folder. `sprite_preview.py check` verifies the pose
   conventions (it caught ear tips clipping at row 0 in the jump frames, now fixed).
-- **Sheet:** `src/DesktopPet.App/SpriteSheet/rabbit.png`, 16 columns × 20 rows of 64×64 cells, one row per animation
+- **Sheet:** `src/Deskling.App/SpriteSheet/rabbit.png`, 16 columns × 20 rows of 64×64 cells, one row per animation
   in `Animations.All` order (the same layout as the exported template). Embedded as a resource; `DefaultArt` crops
   frames from it.
 - **Generator:** `tools/sprites/make_rabbit.py` (Python 3 + Pillow) composes every frame from ASCII parts: ears
@@ -592,10 +594,10 @@ an isolated copy with an empty data folder: the first pet was rolled as Crime Jr
 `crimejr.png` and a matching `atlas.json`, its save got `"Character": "crimejr"`, and its personality reads "Lucas is
 a little bear-cub thief in a hood who …".
 - **The characters** (`Characters`, Core): Botrosa (the `ringbot` generator file), Carycajolt, Courceel, Crime Jr.,
-  Emberdonkey and Redmuzzle are the `Defaults`, from `src/DesktopPet.App/SpriteSheet/Fakemon/` (generated by
+  Emberdonkey and Redmuzzle are the `Defaults`, from `src/Deskling.App/SpriteSheet/Fakemon/` (generated by
   `tools/sprites/make_character.py`). The rabbit is still built in but only used for a pet set to it by hand. Each
   has an id, a name and a species ("little fire donkey"). All seven sheets are embedded in the exe
-  (`DesktopPet.App.Characters.<file name>`, `DesktopPet.App.rabbit.png`).
+  (`Deskling.App.Characters.<file name>`, `Deskling.App.rabbit.png`).
 - **`Character` trait:** the Traits section of `save.json` has an optional `Character` (an id, any case; anything else
   is a trait error). Unset, the pet wears the default character for its number (pet 1 Botrosa, pet 2 Carycajolt, …),
   so pets from before this change turned into Fakemon too, without their files changing.
@@ -726,7 +728,7 @@ written on first run, all seven landed on the taskbar, and two pets walked to th
   z-order), so the user can see it's inside; on a title bar it sits on the pen's floor, not on the ledge. Dragging it
   out lets it go and brings it back to the front. Other pets turn at the pen's sides.
 - **Art:** the generator draws the furniture (`FURNITURE` in `make_rabbit.py`, embedded from
-  `src/DesktopPet.App/Furniture/Art/`) and three new rabbit animations: `kick`, `game`, `bounce`.
+  `src/Deskling.App/Furniture/Art/`) and three new rabbit animations: `kick`, `game`, `bounce`.
 - **Tuning** in `settings.json` under `Furniture`: `NeedBelow`, `Weight`, `CuriosityWeight`, `NearbyToyWeight`,
   `NearbyToyDip`, `JoinDistanceDip`, `JoinChancePerSecond`, `JoinSeconds`, `JoinCooldownSeconds`, `ErrandSeconds`,
   `RetrySeconds`, `PenSitWeight`, kick, hop and bounce speeds.
@@ -750,7 +752,7 @@ loads the model too. User-facing guide: `docs/CHAT.md`.
 - **GPU or CPU:** `Chat.UseGpu` (default on) uses the Vulkan backend on any recent GPU; without one it falls back to
   the CPU and says so.
 - **Architecture:** Core's `ChatDirector` decides when each pet talks or writes, and what about. It talks to the model
-  only through `IChatModel`, with a fake in the tests. The model lives in the new project `DesktopPet.Chat`
+  only through `IChatModel`, with a fake in the tests. The model lives in the new project `Deskling.Chat`
   (`LlamaChatModel`, no WPF). Requests run off the UI thread; the pets keep acting while one is in flight. A reply
   slower than 25 s, or a failed one, is skipped (a failure is reported once).
 - **Speech** (`Chat.Enabled`, menu "Let them talk"):

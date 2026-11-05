@@ -2,12 +2,12 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "DesktopPet (debug)",
+      "name": "Deskling (debug)",
       "type": "coreclr",
       "request": "launch",
       "preLaunchTask": "build",
-      "program": "${workspaceFolder}/src/DesktopPet.App/bin/Debug/net10.0-windows10.0.19041.0/DesktopPet.App.exe",
-      "cwd": "${workspaceFolder}/src/DesktopPet.App",
+      "program": "${workspaceFolder}/src/Deskling.App/bin/Debug/net10.0-windows10.0.19041.0/Deskling.App.exe",
+      "cwd": "${workspaceFolder}/src/Deskling.App",
       "console": "internalConsole",
       "stopAtEntry": false,
       "justMyCode": true

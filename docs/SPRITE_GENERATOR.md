@@ -1,7 +1,7 @@
 # Sprite generator (`tools/sprites/make_rabbit.py`)
 
-Builds the built-in chibi rabbit sheet, `src/DesktopPet.App/SpriteSheet/rabbit.png`, which is embedded in the exe
-and read by `DefaultArt` (see `docs/CODEMAP.md`), and the default furniture art, `src/DesktopPet.App/Furniture/Art/<kind>.png`
+Builds the built-in chibi rabbit sheet, `src/Deskling.App/SpriteSheet/rabbit.png`, which is embedded in the exe
+and read by `DefaultArt` (see `docs/CODEMAP.md`), and the default furniture art, `src/Deskling.App/Furniture/Art/<kind>.png`
 (embedded, and copied into the user's `furniture` folder on first run). The PNG is checked in, so the generator only runs when the art
 changes. Never hand-edit the PNG: the next run overwrites it.
 
@@ -21,7 +21,7 @@ limbs, bold dark outlines, flat colours with one shade and one light tone, tall 
 ## Running it
 
 ```
-python tools/sprites/make_rabbit.py                     # writes src/DesktopPet.App/SpriteSheet/rabbit.png
+python tools/sprites/make_rabbit.py                     # writes src/Deskling.App/SpriteSheet/rabbit.png
 python tools/sprites/make_rabbit.py --out x.png --preview zoom.png   # elsewhere, plus an 8x preview
 python tools/sprites/make_rabbit.py --furniture-preview f.png        # plus an 8x preview of all furniture
 ```

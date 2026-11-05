@@ -1,0 +1,27 @@
+<Window x:Class="Deskling.App.PetWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Deskling"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        ResizeMode="NoResize"
+        Cursor="Hand"
+        Width="64" Height="64">
+    <!-- AllowsTransparency makes this a per-pixel-alpha layered window:
+         Windows routes clicks on fully transparent (alpha 0) pixels to whatever is underneath. -->
+    <!-- Uniform + bottom-centre: custom art with non-square cells keeps its shape and its feet on the feet point. -->
+    <Image x:Name="Sprite"
+           Stretch="Uniform"
+           VerticalAlignment="Bottom"
+           HorizontalAlignment="Center"
+           RenderOptions.BitmapScalingMode="NearestNeighbor"
+           RenderTransformOrigin="0.5,0.5">
+        <Image.RenderTransform>
+            <ScaleTransform x:Name="Flip" ScaleX="1" />
+        </Image.RenderTransform>
+    </Image>
+</Window>

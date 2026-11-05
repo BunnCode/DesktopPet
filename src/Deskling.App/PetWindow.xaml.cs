@@ -1,0 +1,178 @@
+using System.Diagnostics;
+using System.Windows;
+using System.Windows.Input;
+using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using Deskling.Core.Math;
+using Deskling.Platform.Windows;
+
+namespace Deskling.App;
+
+/// <summary>
+/// Sprite-sized transparent window. Dumb view: it shows whatever <see cref="Present"/> tells it and reports
+/// left-button gestures. Windows only delivers clicks on visible pixels (layered window), so every press is "on the pet".
+/// </summary>
+public partial class PetWindow : Window
+{
+    private static readonly TimeSpan TopmostInterval = TimeSpan.FromSeconds(2);
+
+    private readonly Stopwatch _sinceTopmost = Stopwatch.StartNew();
+    private nint _hwnd;
+    private RectI _bounds;
+    private BitmapSource? _frame;
+    private bool _facingLeft;
+    private bool? _smooth; // unset until the first frame
+    private bool _pressed;
+    private bool _releasingCapture;
+    private bool _wasBehind;
+
+    public PetWindow()
+    {
+        InitializeComponent();
+    }
+
+    /// <summary>
+    /// Re-assert topmost every couple of seconds (pets: they stay above other topmost windows). Furniture windows
+    /// switch it off so the pets' windows stay in front of them.
+    /// </summary>
+    public bool KeepOnTop { get; set; } = true;
+
+    /// <summary>
+    /// A window to stay just behind instead of on top (the pen a pet is shut in), or 0. Clearing it puts the window
+    /// back on top straight away.
+    /// </summary>
+    public nint Behind { get; set; }
+
+    /// <summary>The native window, 0 before <see cref="CreateHandle"/>.</summary>
+    public nint Handle => _hwnd;
+
+    /// <summary>Left button went down on the pet. The mouse is captured until release.</summary>
+    public event EventHandler? PointerPressed;
+
+    /// <summary>Left button released after a press.</summary>
+    public event EventHandler? PointerReleased;
+
+    /// <summary>Capture was taken away mid-gesture (e.g. Alt-Tab, another window grabbed the mouse).</summary>
+    public event EventHandler? PointerCanceled;
+
+    /// <summary>Right-clicked: show the pet's menu.</summary>
+    public event EventHandler? MenuRequested;
+
+    protected override void OnMouseRightButtonUp(MouseButtonEventArgs e)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        base.OnMouseRightButtonUp(e);
+        MenuRequested?.Invoke(this, EventArgs.Empty);
+        e.Handled = true;
+    }
+
+    protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        base.OnMouseLeftButtonDown(e);
+        _pressed = true;
+        CaptureMouse(); // keep receiving input while the cursor outruns the window
+        PointerPressed?.Invoke(this, EventArgs.Empty);
+        e.Handled = true;
+    }
+
+    protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        base.OnMouseLeftButtonUp(e);
+
+        // Track our own press flag rather than IsMouseCaptured, so a release is never lost even if capture failed.
+        if (!_pressed)
+        {
+            return;
+        }
+
+        _pressed = false;
+        PointerReleased?.Invoke(this, EventArgs.Empty);
+        _releasingCapture = true;
+        ReleaseMouseCapture();
+        _releasingCapture = false;
+        e.Handled = true;
+    }
+
+    protected override void OnLostMouseCapture(MouseEventArgs e)
+    {
+        base.OnLostMouseCapture(e);
+        if (_pressed && !_releasingCapture)
+        {
+            _pressed = false;
+            PointerCanceled?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>Nearest-neighbour for pixel art (crisp), high quality for painted art.</summary>
+    private void SetSmoothing(bool smooth)
+    {
+        _smooth = smooth;
+        RenderOptions.SetBitmapScalingMode(Sprite, smooth ? BitmapScalingMode.HighQuality : BitmapScalingMode.NearestNeighbor);
+    }
+
+    /// <summary>Re-asserts topmost now (e.g. after other topmost windows such as the debug overlay appeared).</summary>
+    public void BringToFront()
+    {
+        if (_hwnd != 0 && Behind == 0)
+        {
+            PetWindowInterop.BringToTopmost(_hwnd);
+            _sinceTopmost.Restart();
+        }
+    }
+
+    /// <summary>Creates the native window and applies pet styles before it is ever shown.</summary>
+    public void CreateHandle()
+    {
+        _hwnd = new WindowInteropHelper(this).EnsureHandle();
+        PetWindowInterop.ApplyPetStyles(_hwnd);
+    }
+
+    /// <summary>Updates position (physical pixels), sprite frame, mirroring and smoothing; only touches what changed.</summary>
+    public void Present(RectI bounds, BitmapSource frame, bool facingLeft, bool smooth)
+    {
+        if (smooth != _smooth)
+        {
+            SetSmoothing(smooth);
+        }
+
+        if (bounds != _bounds && _hwnd != 0)
+        {
+            _bounds = bounds;
+            PetWindowInterop.SetBounds(_hwnd, bounds);
+        }
+
+        if (!ReferenceEquals(frame, _frame))
+        {
+            _frame = frame;
+            Sprite.Source = frame;
+        }
+
+        if (facingLeft != _facingLeft)
+        {
+            _facingLeft = facingLeft;
+            Flip.ScaleX = facingLeft ? -1 : 1;
+        }
+
+        if (_hwnd == 0)
+        {
+            return;
+        }
+
+        if (Behind != 0)
+        {
+            PetWindowInterop.PlaceBelow(_hwnd, Behind); // cheap when it's already there
+            _wasBehind = true;
+            return;
+        }
+
+        if (KeepOnTop && (_wasBehind || _sinceTopmost.Elapsed >= TopmostInterval))
+        {
+            _wasBehind = false;
+            _sinceTopmost.Restart();
+            PetWindowInterop.BringToTopmost(_hwnd);
+        }
+    }
+}

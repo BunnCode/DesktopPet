@@ -6,7 +6,7 @@
       "detail": "Build the whole solution (Debug)",
       "type": "process",
       "command": "dotnet",
-      "args": ["build", "${workspaceFolder}/DesktopPet.slnx", "-nologo", "/property:GenerateFullPaths=true", "/consoleloggerparameters:NoSummary"],
+      "args": ["build", "${workspaceFolder}/Deskling.slnx", "-nologo", "/property:GenerateFullPaths=true", "/consoleloggerparameters:NoSummary"],
       "group": { "kind": "build", "isDefault": true },
       "problemMatcher": "$msCompile"
     },
@@ -15,7 +15,7 @@
       "detail": "Run all unit tests",
       "type": "process",
       "command": "dotnet",
-      "args": ["test", "${workspaceFolder}/DesktopPet.slnx", "-nologo", "/property:GenerateFullPaths=true"],
+      "args": ["test", "${workspaceFolder}/Deskling.slnx", "-nologo", "/property:GenerateFullPaths=true"],
       "group": { "kind": "test", "isDefault": true },
       "problemMatcher": "$msCompile"
     },
@@ -24,7 +24,7 @@
       "detail": "Build and start the pet without the debugger",
       "type": "process",
       "command": "dotnet",
-      "args": ["run", "--project", "${workspaceFolder}/src/DesktopPet.App/DesktopPet.App.csproj"],
+      "args": ["run", "--project", "${workspaceFolder}/src/Deskling.App/Deskling.App.csproj"],
       "problemMatcher": "$msCompile",
       "presentation": { "reveal": "silent" }
     },
@@ -33,17 +33,17 @@
       "detail": "Re-run Core tests on every save",
       "type": "process",
       "command": "dotnet",
-      "args": ["watch", "test", "--project", "${workspaceFolder}/tests/DesktopPet.Core.Tests/DesktopPet.Core.Tests.csproj"],
+      "args": ["watch", "test", "--project", "${workspaceFolder}/tests/Deskling.Core.Tests/Deskling.Core.Tests.csproj"],
       "isBackground": true,
       "problemMatcher": "$msCompile"
     },
     {
       "label": "publish",
-      "detail": "Self-contained single-file DesktopPet.exe in ./publish (runs without the .NET runtime or any IDE)",
+      "detail": "Self-contained single-file Deskling.exe in ./publish (runs without the .NET runtime or any IDE)",
       "type": "process",
       "command": "dotnet",
       "args": [
-        "publish", "${workspaceFolder}/src/DesktopPet.App/DesktopPet.App.csproj",
+        "publish", "${workspaceFolder}/src/Deskling.App/Deskling.App.csproj",
         "-c", "Release", "-r", "win-x64", "--self-contained", "true",
         "-p:PublishSingleFile=true", "-p:IncludeNativeLibrariesForSelfExtract=true",
         "-o", "${workspaceFolder}/publish"

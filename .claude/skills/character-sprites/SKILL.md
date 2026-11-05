@@ -1,6 +1,6 @@
 ---
 name: character-sprites
-description: Make a pixel-art sprite sheet for a new DesktopPet character from reference art, in the built-in rabbit's chibi style. Use when the user shares a character reference (sketch, turnaround) and wants sprites, or wants to change an existing character's sprites.
+description: Make a pixel-art sprite sheet for a new Deskling character from reference art, in the built-in rabbit's chibi style. Use when the user shares a character reference (sketch, turnaround) and wants sprites, or wants to change an existing character's sprites.
 ---
 
 # Character sprites

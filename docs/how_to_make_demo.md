@@ -5,7 +5,7 @@ in `tools/demo/`; they assume a 2560×1440 primary monitor at 125% (work area bo
 and `FLOOR` for another setup.
 
 1. **Run a separate copy of the app,** so the real data folder is never touched: quit the pet, build, and copy
-   `src/DesktopPet.App/bin/Debug/net10.0-windows10.0.19041.0` to a folder **outside the repo** (for example in your
+   `src/Deskling.App/bin/Debug/net10.0-windows10.0.19041.0` to a folder **outside the repo** (for example in your
    temp folder). Outside the repo the app uses the `data` folder next to its exe. Only one copy runs at a time.
 2. **Make the backdrop:** `python tools/demo/forest.py forest.png`. A pastel forest drawn in the pets' style (flat
    colours, light from the upper left, the sprites' outline colour on the nearest things), upscaled 2× with nearest

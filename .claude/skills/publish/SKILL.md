@@ -1,6 +1,6 @@
 ---
 name: publish
-description: Build, test and publish DesktopPet as a self-contained single-file exe in publish\, then copy the repo's data\ folder (settings, pets, furniture, sprites) next to it in publish\data\. Use when the user asks to build/publish/package the app, make a release build, or refresh the data that ships with the exe.
+description: Build, test and publish Deskling as a self-contained single-file exe in publish\, then copy the repo's data\ folder (settings, pets, furniture, sprites) next to it in publish\data\. Use when the user asks to build/publish/package the app, make a release build, or refresh the data that ships with the exe.
 ---
 
 # Publish with data
@@ -15,11 +15,11 @@ Options: `-SkipTests` (skip `dotnet test`), `-Mirror` (make `publish\data` an ex
 only the publish copy has; only when the user asks for an exact copy).
 
 What it does:
-1. Stops any running `DesktopPet.App` (allowed without asking; it locks `bin\` / `publish\`).
-2. `dotnet build` and `dotnet test` on `DesktopPet.slnx` (warnings are errors).
+1. Stops any running `Deskling.App` (allowed without asking; it locks `bin\` / `publish\`).
+2. `dotnet build` and `dotnet test` on `Deskling.slnx` (warnings are errors).
 3. `dotnet publish` with the same arguments as the VS Code `publish` task (Release, win-x64, self-contained,
    single file). The chat model goes to `publish\models\`, LLamaSharp natives to `publish\runtimes\`.
-4. Backs up the old `publish\data` to `%TEMP%\DesktopPet-backups\publish-data-<time>\`, then copies `data\` into
+4. Backs up the old `publish\data` to `%TEMP%\Deskling-backups\publish-data-<time>\`, then copies `data\` into
    `publish\data\` (newer files win; nothing is deleted without `-Mirror`).
 
 Afterwards tell the user:
@@ -29,4 +29,4 @@ Afterwards tell the user:
 - which pet instances were stopped, and offer to restart them.
 
 Note: an exe run from `publish\` inside the repo still uses the repo's `data\` (`DataFolder` walks up to
-`DesktopPet.slnx`). `publish\data` is what's used once the `publish` folder is copied or zipped somewhere else.
+`Deskling.slnx`). `publish\data` is what's used once the `publish` folder is copied or zipped somewhere else.
