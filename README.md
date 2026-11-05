@@ -1,6 +1,6 @@
 # Deskling
 
-A Shimeji-style desktop pet for Windows. Small pixel-art critters live on your desktop: they walk along the taskbar,
+A desktop pet for Windows. Small pixel-art critters live on your desktop: they walk along the taskbar,
 climb and ride your windows, nap on furniture, play video games together, chat with each other and leave you sticky
 notes.
 
