@@ -95,14 +95,16 @@ internal sealed class StickyNote : Window
 
     /// <summary>
     /// Follows its window: hidden while that is minimized or too small for it, otherwise placed at its offset (kept
-    /// inside the window) and just above it.
+    /// inside the window) and just above <paramref name="below"/> in z-order: its window, or the note under it when
+    /// several share one (each directly above its own window would swap places with the others every time).
     /// </summary>
-    public void Track(TrackedWindowState state, RectI window)
+    /// <returns>Whether it's showing, so the next note on the window can go above it.</returns>
+    public bool Track(TrackedWindowState state, RectI window, long below)
     {
         if (state != TrackedWindowState.Shown)
         {
             HideNote();
-            return;
+            return false;
         }
 
         if (!IsVisible)
@@ -118,7 +120,7 @@ internal sealed class StickyNote : Window
         if (width > window.Width || height > window.Height)
         {
             HideNote();
-            return;
+            return false;
         }
 
         var left = System.Math.Clamp(window.Left + Offset.X, window.Left, window.Right - width);
@@ -130,8 +132,12 @@ internal sealed class StickyNote : Window
             PetWindowInterop.SetPosition(_hwnd, position.Item1, position.Item2);
         }
 
-        WindowTracker.PlaceAbove(_hwnd, WindowId);
+        WindowTracker.PlaceAbove(_hwnd, below);
+        return true;
     }
+
+    /// <summary>Its window handle, for the note stacked above it.</summary>
+    public long Handle => _hwnd;
 
     protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
     {

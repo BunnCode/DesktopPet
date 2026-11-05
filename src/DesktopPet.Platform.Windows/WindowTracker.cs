@@ -49,8 +49,8 @@ public static class WindowTracker
     }
 
     /// <summary>
-    /// Puts our window directly above <paramref name="windowId"/> in z-order, without activating anything, so it's
-    /// covered by whatever covers that window. Does nothing when it's already there.
+    /// Puts our window directly above <paramref name="windowId"/> (another window, or another of ours) in z-order,
+    /// without activating anything, so it's covered by whatever covers that window. Does nothing when it's already there.
     /// </summary>
     public static void PlaceAbove(nint ours, long windowId)
     {

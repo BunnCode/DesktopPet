@@ -213,10 +213,10 @@ Win32 through CsWin32: add API names to `Interop/NativeMethods.txt` (one per lin
 | `UI/IPetControls.cs` | What the menu needs from a pet |
 | `UI/TrayIcon.cs` | `NotifyIcon` with the shared menu; `Notify(title, text, warning)` |
 | `UI/DebugOverlay.cs` | Click-through overlay per monitor drawing floors, window tops, walls, hang bars, pet and furniture boxes (`DebugView`, `DebugPet`) |
-| `Chat/ChatHost.cs` | Loads the model in the background, ticks `ChatDirector` every display frame (`CompositionTarget.Rendering`) with `PetHost.ChatInfo`, shows lines as bubbles (stacked when they'd overlap) and notes, tracks notes against their windows every 100 ms; `Enabled` (speech), `NotesEnabled`, `ReadingEnabled` (sets `ChatDirector.Reader`), `Say(petId, text)` (a fixed line in a bubble, no model; used by pill rounds), `Forget`, `BringToFront` |
+| `Chat/ChatHost.cs` | Loads the model in the background, ticks `ChatDirector` every display frame (`CompositionTarget.Rendering`) with `PetHost.ChatInfo`, shows lines as bubbles (stacked when they'd overlap) and notes, tracks notes against their windows every 100 ms (a window's notes stacked oldest first in z-order, so overlapping ones don't swap and flicker); `Enabled` (speech), `NotesEnabled`, `ReadingEnabled` (sets `ChatDirector.Reader`), `Say(petId, text)` (a fixed line in a bubble, no model; used by pill rounds), `Forget`, `BringToFront` |
 | `Chat/SpeechBubble.cs` | Click-through topmost bubble sized to its text; `Say`, `Follow` (fade, follow the head, stack above `taken`), `Silence` |
 | `Chat/ScreenReader.cs` | `IScreenReader` for Core: query window, check `ScreenReading.Allows`, capture the area, OCR, keep `Visible` lines (covers: windows in front + our pets, bubbles, notes); notifies once if there's no OCR |
-| `Chat/StickyNote.cs` | Note window anchored to another window by offset (of its top-left, or with `fromBottom` its bottom-left: above a pet's head); `Track(state, bounds)`; click → `Dismissed` |
+| `Chat/StickyNote.cs` | Note window anchored to another window by offset (of its top-left, or with `fromBottom` its bottom-left: above a pet's head); `Track(state, bounds, below)` (z-order just above `below`: its window or the note under it), `Handle`; click → `Dismissed` |
 | `app.manifest` | PerMonitorV2 DPI awareness (only applies when started from the .exe; see `DpiAwareness`) |
 
 ---

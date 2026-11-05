@@ -293,7 +293,7 @@ internal sealed class ChatHost : IDisposable
         var note = new StickyNote(windowId, offset, line.Text, pet.Name, fromBottom: line.NoteBehind) { Left = -32000, Top = -32000 };
         note.Dismissed += (_, _) => RemoveNote(note);
         _notes.Add(note);
-        note.Track(state, bounds);
+        TrackNotes(); // on top of the window's other notes
     }
 
     private void RemoveNote(StickyNote note)
@@ -302,18 +302,32 @@ internal sealed class ChatHost : IDisposable
         note.Close();
     }
 
+    /// <summary>
+    /// Follows each note's window. A window's notes stack oldest first, each just above the one before, so overlapping
+    /// notes keep a fixed order instead of taking turns being directly above the window.
+    /// </summary>
     private void TrackNotes()
     {
-        foreach (var note in _notes.ToList())
+        foreach (var group in _notes.GroupBy(n => n.WindowId).ToList())
         {
-            var (state, bounds) = WindowTracker.Query(note.WindowId);
+            var (state, bounds) = WindowTracker.Query(group.Key);
             if (state == TrackedWindowState.Gone)
             {
-                RemoveNote(note);
+                foreach (var note in group.ToList())
+                {
+                    RemoveNote(note);
+                }
+
+                continue;
             }
-            else
+
+            var below = group.Key;
+            foreach (var note in group)
             {
-                note.Track(state, bounds);
+                if (note.Track(state, bounds, below))
+                {
+                    below = note.Handle;
+                }
             }
         }
     }
