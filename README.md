@@ -54,18 +54,6 @@ to join friends who are already hanging out there.
 
 ![A gravestone engraved with Clover and two dates, with a pet standing beside it](docs/screenshots/gravestone.png)
 
-**The menu and the debug overlay.** Right-click a pet for its stats and care options. The debug overlay shows the
-floors, window tops, walls and what each pet and piece of furniture is doing.
-
-<p>
-  <img src="docs/screenshots/menu.png" alt="The pet menu: name and mood, stat bars, Feed, Play, Sleep, fixing, furniture, the chat switches and settings" height="420">
-</p>
-
-![The debug overlay: labelled boxes around every pet and piece of furniture, and highlighted floors and window edges](docs/screenshots/debug-overlay.png)
-
-The screenshots are staged with `tools/demo/` on a pixel-art forest backdrop; see
-[docs/how_to_make_demo.md](docs/how_to_make_demo.md).
-
 ## Requirements
 
 - Windows 10 (version 2004 / build 19041) or later
