@@ -80,6 +80,10 @@ This document describes the design **as built**, the status of each milestone, a
 - **M12 speech and sticky notes are two separate behaviors** (clarified by the user 2026-11-03). Each has its own
   switch (menu: "Let them talk", "Let them leave notes"), rates, gaps, prompt and memory of past lines. They only
   share the model and its one-at-a-time queue.
+- **M12 notes on windows behind a pet** (user-reported 2026-11-04): notes first went only on the window a pet stood on.
+  Now a pet that isn't standing on a window uses the one behind it (`PetSimulation.WindowBehind`, the same window
+  reading picks), and the note goes just above the pet's head rather than below the title bar, which could be far away
+  or hidden under the window the pet stands on.
 - **M12 chat frequencies are traits** (`Chat` multipliers), not stats: they were in `traits.json` like the rest of M10's traits (now the `Traits` in `save.json`).
 - **M12 runtime:** LLamaSharp 0.30 with its **Vulkan** backend (17 MB, works with any recent GPU's driver) instead of
   CUDA (200+ MB, NVIDIA only), plus the CPU backend as the fallback. The model is `Qwen3.5-2B-Q6_K.gguf` (1.5 GB,
@@ -724,14 +728,22 @@ loads the model too. User-facing guide: `docs/CHAT.md`.
     Bubbles of pets side by side stack instead of covering each other.
 - **Sticky notes** (`Chat.NotesEnabled`, menu "Let them leave notes"):
   - A pet standing on a window now and then writes a note and sticks it there, about where it stands, below the title
-    bar. Its prompt is about writing, not speaking, with one topic picked per note (water, stretching, a break,
+    bar. A pet standing in front of a window instead (on the taskbar, the floor, furniture or the top of a window in
+    front) sticks it on that window, the frontmost one behind the middle of its body, just above its head (fixed
+    2026-11-04: before, only the window under its feet got notes). Its prompt is about writing, not speaking, with one topic picked per note (water, stretching, a break,
     cheering on, a kind word, a silly thought …).
-  - 2 per hour while on a window; at least 2 min between notes and 10 min per pet; at most 3 on screen.
+  - 2 per hour while on or in front of a window; at least 2 min between notes and 10 min per pet; at most 3 on screen.
   - The note is a small window anchored to its window: it moves with it, hides while it's minimized, goes when it
     closes, and sits just above it in z-order (so whatever covers the window covers the note). Clicking dismisses it.
 - **Both:** sleeping pets do neither; nothing happens while the screen is locked. Each behavior keeps its own memory
   of the pet's last 5 lines or notes, passed to the prompt so it doesn't repeat itself. The output is cleaned up:
-  quotes, name prefixes, narration, actions, emojis and think tags are removed, at most two sentences, 160 characters.
+  quotes, name prefixes, narration, actions, emojis and think tags are removed, at most two sentences, 160 characters
+  (`MaxSentences`, `MaxChars`).
+- **Settings** (`settings.json` → `Chat`, added to the shipped file 2026-11-04 so they can be tuned for testing; all
+  apply live except `ModelFile`, `UseGpu` and `ContextTokens`): the rates, gaps and switches above; `ChatFrequency`
+  (1), a global multiplier on every pet's speech rates (needs, banter, jokes, remarks; not click reactions) on top of
+  its traits; and how the model picks words, `MaxTokens`, `Temperature`, `TopP`, `TopK`, `MinP`, `RepeatPenalty`
+  (were fixed in code before) and `ContextTokens`. Core passes them to the model as one `ChatSampling`.
 - **Per pet:** the traits have `Chat` multipliers (`Needy`, `Banter`, `Jokes`, `Notes`), rolled for new pets in
   `NewPetChat` (0.5–2). Older files without them count as 1. Shown in About. The personality prompt is the pet's
   `personality.txt` (M10).

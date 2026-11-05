@@ -24,10 +24,12 @@ internal sealed class StickyNote : Window
     /// <param name="offset">Where on that window, from its top-left corner (physical pixels).</param>
     /// <param name="text">What it says.</param>
     /// <param name="author">The pet that wrote it.</param>
-    public StickyNote(long windowId, Vec2 offset, string text, string author)
+    /// <param name="fromBottom">The offset is where the note's bottom-left corner goes instead of its top-left.</param>
+    public StickyNote(long windowId, Vec2 offset, string text, string author, bool fromBottom = false)
     {
         WindowId = windowId;
         Offset = offset;
+        FromBottom = fromBottom;
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = Brushes.Transparent;
@@ -88,6 +90,9 @@ internal sealed class StickyNote : Window
 
     public Vec2 Offset { get; }
 
+    /// <summary><see cref="Offset"/> is for the note's bottom edge (a note above a pet's head).</summary>
+    public bool FromBottom { get; }
+
     /// <summary>
     /// Follows its window: hidden while that is minimized or too small for it, otherwise placed at its offset (kept
     /// inside the window) and just above it.
@@ -117,7 +122,7 @@ internal sealed class StickyNote : Window
         }
 
         var left = System.Math.Clamp(window.Left + Offset.X, window.Left, window.Right - width);
-        var top = System.Math.Clamp(window.Top + Offset.Y, window.Top, window.Bottom - height);
+        var top = System.Math.Clamp(window.Top + Offset.Y - (FromBottom ? height : 0), window.Top, window.Bottom - height);
         var position = ((int)System.Math.Round(left), (int)System.Math.Round(top));
         if (position != _position)
         {

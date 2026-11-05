@@ -6,17 +6,19 @@ namespace DesktopPet.Core.Chat;
 
 /// <summary>
 /// Turns a raw model reply into a line fit for a speech bubble, or rejects it. Small models add quotes, name prefixes,
-/// stage directions, emojis and run-on text; this strips them and keeps at most two sentences.
+/// stage directions, emojis and run-on text; this strips them and keeps at most two sentences (by default).
 /// </summary>
 public static partial class ChatText
 {
-    /// <summary>Longest line shown, in characters.</summary>
+    /// <summary>Longest line shown by default, in characters (<see cref="ChatRules.MaxChars"/>).</summary>
     public const int MaxLength = 160;
 
     /// <summary>The cleaned line, or null when nothing usable is left.</summary>
     /// <param name="raw">What the model returned.</param>
     /// <param name="name">The speaking pet's name (a leading "Name:" is removed).</param>
-    public static string? Clean(string? raw, string name)
+    /// <param name="maxSentences">Keep at most this many sentences.</param>
+    /// <param name="maxChars">Keep at most this many characters.</param>
+    public static string? Clean(string? raw, string name, int maxSentences = 2, int maxChars = MaxLength)
     {
         if (string.IsNullOrWhiteSpace(raw))
         {
@@ -53,8 +55,8 @@ public static partial class ChatText
         }
 
         text = StripQuotes(text);
-        text = FirstSentences(text, 2);
-        text = Truncate(text, MaxLength);
+        text = FirstSentences(text, maxSentences);
+        text = Truncate(text, maxChars);
         text = StripQuotes(text);
         return text.Count(char.IsLetter) >= 2 ? text : null;
     }

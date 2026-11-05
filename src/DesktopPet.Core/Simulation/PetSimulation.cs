@@ -194,17 +194,13 @@ public sealed class PetSimulation
                 return null;
         }
 
-        var box = Current.Bounds;
-        var middle = (box.Top + box.Bottom) / 2.0;
-        var centre = new Vec2((box.Left + box.Right) / 2.0, middle);
-        foreach (var window in _snapshot.Windows) // front to back: the first one there is the one showing behind it
+        if (WindowBehind() is { } behind)
         {
-            if (window.Bounds.Contains(centre))
-            {
-                return window.Id;
-            }
+            return behind;
         }
 
+        var box = Current.Bounds;
+        var middle = (box.Top + box.Bottom) / 2.0;
         var reach = reachDip * _ctx.Scale;
         long? best = null;
         var bestGap = double.MaxValue;
@@ -225,6 +221,32 @@ public sealed class PetSimulation
         }
 
         return best;
+    }
+
+    /// <summary>
+    /// The frontmost window behind the middle of the pet's body while it stands somewhere other than on a window (the
+    /// floor, the taskbar, furniture, the top of a window in front): the window it's in front of. Null while it stands on
+    /// a window, isn't standing, or has nothing behind it.
+    /// </summary>
+    public long? WindowBehind()
+    {
+        var body = _ctx.Body;
+        if (body.Mode != BodyMode.Grounded || PlatformBuilder.WindowIdFromKey(body.GroundKey) is not null)
+        {
+            return null;
+        }
+
+        var box = Current.Bounds;
+        var centre = new Vec2((box.Left + box.Right) / 2.0, (box.Top + box.Bottom) / 2.0);
+        foreach (var window in _snapshot.Windows) // front to back: the first one there is the one showing behind it
+        {
+            if (window.Bounds.Contains(centre))
+            {
+                return window.Id;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>Climbable walls derived from the latest snapshot (for the debug overlay).</summary>

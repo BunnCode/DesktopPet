@@ -96,7 +96,7 @@ internal sealed class ChatHost : IDisposable
             return;
         }
 
-        _ = LoadAsync(modelPath, Rules.UseGpu);
+        _ = LoadAsync(modelPath, Rules.UseGpu, Rules.ContextTokens);
     }
 
     /// <summary>A pet was removed: it stops talking and its bubble goes.</summary>
@@ -138,11 +138,11 @@ internal sealed class ChatHost : IDisposable
         _model?.Dispose();
     }
 
-    private async Task LoadAsync(string path, bool useGpu)
+    private async Task LoadAsync(string path, bool useGpu, int contextTokens)
     {
         try
         {
-            var model = await LlamaChatModel.LoadAsync(path, useGpu).ConfigureAwait(true); // back on the UI thread
+            var model = await LlamaChatModel.LoadAsync(path, useGpu, contextTokens).ConfigureAwait(true); // back on the UI thread
             if (_disposed)
             {
                 model.Dispose();
@@ -272,7 +272,10 @@ internal sealed class ChatHost : IDisposable
         _spoke.Add(pet.Id);
     }
 
-    /// <summary>A note on the window the pet stands on, just below its title bar, about where the pet is.</summary>
+    /// <summary>
+    /// A note on the window the pet stands on, just below its title bar, about where the pet is; or, on a window behind
+    /// the pet, just above its head (below the title bar would often be far away, or under the window it stands on).
+    /// </summary>
     private void AddNote(PetHost pet, long windowId, ChatLine line)
     {
         var (state, bounds) = WindowTracker.Query(windowId);
@@ -283,8 +286,11 @@ internal sealed class ChatHost : IDisposable
 
         var scale = pet.SizePx / System.Math.Max(1, pet.Config.SizeDip);
         var sameWindow = _notes.Count(n => n.WindowId == windowId);
-        var offset = new Vec2(line.NoteX - bounds.Left - (85 * scale), (44 + (24 * sameWindow)) * scale); // centred on the pet, staggered
-        var note = new StickyNote(windowId, offset, line.Text, pet.Name) { Left = -32000, Top = -32000 };
+        var x = line.NoteX - bounds.Left - (85 * scale); // centred on the pet
+        var offset = line.NoteBehind
+            ? new Vec2(x, line.NoteY - pet.SizePx - ((4 + (24 * sameWindow)) * scale) - bounds.Top) // its bottom, staggered upwards
+            : new Vec2(x, (44 + (24 * sameWindow)) * scale); // its top, staggered downwards
+        var note = new StickyNote(windowId, offset, line.Text, pet.Name, fromBottom: line.NoteBehind) { Left = -32000, Top = -32000 };
         note.Dismissed += (_, _) => RemoveNote(note);
         _notes.Add(note);
         note.Track(state, bounds);

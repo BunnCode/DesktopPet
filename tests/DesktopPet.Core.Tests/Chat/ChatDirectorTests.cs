@@ -26,9 +26,10 @@ public class ChatDirectorTests
     };
 
     private static ChatPet Pet(
-        int id, double x = 100, PetStats? stats = null, bool canTalk = true, long? window = null, ChatTraits? traits = null) =>
+        int id, double x = 100, PetStats? stats = null, bool canTalk = true, long? window = null, ChatTraits? traits = null,
+        long? behind = null) =>
         new(id, $"Pet{id}", $"Pet{id} likes carrots.", stats ?? new PetStats(80, 80, 80), new Vec2(x, 500), 1, canTalk, window,
-            traits ?? new ChatTraits());
+            traits ?? new ChatTraits(), BehindWindowId: behind);
 
     /// <summary>Rolls always succeed (0 is below any chance) and pick the first kind with a rate.</summary>
     private static ChatDirector Director(FakeChatModel model) => new(new FakeRandom(0.0)) { Model = model };
@@ -80,6 +81,43 @@ public class ChatDirectorTests
 
         Assert.Empty(lines);
         Assert.Empty(model.Prompts);
+    }
+
+    [Fact]
+    public void Chat_frequency_scales_every_pets_speech_but_not_notes()
+    {
+        // A roll of 0.0005 misses a 10-per-hour joke over one 0.1 s tick (0.00028) but hits at twice the rate.
+        var rules = Quiet with { JokesPerHour = 10 };
+        var model = new FakeChatModel("Ha!");
+
+        Assert.Empty(Run(new ChatDirector(new FakeRandom(0.0005)) { Model = model }, [Pet(1)], rules, 2));
+        Assert.Single(Run(new ChatDirector(new FakeRandom(0.0005)) { Model = model }, [Pet(1)], rules with { ChatFrequency = 2 }, 2));
+
+        var quiet = Run(Director(model), [Pet(1, window: 7)], rules with { ChatFrequency = 0, NotesPerHour = 10 }, 10);
+        Assert.All(quiet, l => Assert.Equal(ChatKind.Note, l.Kind));
+        Assert.NotEmpty(quiet);
+    }
+
+    [Fact]
+    public void The_sampling_settings_reach_the_model_and_replies_are_cut_to_the_limits()
+    {
+        var model = new FakeChatModel("One carrot. Two carrots. Three carrots.");
+        var rules = Quiet with
+        {
+            JokesPerHour = 10,
+            Temperature = 0.3,
+            TopP = 0.5,
+            TopK = 7,
+            MinP = 0.05,
+            RepeatPenalty = 1.3,
+            MaxTokens = 33,
+            MaxSentences = 1,
+        };
+
+        var line = Assert.Single(Run(Director(model), [Pet(1)], rules, 2));
+
+        Assert.Equal(new ChatSampling(33, 0.3, 0.5, 7, 0.05, 1.3), model.Samplings[0]);
+        Assert.Equal("One carrot.", line.Text);
     }
 
     [Fact]
@@ -200,9 +238,22 @@ public class ChatDirectorTests
         Assert.Empty(Run(Director(model), [Pet(1)], rules, 20)); // on the floor: no window
 
         var line = Assert.Single(Run(Director(model), [Pet(1, x: 321, window: 42)], rules, 2));
-        Assert.Equal((ChatKind.Note, 42L, 321.0), (line.Kind, line.WindowId, line.NoteX));
+        Assert.Equal((ChatKind.Note, 42L, 321.0, false), (line.Kind, line.WindowId, line.NoteX, line.NoteBehind));
 
         Assert.Empty(Run(Director(model), [Pet(1, window: 42)], rules, 20, notes: 2)); // at the cap
+    }
+
+    [Fact]
+    public void Notes_go_on_the_window_behind_a_pet_when_it_isnt_standing_on_one()
+    {
+        var model = new FakeChatModel("Drink some water!");
+        var rules = Quiet with { NotesPerHour = 10 };
+
+        var behind = Assert.Single(Run(Director(model), [Pet(1, x: 321, behind: 9)], rules, 2));
+        Assert.Equal((9L, 321.0, 500.0, true), (behind.WindowId, behind.NoteX, behind.NoteY, behind.NoteBehind));
+
+        var on = Assert.Single(Run(Director(model), [Pet(1, window: 42, behind: 9)], rules, 2)); // the one it stands on wins
+        Assert.Equal((42L, false), (on.WindowId, on.NoteBehind));
     }
 
     [Fact]
@@ -327,7 +378,7 @@ public class ChatDirectorTests
 
         Assert.True(model.LastToken.IsCancellationRequested);
         model.Release("Too late");
-        Assert.Empty(Run(director, [Pet(1)], rules, 1));
+        Assert.Empty(Run(director, [Pet(1)], rules, 2));
     }
 
     [Fact]
@@ -407,9 +458,12 @@ internal sealed class FakeChatModel(params string[] replies) : IChatModel
 
     public CancellationToken LastToken { get; private set; }
 
-    public Task<string> CompleteAsync(ChatPrompt prompt, int maxTokens, double temperature, CancellationToken cancellationToken)
+    public List<ChatSampling> Samplings { get; } = [];
+
+    public Task<string> CompleteAsync(ChatPrompt prompt, ChatSampling sampling, CancellationToken cancellationToken)
     {
         Prompts.Add(prompt);
+        Samplings.Add(sampling);
         LastToken = cancellationToken;
         if (Fail is not null)
         {

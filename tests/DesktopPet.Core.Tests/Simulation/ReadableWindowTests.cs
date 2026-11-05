@@ -94,6 +94,35 @@ public class ReadableWindowTests
     }
 
     [Fact]
+    public void The_window_behind_is_the_one_it_stands_in_front_of_not_on()
+    {
+        var desktop = new FakeDesktop().Monitor(0, 0, 1920, 1080, taskbar: 40).Window(Win, 0, 0, 1920, 1040, maximized: true).Snapshot();
+        var inFront = NewSim(desktop);
+        inFront.Place(new Vec2(500, 100), Vec2.Zero);
+        inFront.RunUntil(desktop, Grounded);
+
+        Assert.Equal(Win, inFront.WindowBehind());
+        Assert.Null(LandedAt(1000).WindowBehind()); // standing on it
+        Assert.Null(LandedAt(300).WindowBehind());  // nothing behind
+    }
+
+    [Fact]
+    public void On_top_of_one_window_in_front_of_another_the_other_is_behind()
+    {
+        const long back = 9;
+        var desktop = new FakeDesktop().Monitor(0, 0, 1920, 1080, taskbar: 40)
+            .Window(Win, 800, 600, 400, 440)                // stood on
+            .Window(back, 0, 0, 1920, 1040, maximized: true) // behind it
+            .Snapshot();
+        var sim = NewSim(desktop);
+        sim.Place(new Vec2(1000, 100), Vec2.Zero);
+        sim.RunUntil(desktop, Grounded);
+
+        Assert.Equal(600, sim.Current.FeetPos.Y);
+        Assert.Null(sim.WindowBehind()); // it stands on Win: notes go there
+    }
+
+    [Fact]
     public void Falling_pets_read_nothing()
     {
         var sim = NewSim(Desktop);

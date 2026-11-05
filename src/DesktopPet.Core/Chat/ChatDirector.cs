@@ -17,15 +17,21 @@ namespace DesktopPet.Core.Chat;
 /// <param name="WindowId">The window it stands on, if any (sticky notes go there).</param>
 /// <param name="Traits">How often it talks and writes notes.</param>
 /// <param name="ReadWindowId">The window it's on, in front of or beside, which it can read (M12b), if any.</param>
+/// <param name="BehindWindowId">
+/// The window it stands in front of (not on), if any: sticky notes go there when it isn't standing on one.
+/// </param>
 public sealed record ChatPet(
     int Id, string Name, string Personality, PetStats Stats, Vec2 Feet, double Scale, bool CanTalk, long? WindowId, ChatTraits Traits,
-    long? ReadWindowId = null);
+    long? ReadWindowId = null, long? BehindWindowId = null);
 
 /// <summary>
 /// What came of a request: a spoken line for a speech bubble, or (<see cref="ChatKind.Note"/>) the text of a sticky
-/// note for <see cref="WindowId"/> at <see cref="NoteX"/>.
+/// note for <see cref="WindowId"/> at <see cref="NoteX"/>. A note on a window the pet stood on goes below its title bar;
+/// one on a window behind the pet (<see cref="NoteBehind"/>) goes just above the pet's head, its feet then being at
+/// <see cref="NoteY"/>.
 /// </summary>
-public sealed record ChatLine(int PetId, ChatKind Kind, string Text, long? WindowId = null, double NoteX = 0);
+public sealed record ChatLine(
+    int PetId, ChatKind Kind, string Text, long? WindowId = null, double NoteX = 0, double NoteY = 0, bool NoteBehind = false);
 
 /// <summary>
 /// Runs the two behaviors that use the language model, <b>speech</b> (bubbles: needs, banter and its answer, jokes)
@@ -260,12 +266,13 @@ public sealed class ChatDirector : IDisposable
         var t = pet.Traits;
         var needy = LowestNeed(pet.Stats, rules.NeedyBelow);
         var friend = Nearest(pet, pets, rules.BanterDistanceDip * pet.Scale);
+        var f = rules.ChatFrequency;
         var rates = new (ChatKind Kind, double PerHour)[]
         {
-            (ChatKind.Needy, needy is null ? 0 : rules.NeedyPerHour * t.Needy),
-            (ChatKind.Banter, friend is null ? 0 : rules.BanterPerHour * t.Banter),
-            (ChatKind.Joke, rules.JokesPerHour * t.Jokes),
-            (ChatKind.Remark, Reader is null || pet.ReadWindowId is null ? 0 : rules.RemarksPerHour * t.Curiosity),
+            (ChatKind.Needy, needy is null ? 0 : rules.NeedyPerHour * t.Needy * f),
+            (ChatKind.Banter, friend is null ? 0 : rules.BanterPerHour * t.Banter * f),
+            (ChatKind.Joke, rules.JokesPerHour * t.Jokes * f),
+            (ChatKind.Remark, Reader is null || pet.ReadWindowId is null ? 0 : rules.RemarksPerHour * t.Curiosity * f),
         };
 
         var total = rates.Sum(r => System.Math.Max(0, r.PerHour));
@@ -311,10 +318,10 @@ public sealed class ChatDirector : IDisposable
         return true;
     }
 
-    /// <summary>Rolls whether this pet, standing on a window, leaves a note on it now.</summary>
+    /// <summary>Rolls whether this pet, standing on or in front of a window, leaves a note on it now.</summary>
     private bool TryWriteNote(ChatPet pet, ChatRules rules, double dt)
     {
-        if (!pet.CanTalk || pet.WindowId is not { } window || _now - _notes.LastFor(pet.Id) < rules.PetNoteGapSeconds)
+        if (!pet.CanTalk || (pet.WindowId ?? pet.BehindWindowId) is not { } window || _now - _notes.LastFor(pet.Id) < rules.PetNoteGapSeconds)
         {
             return false;
         }
@@ -331,7 +338,7 @@ public sealed class ChatDirector : IDisposable
         var read = Reader is not null && _random.Chance(System.Math.Clamp(rules.NoteReadChance * pet.Traits.Curiosity, 0, 1))
             ? new Reading(window, ChatPrompts.NoteAbout)
             : null;
-        Start(pet, ChatKind.Note, usual, rules, noteWindow: window, noteX: pet.Feet.X, read: read); // nothing readable: the usual topic
+        Start(pet, ChatKind.Note, usual, rules, noteWindow: window, noteBehind: pet.WindowId is null, read: read); // nothing readable: the usual topic
         return true;
     }
 
@@ -341,12 +348,12 @@ public sealed class ChatDirector : IDisposable
     /// <param name="rules">Chat tuning.</param>
     /// <param name="listener">Who a banter line is said to.</param>
     /// <param name="noteWindow">The window a note goes on.</param>
-    /// <param name="noteX">Where on it.</param>
+    /// <param name="noteBehind">The note's window is behind the pet rather than under its feet.</param>
     /// <param name="answerAt">When an answer may be shown.</param>
     /// <param name="read">Read this window first and ask about what's there.</param>
     private void Start(
-        ChatPet pet, ChatKind kind, string? user, ChatRules rules, ChatPet? listener = null, long? noteWindow = null, double noteX = 0,
-        double answerAt = 0, Reading? read = null)
+        ChatPet pet, ChatKind kind, string? user, ChatRules rules, ChatPet? listener = null, long? noteWindow = null,
+        bool noteBehind = false, double answerAt = 0, Reading? read = null)
     {
         var system = kind == ChatKind.Note
             ? ChatPrompts.NoteSystem(pet.Name, pet.Personality, _notes.Recent(pet.Id))
@@ -357,7 +364,7 @@ public sealed class ChatDirector : IDisposable
         {
             task = read is not null && Reader is { } reader
                 ? ReadThenAskAsync(reader, Model!, read, pet, system, user, rules, cancel.Token)
-                : Model!.CompleteAsync(new ChatPrompt(system, user ?? string.Empty), rules.MaxTokens, rules.Temperature, cancel.Token);
+                : Model!.CompleteAsync(new ChatPrompt(system, user ?? string.Empty), rules.Sampling, cancel.Token);
         }
 #pragma warning disable CA1031 // any model failure just skips this one
         catch (Exception e)
@@ -366,7 +373,7 @@ public sealed class ChatDirector : IDisposable
             task = Task.FromException<string>(e);
         }
 
-        _job = new Job(pet.Id, pet.Name, kind, task, cancel, _now, listener?.Id, noteWindow, noteX, answerAt);
+        _job = new Job(pet.Id, pet.Name, kind, task, cancel, _now, listener?.Id, noteWindow, pet.Feet, noteBehind, answerAt);
         TrackFor(kind).Mark(pet.Id, _now);
     }
 
@@ -402,7 +409,7 @@ public sealed class ChatDirector : IDisposable
             return string.Empty;
         }
 
-        return await model.CompleteAsync(new ChatPrompt(system, user), rules.MaxTokens, rules.Temperature, cancellationToken).ConfigureAwait(false);
+        return await model.CompleteAsync(new ChatPrompt(system, user), rules.Sampling, cancellationToken).ConfigureAwait(false);
     }
 
     private void Finish(Job job, IReadOnlyList<ChatPet> pets, ChatRules rules)
@@ -424,13 +431,13 @@ public sealed class ChatDirector : IDisposable
             return;
         }
 
-        var text = ChatText.Clean(job.Task.Result, job.PetName);
+        var text = ChatText.Clean(job.Task.Result, job.PetName, rules.MaxSentences, rules.MaxChars);
         if (text is null)
         {
             return;
         }
 
-        var line = new ChatLine(job.PetId, job.Kind, text, job.NoteWindow, job.NoteX);
+        var line = new ChatLine(job.PetId, job.Kind, text, job.NoteWindow, job.NoteAt.X, job.NoteAt.Y, job.NoteBehind);
         if (job.Kind == ChatKind.Answer && _now < job.AnswerAt)
         {
             _held = (line, job.AnswerAt); // let the first line be read before the answer appears
@@ -515,7 +522,7 @@ public sealed class ChatDirector : IDisposable
 
     private sealed class Job(
         int petId, string petName, ChatKind kind, Task<string> task, CancellationTokenSource cancel, double startedAt, int? listenerId,
-        long? noteWindow, double noteX, double answerAt) : IDisposable
+        long? noteWindow, Vec2 noteAt, bool noteBehind, double answerAt) : IDisposable
     {
         public int PetId { get; } = petId;
         public string PetName { get; } = petName;
@@ -524,7 +531,8 @@ public sealed class ChatDirector : IDisposable
         public double StartedAt { get; } = startedAt;
         public int? ListenerId { get; } = listenerId;
         public long? NoteWindow { get; } = noteWindow;
-        public double NoteX { get; } = noteX;
+        public Vec2 NoteAt { get; } = noteAt;
+        public bool NoteBehind { get; } = noteBehind;
         public double AnswerAt { get; } = answerAt;
         public bool Abandoned { get; private set; }
 

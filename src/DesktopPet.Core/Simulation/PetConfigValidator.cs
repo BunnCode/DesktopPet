@@ -194,6 +194,14 @@ public static class PetConfigValidator
 
             Range("Chat.MaxTokens", chat.MaxTokens, 8, 256);
             Range("Chat.Temperature", chat.Temperature, 0, 2);
+            Range("Chat.TopP", chat.TopP, 0.01, 1);
+            Range("Chat.TopK", chat.TopK, 0, 1_000);
+            Range("Chat.MinP", chat.MinP, 0, 1);
+            Range("Chat.RepeatPenalty", chat.RepeatPenalty, 0.5, 2);
+            Range("Chat.ContextTokens", chat.ContextTokens, 512, 32_768);
+            Range("Chat.MaxSentences", chat.MaxSentences, 1, 10);
+            Range("Chat.MaxChars", chat.MaxChars, 20, 1_000);
+            Range("Chat.ChatFrequency", chat.ChatFrequency, 0, 100);
             Range("Chat.NeedyBelow", chat.NeedyBelow, 0, 100);
             Range("Chat.NeedyPerHour", chat.NeedyPerHour, 0, 3_600);
             Range("Chat.BanterPerHour", chat.BanterPerHour, 0, 3_600);

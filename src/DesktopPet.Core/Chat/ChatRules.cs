@@ -19,10 +19,34 @@ public sealed record ChatRules
     public bool UseGpu { get; init; } = true;
 
     /// <summary>Longest reply, in tokens (a token is about three quarters of a word).</summary>
-    public int MaxTokens { get; init; } = 60 * 3;
+    public int MaxTokens { get; init; } = 60;
 
     /// <summary>Randomness of the wording: 0 is always the likeliest words, 1 and above is wilder.</summary>
-    public double Temperature { get; init; } = 1;
+    public double Temperature { get; init; } = 0.8;
+
+    /// <summary>
+    /// Only the likeliest words that together make up this share of the chance are considered (1: all of them). Lower is
+    /// tamer.
+    /// </summary>
+    public double TopP { get; init; } = 0.9;
+
+    /// <summary>Only this many of the likeliest words are considered at each step (0: no limit). Lower is tamer.</summary>
+    public int TopK { get; init; } = 40;
+
+    /// <summary>Words less likely than this fraction of the likeliest one are dropped (0: off). Higher is tamer.</summary>
+    public double MinP { get; init; }
+
+    /// <summary>Above 1, words the reply already used are less likely again (1: off). Too high makes odd wording.</summary>
+    public double RepeatPenalty { get; init; } = 1.1;
+
+    /// <summary>Room for the prompt and the reply, in tokens (the prompts are a few hundred). Applies on restart.</summary>
+    public int ContextTokens { get; init; } = 1024;
+
+    /// <summary>A reply is cut to this many sentences (speech and notes alike).</summary>
+    public int MaxSentences { get; init; } = 2;
+
+    /// <summary>A reply is cut to this many characters (speech and notes alike).</summary>
+    public int MaxChars { get; init; } = 160;
 
     /// <summary>A reply that takes longer than this is dropped.</summary>
     public double ReplyTimeoutSeconds { get; init; } = 25;
@@ -31,6 +55,12 @@ public sealed record ChatRules
 
     /// <summary>Whether pets talk. The menu's "Let them talk" starts from this.</summary>
     public bool Enabled { get; init; } = true;
+
+    /// <summary>
+    /// Multiplies how often every pet talks (needs, banter, jokes, remarks; not click reactions), on top of each pet's
+    /// own traits: 2 is twice as chatty, 0 is quiet. The gaps below still apply, so they cap it.
+    /// </summary>
+    public double ChatFrequency { get; init; } = 1;
 
     /// <summary>A need below this makes the pet say so.</summary>
     public double NeedyBelow { get; init; } = 30;
@@ -72,17 +102,17 @@ public sealed record ChatRules
     /// <summary>Whether pets leave sticky notes. The menu's "Let them leave notes" starts from this.</summary>
     public bool NotesEnabled { get; init; } = true;
 
-    /// <summary>Notes per hour while the pet stands on a window.</summary>
-    public double NotesPerHour { get; init; } = 8;
+    /// <summary>Notes per hour while the pet stands on or in front of a window (times its own <c>Notes</c> trait).</summary>
+    public double NotesPerHour { get; init; } = 2;
 
     /// <summary>At most this many sticky notes on screen at once.</summary>
-    public int MaxNotes { get; init; } = 16;
+    public int MaxNotes { get; init; } = 3;
 
     /// <summary>At least this long between two notes from any pets.</summary>
-    public double NoteGapSeconds { get; init; } = 30;
+    public double NoteGapSeconds { get; init; } = 120;
 
     /// <summary>At least this long between two notes from the same pet.</summary>
-    public double PetNoteGapSeconds { get; init; } = 120;
+    public double PetNoteGapSeconds { get; init; } = 600;
 
     // ---- Reading the screen (used by both behaviors) ----
 
@@ -96,7 +126,7 @@ public sealed record ChatRules
     public double RemarksPerHour { get; init; } = 4;
 
     /// <summary>Chance that a note written on a window is about what the pet reads there (otherwise a usual topic).</summary>
-    public double NoteReadChance { get; init; } = 1;
+    public double NoteReadChance { get; init; } = 0.4;
 
     /// <summary>A pet this close (DIP) to a window's side counts as beside it, and reads it.</summary>
     public double ReadReachDip { get; init; } = 40;
@@ -116,6 +146,9 @@ public sealed record ChatRules
     [
         "InPrivate", "Incognito", "Private Browsing", "Password", "Sign in", "Log in", "Login",
     ];
+
+    /// <summary>How the model picks its words.</summary>
+    public ChatSampling Sampling => new(MaxTokens, Temperature, TopP, TopK, MinP, RepeatPenalty);
 
     /// <summary>How long a speech bubble with <paramref name="text"/> stays, in seconds.</summary>
     public double BubbleDuration(string text) =>

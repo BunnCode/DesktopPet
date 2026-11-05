@@ -164,7 +164,8 @@ internal sealed class PetHost : IPetControls, IDisposable
             var window = _simulation.Mode == BodyMode.Grounded ? PlatformBuilder.WindowIdFromKey(_simulation.GroundKey) : null;
             var scale = current.Size.Y / System.Math.Max(1, _simulation.Config.SizeDip);
             var readable = _simulation.ReadableWindow(_simulation.Config.Chat.ReadReachDip);
-            return new ChatPet(Id, Name, Personality, Stats, current.FeetPos, scale, !asleep, window, Traits.Chat, readable);
+            return new ChatPet(
+                Id, Name, Personality, Stats, current.FeetPos, scale, !asleep, window, Traits.Chat, readable, _simulation.WindowBehind());
         }
     }
 

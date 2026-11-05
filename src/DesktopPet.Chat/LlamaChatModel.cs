@@ -15,9 +15,6 @@ namespace DesktopPet.Chat;
 /// </summary>
 public sealed class LlamaChatModel : IChatModel, IDisposable
 {
-    /// <summary>Room for the prompt and the answer, in tokens. The prompts are a few hundred tokens.</summary>
-    private const uint ContextSize = 1024;
-
     private static readonly object ConfigureLock = new();
     private static bool s_configured;
 
@@ -43,21 +40,26 @@ public sealed class LlamaChatModel : IChatModel, IDisposable
     /// Loads the model (seconds; runs on a worker thread). Wanting the GPU but finding none usable falls back to the
     /// processor; check <see cref="OnGpu"/>. The backend choice is made once per process, at the first load.
     /// </summary>
+    /// <param name="path">The model file.</param>
+    /// <param name="useGpu">Run it on the graphics card if there is one.</param>
+    /// <param name="contextTokens">Room for the prompt and the answer, in tokens.</param>
+    /// <param name="cancellationToken">Cancels before the load starts.</param>
     /// <exception cref="FileNotFoundException">No model at <paramref name="path"/>.</exception>
-    public static Task<LlamaChatModel> LoadAsync(string path, bool useGpu, CancellationToken cancellationToken = default)
+    public static Task<LlamaChatModel> LoadAsync(string path, bool useGpu, int contextTokens, CancellationToken cancellationToken = default)
     {
         if (!File.Exists(path))
         {
             throw new FileNotFoundException("The chat model wasn't found.", path);
         }
 
-        return Task.Run(() => Load(path, useGpu), cancellationToken);
+        return Task.Run(() => Load(path, useGpu, contextTokens), cancellationToken);
     }
 
-    public Task<string> CompleteAsync(ChatPrompt prompt, int maxTokens, double temperature, CancellationToken cancellationToken)
+    public Task<string> CompleteAsync(ChatPrompt prompt, ChatSampling sampling, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(prompt);
-        return Task.Run(() => RunAsync(ChatMl.Format(prompt), maxTokens, temperature, cancellationToken), cancellationToken);
+        ArgumentNullException.ThrowIfNull(sampling);
+        return Task.Run(() => RunAsync(ChatMl.Format(prompt), sampling, cancellationToken), cancellationToken);
     }
 
     public void Dispose()
@@ -67,12 +69,12 @@ public sealed class LlamaChatModel : IChatModel, IDisposable
         _one.Dispose();
     }
 
-    private static LlamaChatModel Load(string path, bool useGpu)
+    private static LlamaChatModel Load(string path, bool useGpu, int contextTokens)
     {
         Configure(useGpu);
         var parameters = new ModelParams(path)
         {
-            ContextSize = ContextSize,
+            ContextSize = (uint)System.Math.Max(512, contextTokens),
             GpuLayerCount = useGpu ? 999 : 0, // every layer
             BatchSize = 512,
         };
@@ -94,7 +96,7 @@ public sealed class LlamaChatModel : IChatModel, IDisposable
         var prompt = new ChatPrompt(
             ChatPrompts.System("Pip", "Pip is a little grey rabbit who loves carrots and climbing.", null, ["Hello!", "Carrots, please."]),
             ChatPrompts.Joke);
-        RunAsync(ChatMl.Format(prompt), 8, 0.8, CancellationToken.None).GetAwaiter().GetResult();
+        RunAsync(ChatMl.Format(prompt), new ChatRules().Sampling with { MaxTokens = 8 }, CancellationToken.None).GetAwaiter().GetResult();
     }
 
     /// <summary>Picks the native library before anything loads it: Vulkan when wanted (if the machine has it), else the CPU.</summary>
@@ -131,7 +133,7 @@ public sealed class LlamaChatModel : IChatModel, IDisposable
         return path is null ? "unknown" : new DirectoryInfo(Path.GetDirectoryName(path)!).Name;
     }
 
-    private async Task<string> RunAsync(string prompt, int maxTokens, double temperature, CancellationToken cancellationToken)
+    private async Task<string> RunAsync(string prompt, ChatSampling sampling, CancellationToken cancellationToken)
     {
         await _one.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -139,14 +141,15 @@ public sealed class LlamaChatModel : IChatModel, IDisposable
             var executor = new StatelessExecutor(_weights, _parameters) { ApplyTemplate = false };
             var inference = new InferenceParams
             {
-                MaxTokens = maxTokens,
+                MaxTokens = sampling.MaxTokens,
                 AntiPrompts = [ChatMl.EndOfTurn, "<|endoftext|>", "<|im_start|>"],
                 SamplingPipeline = new DefaultSamplingPipeline
                 {
-                    Temperature = (float)temperature,
-                    TopP = 0.9f,
-                    TopK = 40,
-                    RepeatPenalty = 1.1f,
+                    Temperature = (float)sampling.Temperature,
+                    TopP = (float)sampling.TopP,
+                    TopK = sampling.TopK,
+                    MinP = (float)sampling.MinP,
+                    RepeatPenalty = (float)sampling.RepeatPenalty,
                 },
             };
 

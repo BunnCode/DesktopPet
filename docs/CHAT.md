@@ -3,7 +3,7 @@
 Pets do two separate things with words:
 
 - **They talk:** short lines in a speech bubble above their head.
-- **They leave sticky notes:** a note stuck on the window they're standing on.
+- **They leave sticky notes:** a note stuck on the window they're standing on or in front of.
 
 Each has its own switch in the menu (**Let them talk**, **Let them leave notes**) and in `settings.json` under `Chat`
 (`Enabled`, `NotesEnabled`), and its own timing. The words come from a small language model (Qwen3.5-2B) that runs on
@@ -27,7 +27,8 @@ Bubbles follow the pet and fade after a few seconds. When pets stand side by sid
 ## Sticky notes
 
 A pet standing on a window now and then writes a note for you (drink some water, take a break, a kind word, a silly
-thought) and sticks it on that window, where it's standing. The note moves with the window, hides while it's minimized
+thought) and sticks it on that window, where it's standing. A pet standing in front of a window (on the taskbar, say)
+sticks it on that window instead, just above its head. The note moves with the window, hides while it's minimized
 and goes when it closes. Other windows in front cover it as they cover the window. Click a note to dismiss it. At most
 3 are on screen at once, and notes don't come back after a restart.
 
@@ -69,6 +70,7 @@ New pets get random ones (between 0.5 and 2 by default, `NewPetChat` in `setting
 | Setting | Default | Meaning |
 |---|---|---|
 | `Enabled` | `true` | Pets talk |
+| `ChatFrequency` | 1 | Multiplies how often every pet talks (needs, banter, jokes, remarks; not click reactions): 2 is twice as chatty, 0 is quiet. The gaps below still cap it |
 | `NeedyBelow` | 30 | A need below this makes the pet say so |
 | `NeedyPerHour`, `BanterPerHour`, `JokesPerHour` | 10, 8, 3 | Lines per hour while that kind makes sense |
 | `BanterDistanceDip` | 260 | How close two pets must be to chat |
@@ -77,7 +79,7 @@ New pets get random ones (between 0.5 and 2 by default, `NewPetChat` in `setting
 | `AnswerDelaySeconds` | 2 | The answer in a conversation waits at least this long |
 | `BubbleSeconds`, `BubbleSecondsPerChar` | 3, 0.06 | How long a bubble stays |
 | `NotesEnabled` | `true` | Pets leave sticky notes |
-| `NotesPerHour` | 2 | Notes per hour while a pet stands on a window |
+| `NotesPerHour` | 2 | Notes per hour while a pet stands on or in front of a window (times its `Notes` trait) |
 | `NoteGapSeconds`, `PetNoteGapSeconds` | 120, 600 | Time between any two notes, and between two from the same pet |
 | `MaxNotes` | 3 | Notes on screen at once |
 | `RecentLines` | 5 | Lines (and, separately, notes) a pet is reminded of so it doesn't repeat itself |
@@ -98,7 +100,12 @@ the pets carry on without words and a notification says where it was looked for.
 |---|---|---|
 | `ModelFile` | `Qwen3.5-2B-Q6_K.gguf` | A file name (looked for in `models\` next to the app, then in `data\models\`) or a full path. Any GGUF chat model in the Qwen (ChatML) format works. Applies on restart |
 | `UseGpu` | `true` | Run on the graphics card through Vulkan (any recent NVIDIA, AMD or Intel card). Without a usable card it runs on the processor and says so. Applies on restart |
-| `MaxTokens`, `Temperature` | 60, 0.8 | Longest reply, and how wild the wording is |
+| `ContextTokens` | 1024 | Room for the prompt and the reply, in tokens. Applies on restart |
+| `MaxTokens` | 60 | Longest reply, in tokens |
+| `Temperature` | 0.8 | How wild the wording is: 0 is always the likeliest words, 2 is wild |
+| `TopP`, `TopK`, `MinP` | 0.9, 40, 0 | Which words are considered at all: the likeliest ones making up `TopP` of the chance, at most `TopK` of them (0: no limit), none below `MinP` times the likeliest (0: off). Lower `TopP`/`TopK` or higher `MinP` is tamer |
+| `RepeatPenalty` | 1.1 | Above 1, words already used are less likely again (1: off) |
+| `MaxSentences`, `MaxChars` | 2, 160 | Replies (speech and notes) are cut to this |
 | `ReplyTimeoutSeconds` | 25 | A reply that takes longer is dropped |
 
 For developers: `tools\models\get-model.ps1` downloads the model into `models\` at the repo root, where the build and

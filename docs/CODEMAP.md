@@ -72,6 +72,7 @@ One pet. The App talks to Core almost only through this class.
 | `Death`, `TakeWarnings()`, `Neglect`, `BornUtc` | M14: set once it has died (`PetDeath`); warnings since the last call (`PetWarning`); the neglect timers; its birthday (from the save, else now) |
 | `DropFrom(feet)` | Place an airborne pet (new pets arriving) |
 | `ReadableWindow(reachDip)` | The window the pet can read (M12b): stands on or clings to, else the one behind it, else one beside it |
+| `WindowBehind()` | The frontmost window behind the pet's middle while it stands somewhere other than on a window (notes go there) |
 | `OnPillRound`, `PillRoundBlocked`, `Seek(groundKey, x)`, `AskToMate`, `EndPillRound`, `Listen`, `Refuse` | M15: the breeding pill round, driven by `BreedingDirector` (the asker heads for a spot and asks; the asked pet stops to listen, or walks off) |
 | `FurnitureTarget`, `Pen`, `LeaveFurniture()` | The furniture it's heading for or using, the pen it's shut in; free its slot (pet removed) |
 | `UserAway`, `PushingEnabled` | Set by host / menu |
@@ -135,7 +136,7 @@ UseFurniture; `LostGround`→Fall, `Grabbed`→Hang, `Clung`→Cling, `HitWall`�
 | `Furniture/FurnitureWorld.cs` | **All furniture, shared by pets**: `SetSpecs` (the egg and gravestone specs always stay), `Add`, `AddEgg`, `EggItems`, `AddGrave`, `GraveItems`, `SetGrave`, `Remove`, `Tick` (physics via `PhysicsSystem` with the item's size, bounce, respawn), pointer drag/throw/poke, `Kick`, `PenAt`, `PenAhead`, `CreateSave`/`Load`, `Version` |
 | `Furniture/RoutePlanner.cs` | Dijkstra over ground segments with walk, walk off / drop, climb up, climb down → `RouteStep`s; `SideAt` |
 | `Furniture/RoomSave.cs` | `RoomSave`/`RoomItem` (an egg's `EggInfo` or a gravestone's `GraveInfo` included) and `RoomStore` (`room.json`, atomic write) |
-| `Chat/ChatRules.cs` | Chat tuning (`PetConfig.Chat`): shared model settings, then **speech** and **sticky notes**, two separate behaviors with their own switches, rates and gaps |
+| `Chat/ChatRules.cs` | Chat tuning (`PetConfig.Chat`): shared model settings (`Sampling` → `ChatSampling`, `ContextTokens`, `MaxSentences`/`MaxChars`), then **speech** (`ChatFrequency` scales all pets' speech rates) and **sticky notes**, two separate behaviors with their own switches, rates and gaps |
 | `Breeding/BreedingRules.cs` | Breeding tuning (`PetConfig.Breeding`): switch, rate per hour, cooldown, min stat, reach, courtship and approach seconds, hatch minutes, variation; pill round minutes, visit and ask seconds, agree chance |
 | `Breeding/BreedingDirector.cs` | **When pets mate**: `Tick(dt, pets, rules, roomForEgg)` rolls each close, ready pair (`Ready`: not fixed, free, stats, cooldown), runs one courtship at a time (`PetSimulation.Court` / `CourtshipArrived` / `EndCourtship`), calls it off if either stops; `TakeMatings` → `Mating(ParentA, ParentB, EggFeet)`; `Forget`. `BreedingPet(Id, Sim)`. M15 pill rounds (`TickRounds`: nearest unasked pet → `Approach` (`Seek`, then `AskToMate` + `Listen`) → `Asking` → `Refusal` or courtship), `PillRounds`, `TakeSayings` |
 | `Breeding/PillLines.cs` | M15: `Saying(PetId, Text)`; the fixed ask / yes / no lines (`NoReason`: not interested, fixed, cooldown, not well) |
@@ -144,12 +145,12 @@ UseFurniture; `LostGround`→Fall, `Grabbed`→Hang, `Clung`→Cling, `HitWall`�
 | `Death/Mortality.cs` | M14: `Mortality.Update(stats, elapsed, counting, rules, critical, warnings)` → `DeathCause?` (per-need timers at 0, all-critical timer, pause when not counting, one warning per need until it recovers); `NeglectTimers` (saved), `DeathCause`, `PetDeath`, `PetWarning`, `WarningKind` |
 | `Death/Grave.cs` | `GraveInfo` (pet id, name, born, died, cause; `From(id, name, save)`, `Story`, `Date`), `Graves` (`Kind = "grave"`, the built-in `Spec`) |
 | `Breeding/Egg.cs` | `EggInfo` (laid/hatch times, parents, child traits without a name, `SpritesFrom`), `Eggs` (`Kind = "egg"`, the built-in `Spec`) |
-| `Chat/IChatModel.cs` | `IChatModel.CompleteAsync(ChatPrompt, maxTokens, temperature, ct)`, `ChatPrompt(System, User)` |
-| `Chat/ChatDirector.cs` | **Runs speech and notes**: `Tick(dt, pets, rules, speech, notes, notesOnScreen)`, `Clicked(petId, click)` (a reaction that goes first and skips the gaps), one request at a time, timeouts, banter → answer (held until `AnswerDelaySeconds`), per-behavior gaps and recent lines (`Track`); `TakeLines` → `ChatLine`s, `TakeProblems`, `Forget`. `ChatPet` is a pet as chat sees it (incl. `ReadWindowId`). `Reader` (null = reading off): remarks and reading notes read first, then ask (`ReadThenAskAsync`) |
+| `Chat/IChatModel.cs` | `IChatModel.CompleteAsync(ChatPrompt, ChatSampling, ct)`, `ChatPrompt(System, User)`, `ChatSampling` (max tokens, temperature, top-p, top-k, min-p, repeat penalty) |
+| `Chat/ChatDirector.cs` | **Runs speech and notes**: `Tick(dt, pets, rules, speech, notes, notesOnScreen)`, `Clicked(petId, click)` (a reaction that goes first and skips the gaps), one request at a time, timeouts, banter → answer (held until `AnswerDelaySeconds`), per-behavior gaps and recent lines (`Track`); `TakeLines` → `ChatLine`s, `TakeProblems`, `Forget`. `ChatPet` is a pet as chat sees it (incl. `ReadWindowId`, `BehindWindowId`: a note goes on the window it stands on, else the one behind it, then with `ChatLine.NoteBehind`). `Reader` (null = reading off): remarks and reading notes read first, then ask (`ReadThenAskAsync`) |
 | `Chat/ChatPrompts.cs` | `ChatKind` (Needy, Banter, Answer, Clicked, Joke, Remark; Note = a note's text), `NeedKind`; `System` (speech, mood only for needs), `NoteSystem` (writing), `Needy`/`Clicked`/`Banter`/`Answer`/`Joke`, `NoteTopics` + `Note(topic)`, `Remark`/`NoteAbout` (title + text read), `Mood` |
 | `Chat/ScreenReading.cs` | M12b: `ScreenLine`, `ScreenText`, `IScreenReader` (the App's OCR reader, a fake in tests); `ScreenReading`: `Allows` (excluded apps and title words), `Area` (box around the pet, slid into the window), `Visible` (drop lines under covers), `Snippet` (nearest readable lines, reading order) |
 | `Chat/TextList.cs` | A string list that compares by items (settings lists, so config records stay equal) |
-| `Chat/ChatText.cs` | `ChatText.Clean` (raw reply → bubble/note text or null); `ChatMl.Format` (Qwen ChatML, thinking off) |
+| `Chat/ChatText.cs` | `ChatText.Clean(raw, name, maxSentences, maxChars)` (raw reply → bubble/note text or null); `ChatMl.Format` (Qwen ChatML, thinking off) |
 | `Simulation/PetClick.cs` | `PetClick` (Petted, WokenUp, Poked): what a click did; `PetSimulation.TakeClick()` drains it |
 | `Simulation/PetConfigValidator.cs` | Range checks for every setting |
 | `Simulation/PetFrame.cs` | Render output record; `SpriteRect` |
@@ -180,7 +181,7 @@ Win32 through CsWin32: add API names to `Interop/NativeMethods.txt` (one per lin
 
 | File | Purpose |
 |---|---|
-| `LlamaChatModel.cs` | `LoadAsync(path, useGpu)` (Vulkan or CPU backend chosen once per process, warm-up answer), `CompleteAsync` (off the UI thread, one at a time, `StatelessExecutor` with ChatML and stop strings), `OnGpu`, `Backend` |
+| `LlamaChatModel.cs` | `LoadAsync(path, useGpu, contextTokens)` (Vulkan or CPU backend chosen once per process, warm-up answer), `CompleteAsync` (off the UI thread, one at a time, `StatelessExecutor` with ChatML and stop strings), `OnGpu`, `Backend` |
 
 ---
 
@@ -210,7 +211,7 @@ Win32 through CsWin32: add API names to `Interop/NativeMethods.txt` (one per lin
 | `Chat/ChatHost.cs` | Loads the model in the background, ticks `ChatDirector` every display frame (`CompositionTarget.Rendering`) with `PetHost.ChatInfo`, shows lines as bubbles (stacked when they'd overlap) and notes, tracks notes against their windows every 100 ms; `Enabled` (speech), `NotesEnabled`, `ReadingEnabled` (sets `ChatDirector.Reader`), `Say(petId, text)` (a fixed line in a bubble, no model; used by pill rounds), `Forget`, `BringToFront` |
 | `Chat/SpeechBubble.cs` | Click-through topmost bubble sized to its text; `Say`, `Follow` (fade, follow the head, stack above `taken`), `Silence` |
 | `Chat/ScreenReader.cs` | `IScreenReader` for Core: query window, check `ScreenReading.Allows`, capture the area, OCR, keep `Visible` lines (covers: windows in front + our pets, bubbles, notes); notifies once if there's no OCR |
-| `Chat/StickyNote.cs` | Note window anchored to another window by offset; `Track(state, bounds)`; click → `Dismissed` |
+| `Chat/StickyNote.cs` | Note window anchored to another window by offset (of its top-left, or with `fromBottom` its bottom-left: above a pet's head); `Track(state, bounds)`; click → `Dismissed` |
 | `app.manifest` | PerMonitorV2 DPI awareness (only applies when started from the .exe; see `DpiAwareness`) |
 
 ---
@@ -251,7 +252,7 @@ picked up calls the trip off.
 **Furniture edit:** watcher → `App.OnFurnitureChanged` → `LoadFurniture` → `FurnitureHost.SetSpecs` (kinds that are
 gone are removed from the room).
 
-**Speech and notes (each display frame):** `ChatHost.OnRendering` → `PetHost.ChatInfo` and `PetHost.TakeClick` → `ChatDirector.Clicked` for each pet → `ChatDirector.Tick` (collect a finished reply → `ChatText.Clean` → line; then maybe start one request: a click reaction, else a pending answer, else a speech roll, else a note roll → `IChatModel.CompleteAsync` on a worker thread) → `TakeLines`: speech → `SpeechBubble.Say`, notes → new `StickyNote` on the pet's window → bubbles `Follow` their pets; notes `Track` their windows every 100 ms.
+**Speech and notes (each display frame):** `ChatHost.OnRendering` → `PetHost.ChatInfo` and `PetHost.TakeClick` → `ChatDirector.Clicked` for each pet → `ChatDirector.Tick` (collect a finished reply → `ChatText.Clean` → line; then maybe start one request: a click reaction, else a pending answer, else a speech roll, else a note roll → `IChatModel.CompleteAsync` on a worker thread) → `TakeLines`: speech → `SpeechBubble.Say`, notes → new `StickyNote` on the pet's window (below its title bar) or the window behind it (above its head) → bubbles `Follow` their pets; notes `Track` their windows every 100 ms.
 
 **Death:** `PetSimulation.UpdateStats` → `Mortality.Update` (warnings → `TakeWarnings` → `PetHost.Warned` → `App.OnWarned` → tray) → once a timer runs out, `Death` is set → `PetHost.Died` (posted) → `App.OnDied` (forget in chat and breeding, `Close(save: true)` writes the dead save, `FurnitureHost.AddGrave` at its feet). Startup: `StartupPets` skips dead pets, then `PlaceGraves`. Gravestone right-click → `Revive` (`SaveData.Revived`, remove the gravestone, `StartPet` there) or `DeleteGrave` (Recycle Bin, then remove).
 

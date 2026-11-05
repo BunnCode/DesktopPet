@@ -49,6 +49,15 @@ public class ChatTextTests
     }
 
     [Fact]
+    public void The_limits_can_be_changed()
+    {
+        var raw = "One carrot. Two carrots. Three carrots, four carrots and more carrots.";
+
+        Assert.Equal("One carrot. Two carrots. Three carrots, four carrots and more carrots.", ChatText.Clean(raw, "Mia", 3, 500));
+        Assert.True(ChatText.Clean(raw, "Mia", 3, 30)!.Length <= 30);
+    }
+
+    [Fact]
     public void ChatMl_switches_thinking_off()
     {
         var text = ChatMl.Format(new ChatPrompt("sys", "usr"));
