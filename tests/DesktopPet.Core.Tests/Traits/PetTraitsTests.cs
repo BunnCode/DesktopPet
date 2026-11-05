@@ -153,7 +153,46 @@ public class PetTraitsTests
             Assert.InRange(t.Neediness.Hunger, 0.8, 1.25);
             Assert.InRange(t.Behavior.Climb, 0.5, 2.0);
             Assert.InRange(t.Chat.Banter, 0.5, 2.0);
+            Assert.Contains(Characters.Defaults, c => c.Id == t.Character);
         }
+    }
+
+    [Fact]
+    public void A_new_pet_gets_a_default_character_the_fewest_pets_wear()
+    {
+        var worn = Characters.Defaults.Select(c => c.Id).Where(id => id != "crimejr").Concat(["rabbit", "carycajolt"]).ToList();
+        Assert.Equal("crimejr", Characters.Pick(new FakeRandom(0.99), worn));
+        Assert.Equal("crimejr", TraitRoller.Roll(PetConfig.Default, new FakeRandom(0.5), [], worn).Character);
+
+        // A tie: chosen at random among the least worn, in list order.
+        Assert.Equal(Characters.Defaults[0].Id, Characters.Pick(new FakeRandom(0.0), []));
+        Assert.Equal(Characters.Defaults[^1].Id, Characters.Pick(new FakeRandom(0.99), []));
+    }
+
+    [Fact]
+    public void Characters_follow_the_pet_number_unless_it_has_a_known_one()
+    {
+        Assert.Equal(Characters.Defaults[0], Characters.For(1, null));
+        Assert.Equal(Characters.Defaults[1], Characters.For(2, "nonsense"));
+        Assert.Equal(Characters.Defaults[0], Characters.For(Characters.Defaults.Count + 1, null));
+        Assert.Equal("rabbit", Characters.For(3, " Rabbit ").Id);
+        Assert.Equal("little fire donkey", Characters.SpeciesOf("EMBERDONKEY"));
+        Assert.Equal(Characters.UnknownSpecies, Characters.SpeciesOf(null));
+    }
+
+    [Fact]
+    public void Character_is_read_written_and_checked()
+    {
+        var written = PetTraitsFile.Serialize(PetTraits.Neutral("Ava") with { Character = "redmuzzle" });
+        Assert.Contains("\"Character\": \"redmuzzle\"", written, StringComparison.Ordinal);
+        Assert.Equal("redmuzzle", PetTraitsFile.Parse(written).Traits!.Character);
+
+        Assert.DoesNotContain("Character", PetTraitsFile.Serialize(PetTraits.Neutral("Ava")), StringComparison.Ordinal);
+        Assert.Equal("botrosa", PetTraitsFile.Parse("""{ "Name": "Ava", "Character": " Botrosa " }""").Traits!.Character);
+
+        var bad = PetTraitsFile.Parse("""{ "Name": "Ava", "Character": "dragon" }""");
+        Assert.Null(bad.Traits);
+        Assert.Contains(bad.Errors, e => e.StartsWith("Character must be one of", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -254,19 +293,23 @@ public class PetTraitsTests
         var traits = new PetTraits
         {
             Name = "Rosie",
+            Character = "courceel",
             Neediness = new Neediness(Hunger: 1.9, Energy: 0.6),
             Behavior = new BehaviorTraits(Climb: 1.5, Walk: 1.2, Push: 1.45),
         };
 
         Assert.Equal(
-            "Rosie is a little grey rabbit who is always hungry, has boundless energy and loves climbing.",
+            "Rosie is a little tan foal who is always hungry, has boundless energy and loves climbing.",
             Personality.Describe(traits));
     }
 
     [Fact]
     public void An_average_pet_is_easygoing()
     {
-        Assert.Equal("Ava is a little grey rabbit who is pretty easygoing.", Personality.Describe(PetTraits.Neutral("Ava")));
+        Assert.Equal("Ava is a little critter who is pretty easygoing.", Personality.Describe(PetTraits.Neutral("Ava")));
+        Assert.Equal(
+            "Ava is a little grey rabbit who is pretty easygoing.",
+            Personality.Describe(PetTraits.Neutral("Ava") with { Character = Characters.Rabbit }));
     }
 
     [Fact]

@@ -5,7 +5,7 @@ using DesktopPet.Core.Traits;
 namespace DesktopPet.Core.Breeding;
 
 /// <summary>A parent as inheritance sees it.</summary>
-/// <param name="Id">Its pet id (folder number): picks its jacket colour if it has none of its own.</param>
+/// <param name="Id">Its pet id (folder number): picks its jacket colour and character if it has none of its own.</param>
 /// <param name="Traits">Its traits.</param>
 /// <param name="HasOwnSprites">Whether it has its own sprite sheet (<c>pets\n\sprites\atlas.json</c>).</param>
 public sealed record Parent(int Id, PetTraits Traits, bool HasOwnSprites);
@@ -13,7 +13,8 @@ public sealed record Parent(int Id, PetTraits Traits, bool HasOwnSprites);
 /// <summary>
 /// How a child takes after its parents: each number comes from one parent or their average, then strays a little
 /// (<see cref="BreedingRules.Variation"/>). The built-in rabbit's jacket colour is a blend of the parents'. The art
-/// comes from one parent at random: if that one has its own sprite sheet, the child gets a copy.
+/// comes from one parent at random: the child is that parent's character, and if that one has its own sprite sheet,
+/// the child gets a copy.
 /// </summary>
 public static class Inheritance
 {
@@ -25,12 +26,13 @@ public static class Inheritance
         ArgumentNullException.ThrowIfNull(rules);
         ArgumentNullException.ThrowIfNull(random);
         var parents = new TextList([a.Traits.Name, b.Traits.Name]);
-        var child = Cross(a.Traits, b.Traits, rules.Variation, random) with
+        var crossed = Cross(a.Traits, b.Traits, rules.Variation, random) with
         {
             Jacket = JacketColors.Blend(JacketColors.BaseOf(a.Id, a.Traits.Jacket), JacketColors.BaseOf(b.Id, b.Traits.Jacket), random),
             Parents = parents,
         };
         var art = random.Chance(0.5) ? a : b;
+        var child = crossed with { Character = Characters.For(art.Id, art.Traits.Character).Id };
         return new EggInfo
         {
             LaidAtUtc = now,

@@ -41,13 +41,7 @@ public static class Personality
             .Select(c => c.Phrase!)
             .ToList();
 
-        var name = traits.Name;
-        return phrases.Count switch
-        {
-            0 => $"{name} is a little grey rabbit who is pretty easygoing.",
-            1 => $"{name} is a little grey rabbit who {phrases[0]}.",
-            _ => $"{name} is a little grey rabbit who {string.Join(", ", phrases[..^1])} and {phrases[^1]}.",
-        };
+        return PersonalityTraits.Sentence(traits.Name, Characters.SpeciesOf(traits.Character), phrases);
     }
 
     /// <summary>Tidies text read from the file: trimmed and capped at <see cref="MaxLength"/>.</summary>

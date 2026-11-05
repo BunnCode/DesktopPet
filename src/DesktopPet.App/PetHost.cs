@@ -113,8 +113,11 @@ internal sealed class PetHost : IPetControls, IDisposable
 
     public int Id { get; }
 
-    /// <summary>The built-in rabbit's jacket colours for this pet: its own, or the one that goes with its number.</summary>
-    public JacketShades Jacket => JacketColors.For(Id, Traits.Jacket);
+    /// <summary>This pet's built-in character: its own, or the one that goes with its number.</summary>
+    public CharacterInfo Character => Characters.For(Id, Traits.Character);
+
+    /// <summary>The built-in art it falls back on: its character, and the jacket colours (its own, or its number's).</summary>
+    public BuiltInLook Look => new(Character.Id, JacketColors.For(Id, Traits.Jacket));
 
     /// <summary>The pet as breeding sees it.</summary>
     public BreedingPet BreedingInfo => new(Id, _simulation);
@@ -165,7 +168,8 @@ internal sealed class PetHost : IPetControls, IDisposable
             var scale = current.Size.Y / System.Math.Max(1, _simulation.Config.SizeDip);
             var readable = _simulation.ReadableWindow(_simulation.Config.Chat.ReadReachDip);
             return new ChatPet(
-                Id, Name, Personality, Stats, current.FeetPos, scale, !asleep, window, Traits.Chat, readable, _simulation.WindowBehind());
+                Id, Name, Personality, Stats, current.FeetPos, scale, !asleep, window, Traits.Chat, readable, _simulation.WindowBehind(),
+                Character.Species);
         }
     }
 

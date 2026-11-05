@@ -9,7 +9,7 @@ namespace DesktopPet.Core.Traits;
 /// numbers. <see cref="Nudge"/> maps a number's name (<c>Hunger</c>, <c>Walk</c>, <c>Mating</c>, <c>Jokes</c> …; see
 /// <see cref="PersonalityTraits.Keys"/>) to a factor it's multiplied by.
 /// </summary>
-/// <param name="Text">Finishes "Mia is a little grey rabbit who …", such as "is voracious" or "loves climbing".</param>
+/// <param name="Text">Finishes "Mia is a little fire donkey who …", such as "is voracious" or "loves climbing".</param>
 /// <param name="Nudge">Factors by number name; numbers it doesn't name are left alone.</param>
 public sealed record PersonalityTrait(string Text, IReadOnlyDictionary<string, double> Nudge);
 
@@ -35,7 +35,7 @@ public static class PersonalityTraits
 
     public const string Header =
         "// The personality traits new pets are given 2 or 3 of (added from the menu or hatched from an egg).\n" +
-        "// Text finishes the sentence \"Mia is a little grey rabbit who ...\" and goes into the pet's personality.txt.\n" +
+        "// Text finishes the sentence \"Mia is a little fire donkey who ...\" and goes into the pet's personality.txt.\n" +
         "// Nudge multiplies the pet's numbers (the Traits in its save.json): Hunger, Happiness, Energy (neediness), Idle, Walk,\n" +
         "// Sit, Sleep, Climb, Push, Mating (behavior), Needy, Banter, Jokes, Notes, Curiosity (chat).\n" +
         "// Traits nudging the same number opposite ways are never given together. Edits apply to the next new pet.\n";
@@ -222,18 +222,21 @@ public static class PersonalityTraits
             return (traits, Personality.Describe(traits));
         }
 
-        return (Apply(traits, drawn), Sentence(traits.Name, [.. drawn.Select(d => d.Text)]));
+        return (Apply(traits, drawn), Sentence(traits.Name, Characters.SpeciesOf(traits.Character), [.. drawn.Select(d => d.Text)]));
     }
 
-    /// <summary>"Mia is a little grey rabbit who is voracious, is a bit lazy and loves climbing."</summary>
-    public static string Sentence(string name, IReadOnlyList<string> phrases)
+    /// <summary>"Mia is a little fire donkey who is voracious, is a bit lazy and loves climbing."</summary>
+    /// <param name="name">The pet's name.</param>
+    /// <param name="species">What it is (<see cref="CharacterInfo.Species"/>).</param>
+    /// <param name="phrases">Its personality traits' words.</param>
+    public static string Sentence(string name, string species, IReadOnlyList<string> phrases)
     {
         ArgumentNullException.ThrowIfNull(phrases);
         return phrases.Count switch
         {
-            0 => $"{name} is a little grey rabbit who is pretty easygoing.",
-            1 => $"{name} is a little grey rabbit who {phrases[0]}.",
-            _ => $"{name} is a little grey rabbit who {string.Join(", ", phrases.Take(phrases.Count - 1))} and {phrases[^1]}.",
+            0 => $"{name} is a {species} who is pretty easygoing.",
+            1 => $"{name} is a {species} who {phrases[0]}.",
+            _ => $"{name} is a {species} who {string.Join(", ", phrases.Take(phrases.Count - 1))} and {phrases[^1]}.",
         };
     }
 

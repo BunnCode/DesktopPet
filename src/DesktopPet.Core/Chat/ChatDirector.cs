@@ -20,9 +20,10 @@ namespace DesktopPet.Core.Chat;
 /// <param name="BehindWindowId">
 /// The window it stands in front of (not on), if any: sticky notes go there when it isn't standing on one.
 /// </param>
+/// <param name="Species">What it is, such as "little fire donkey" (<see cref="CharacterInfo.Species"/>).</param>
 public sealed record ChatPet(
     int Id, string Name, string Personality, PetStats Stats, Vec2 Feet, double Scale, bool CanTalk, long? WindowId, ChatTraits Traits,
-    long? ReadWindowId = null, long? BehindWindowId = null);
+    long? ReadWindowId = null, long? BehindWindowId = null, string Species = Characters.UnknownSpecies);
 
 /// <summary>
 /// What came of a request: a spoken line for a speech bubble, or (<see cref="ChatKind.Note"/>) the text of a sticky
@@ -305,7 +306,7 @@ public sealed class ChatDirector : IDisposable
                 Start(pet, kind, ChatPrompts.Needy(need, value), rules);
                 break;
             case ChatKind.Banter:
-                Start(pet, kind, ChatPrompts.Banter(friend!.Name), rules, listener: friend);
+                Start(pet, kind, ChatPrompts.Banter(friend!.Name, friend.Species), rules, listener: friend);
                 break;
             case ChatKind.Remark:
                 Start(pet, kind, user: null, rules, read: new Reading(pet.ReadWindowId!.Value, ChatPrompts.Remark));
@@ -356,8 +357,8 @@ public sealed class ChatDirector : IDisposable
         bool noteBehind = false, double answerAt = 0, Reading? read = null)
     {
         var system = kind == ChatKind.Note
-            ? ChatPrompts.NoteSystem(pet.Name, pet.Personality, _notes.Recent(pet.Id))
-            : ChatPrompts.System(pet.Name, pet.Personality, kind is ChatKind.Needy or ChatKind.Clicked ? pet.Stats : null, _speech.Recent(pet.Id));
+            ? ChatPrompts.NoteSystem(pet.Name, pet.Species, pet.Personality, _notes.Recent(pet.Id))
+            : ChatPrompts.System(pet.Name, pet.Species, pet.Personality, kind is ChatKind.Needy or ChatKind.Clicked ? pet.Stats : null, _speech.Recent(pet.Id));
         var cancel = new CancellationTokenSource();
         Task<string> task;
         try

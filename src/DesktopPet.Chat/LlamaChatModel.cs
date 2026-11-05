@@ -94,7 +94,7 @@ public sealed class LlamaChatModel : IChatModel, IDisposable
     private void WarmUp()
     {
         var prompt = new ChatPrompt(
-            ChatPrompts.System("Pip", "Pip is a little grey rabbit who loves carrots and climbing.", null, ["Hello!", "Carrots, please."]),
+            ChatPrompts.System("Pip", "little grey rabbit", "Pip is a little grey rabbit who loves carrots and climbing.", null, ["Hello!", "Carrots, please."]),
             ChatPrompts.Joke);
         RunAsync(ChatMl.Format(prompt), new ChatRules().Sampling with { MaxTokens = 8 }, CancellationToken.None).GetAwaiter().GetResult();
     }

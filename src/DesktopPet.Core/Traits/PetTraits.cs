@@ -24,6 +24,14 @@ public sealed record PetTraits
     public bool Fixed { get; init; }
 
     /// <summary>
+    /// Which built-in character it is (an id from <see cref="Characters.All"/>, such as "emberdonkey"): the art drawn
+    /// where its sprites folders have none, and what it is in its personality and chat. Null: the default character
+    /// that goes with the pet's number (<see cref="Characters.For"/>).
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Character { get; init; }
+
+    /// <summary>
     /// The built-in rabbit's jacket colour, #RRGGBB. Null: the colour that goes with the pet's number. Hatched pets get
     /// a blend of their parents'.
     /// </summary>

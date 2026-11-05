@@ -77,6 +77,7 @@ public static class PetTraitsFile
             Neediness = traits.Neediness ?? new Neediness(),
             Behavior = traits.Behavior ?? new BehaviorTraits(),
             Chat = traits.Chat ?? new ChatTraits(),
+            Character = string.IsNullOrWhiteSpace(traits.Character) ? null : Characters.Find(traits.Character)?.Id ?? traits.Character.Trim(),
             Jacket = string.IsNullOrWhiteSpace(traits.Jacket) ? null : traits.Jacket.Trim(),
             Parents = traits.Parents is { Count: > 0 } parents ? new Chat.TextList(parents.Where(p => !string.IsNullOrWhiteSpace(p)).Select(p => p.Trim())) : null,
         };
@@ -131,6 +132,11 @@ public static class PetTraitsFile
         Range("Chat.Jokes", c.Jokes);
         Range("Chat.Notes", c.Notes);
         Range("Chat.Curiosity", c.Curiosity);
+
+        if (traits.Character is { } character && Characters.Find(character) is null)
+        {
+            errors.Add($"Character must be one of {string.Join(", ", Characters.All.Select(c => $"\"{c.Id}\""))} (it is \"{character}\").");
+        }
 
         if (traits.Jacket is { } jacket && !JacketColors.TryParse(jacket, out _))
         {

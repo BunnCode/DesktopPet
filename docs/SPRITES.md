@@ -1,6 +1,8 @@
 # Custom sprites
 
-DesktopPet draws every animation with its built-in chibi rabbit unless you give it your own. Custom art lives in
+Every pet is one of the built-in characters (the `Character` in its `save.json`), and a new pet starts with a copy of
+its character's sheet and `atlas.json` in its own `pets\<n>\sprites\` folder, ready to edit. Animations without
+custom art use the character's built-in sheet. Custom art lives in
 `data\sprites\` (menu → Customize → Open data folder) and **reloads as soon as you save**.
 
 ## Quick start
@@ -10,7 +12,7 @@ DesktopPet draws every animation with its built-in chibi rabbit unless you give 
 3. Paint over the frames and save. The pet updates within a second.
 
 **One pet only:** put the files in that pet's own folder instead, `pets\<n>\sprites\` (menu → About *name* → Open its
-folder). Per animation, the pet's own sprites win over the shared `sprites\`, which win over the built-in rabbit. Each
+folder). Per animation, the pet's own sprites win over the shared `sprites\`, which win over the pet's built-in character. Each
 atlas keeps its own `facesLeft` and `smooth`, so the layers can mix different art.
 
 Any animation you remove from `atlas.json` goes back to the built-in art, so you can replace one animation at a time.

@@ -61,19 +61,22 @@ public class PersonalityTraitsTests
     [Fact]
     public void Drawn_traits_nudge_the_numbers_and_make_the_sentence()
     {
-        var traits = new PetTraits { Name = "Mia", Neediness = new Neediness(Hunger: 1.5), Behavior = new BehaviorTraits(Walk: 8) };
+        var traits = new PetTraits
+        {
+            Name = "Mia", Neediness = new Neediness(Hunger: 1.5), Behavior = new BehaviorTraits(Walk: 8), Character = "emberdonkey",
+        };
         var list = new[] { Trait("is voracious", ("Hunger", 1.6)), Trait("can't sit still", ("Walk", 1.6)) };
 
         var (given, personality) = PersonalityTraits.Give(traits, list, new FakeRandom(0.0));
         Assert.Equal(2.4, given.Neediness.Hunger);
         Assert.Equal(10, given.Behavior.Walk); // capped
         Assert.Equal(1, given.Behavior.Sit);
-        Assert.Equal("Mia is a little grey rabbit who is voracious and can't sit still.", personality);
+        Assert.Equal("Mia is a little fire donkey who is voracious and can't sit still.", personality);
 
         var (plain, described) = PersonalityTraits.Give(traits, [], new FakeRandom(0.0));
         Assert.Equal(traits, plain);
         Assert.Equal(Personality.Describe(traits), described);
-        Assert.Equal("Leo is a little grey rabbit who is a, b and c.", PersonalityTraits.Sentence("Leo", ["is a", "b", "c"]));
+        Assert.Equal("Leo is a little tan foal who is a, b and c.", PersonalityTraits.Sentence("Leo", "little tan foal", ["is a", "b", "c"]));
     }
 
     [Fact]

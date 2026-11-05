@@ -3,6 +3,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using DesktopPet.Core.Animation;
 using DesktopPet.Core.Rendering;
+using DesktopPet.Core.Traits;
 
 namespace DesktopPet.App.SpriteSheet;
 
@@ -54,7 +55,7 @@ internal static class SpriteTemplateExporter
             var animation = animations[row];
             for (var frame = 0; frame < animation.FrameCount; frame++)
             {
-                var art = DefaultArt.Frame(animation.Id, frame);
+                var art = DefaultArt.Frame(Characters.Rabbit, animation.Id, frame);
                 for (var y = 0; y < cell; y++)
                 {
                     Array.Copy(art, y * cell, pixels, (((row * cell) + y) * width) + (frame * cell), cell);

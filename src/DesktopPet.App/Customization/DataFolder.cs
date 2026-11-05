@@ -224,6 +224,27 @@ internal sealed class DataFolder(string root)
     /// <summary>Whether the pet has its own sprite sheet (an atlas.json in its sprites folder).</summary>
     public bool HasOwnSprites(int petId) => File.Exists(Path.Combine(PetSprites(petId), SpriteSheet.SpriteAtlas.AtlasFileName));
 
+    /// <summary>
+    /// Gives a new pet its own copy of a built-in character's art: <c>&lt;character&gt;.png</c> and a matching
+    /// atlas.json in its sprites folder, which it then draws from (and the user can edit). Does nothing if the pet
+    /// already has its own sprites.
+    /// </summary>
+    public void WriteCharacterSprites(int petId, string character)
+    {
+        if (HasOwnSprites(petId))
+        {
+            return;
+        }
+
+        var folder = PetSprites(petId);
+        Directory.CreateDirectory(folder);
+        var image = $"{character}.png";
+        File.WriteAllBytes(Path.Combine(folder, image), SpriteSheet.DefaultArt.SheetPng(character));
+        File.WriteAllText(
+            Path.Combine(folder, SpriteSheet.SpriteAtlas.AtlasFileName),
+            Core.Rendering.SpriteSheetParser.TemplateJson(Core.Animation.Animations.All, image, SpriteSheet.DefaultArt.FrameSize));
+    }
+
     /// <summary>Copies one pet's own sprites folder into another's (a hatchling taking after a parent).</summary>
     public void CopySprites(int fromPetId, int toPetId)
     {

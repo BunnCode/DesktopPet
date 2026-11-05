@@ -20,7 +20,10 @@ public class InheritanceTests
         Fixed = false,
     };
 
-    private static readonly PetTraits Leo = new() { Name = "Leo", Neediness = new Neediness(1, 1, 1.5), Jacket = "#B0384A" };
+    private static readonly PetTraits Leo = new()
+    {
+        Name = "Leo", Neediness = new Neediness(1, 1, 1.5), Jacket = "#B0384A", Character = "emberdonkey",
+    };
 
     [Fact]
     public void Each_number_comes_from_one_parent_or_the_average()
@@ -61,10 +64,12 @@ public class InheritanceTests
         Assert.True(JacketColors.TryParse(egg.Child.Jacket, out var jacket));
         Assert.Equal("#693044", JacketColors.Format(jacket));
 
-        // The first parent's art (0.0 < 0.5), which has no sprites of its own.
+        // The first parent's art (0.0 < 0.5), which has no sprites of its own: its character is pet 1's default.
         Assert.Null(egg.SpritesFrom);
+        Assert.Equal(Characters.For(1, null).Id, egg.Child.Character);
         var other = Inheritance.Egg(new Parent(1, Mia, false), new Parent(4, Leo, true), new BreedingRules(), new FakeRandom(0.9), now);
         Assert.Equal(4, other.SpritesFrom);
+        Assert.Equal("emberdonkey", other.Child.Character);
     }
 
     [Fact]

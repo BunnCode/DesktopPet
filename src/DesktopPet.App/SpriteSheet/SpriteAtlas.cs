@@ -14,12 +14,15 @@ namespace DesktopPet.App.SpriteSheet;
 /// <param name="Smooth">Scale with smoothing rather than nearest-neighbour.</param>
 internal readonly record struct AtlasFrame(BitmapSource Bitmap, bool FacesLeft, bool Smooth);
 
+/// <summary>The built-in art a pet falls back on: its character, and (for the rabbit) its jacket colours.</summary>
+internal readonly record struct BuiltInLook(string Character, JacketShades? Jacket = null);
+
 /// <summary>A sprites folder that was read, and what was found in it (null spec: the folder has no atlas.json).</summary>
 internal sealed record SpriteLayer(string Folder, SpriteSheetSpec? Spec);
 
 /// <summary>
 /// Maps Core's (animation id, frame index) to frozen bitmaps, one animation at a time from layered sprite folders:
-/// the pet's own sprites, then the shared sprites, then the built-in rabbit (DefaultArt). Facing and smoothing are
+/// the pet's own sprites, then the shared sprites, then the pet's built-in character (DefaultArt). Facing and smoothing are
 /// per animation, since each can come from a different atlas.
 /// </summary>
 internal sealed class SpriteAtlas
@@ -37,8 +40,8 @@ internal sealed class SpriteAtlas
     /// <summary>How many animations use custom art.</summary>
     public int CustomCount { get; }
 
-    public static SpriteAtlas CreateDefault(IEnumerable<AnimationDef> animations, JacketShades? jacket = null) =>
-        new(animations.ToDictionary(a => a.Id, a => BuiltIn(a, jacket)), customCount: 0);
+    public static SpriteAtlas CreateDefault(IEnumerable<AnimationDef> animations, BuiltInLook look) =>
+        new(animations.ToDictionary(a => a.Id, a => BuiltIn(a, look)), customCount: 0);
 
     /// <summary>
     /// Loads <c>atlas.json</c> and its PNGs from each folder, earlier folders winning per animation. Animations no folder
@@ -46,9 +49,9 @@ internal sealed class SpriteAtlas
     /// </summary>
     /// <param name="folders">Sprite folders, most specific first (the pet's own, then the shared one).</param>
     /// <param name="animations">The game's animations.</param>
-    /// <param name="jacket">The built-in rabbit's jacket colours for animations without custom art (one per pet).</param>
+    /// <param name="look">The pet's built-in art, for animations without custom art.</param>
     public static (SpriteAtlas Atlas, IReadOnlyList<SpriteLayer> Layers) Load(
-        IReadOnlyList<string> folders, IReadOnlyList<AnimationDef> animations, JacketShades? jacket = null)
+        IReadOnlyList<string> folders, IReadOnlyList<AnimationDef> animations, BuiltInLook look)
     {
         var layers = new List<(SpriteLayer Layer, Func<string, BitmapSource?> Image)>();
         foreach (var folder in folders)
@@ -68,7 +71,7 @@ internal sealed class SpriteAtlas
             }
             else
             {
-                frames[a.Id] = BuiltIn(a, jacket);
+                frames[a.Id] = BuiltIn(a, look);
             }
         }
 
@@ -115,9 +118,10 @@ internal sealed class SpriteAtlas
         return (new SpriteLayer(folder, spec), Image);
     }
 
-    private static AtlasFrame[] BuiltIn(AnimationDef animation, JacketShades? jacket) =>
+    private static AtlasFrame[] BuiltIn(AnimationDef animation, BuiltInLook look) =>
         [.. Enumerable.Range(0, animation.FrameCount)
-            .Select(i => new AtlasFrame(ToBitmap(DefaultArt.Frame(animation.Id, i, jacket), DefaultArt.FrameSize), FacesLeft: false, Smooth: false))];
+            .Select(i => new AtlasFrame(
+                ToBitmap(DefaultArt.Frame(look.Character, animation.Id, i, look.Jacket), DefaultArt.FrameSize), FacesLeft: false, Smooth: false))];
 
     internal static BitmapFrame? TryDecode(string path)
     {

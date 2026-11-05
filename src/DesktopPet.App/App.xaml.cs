@@ -224,21 +224,23 @@ public partial class App : Application
         var traits = loaded?.Traits;
         if (loaded is null)
         {
-            var rolled = TraitRoller.Roll(_config, _traitRandom, names);
+            var rolled = TraitRoller.Roll(_config, _traitRandom, names, WornCharacters());
             names.Add(rolled.Name);
             traits = rolled; // saved into save.json below
+            TryWrite(() => _data.WriteCharacterSprites(id, rolled.Character!), problems);
         }
 
         traits ??= PetTraits.Neutral($"Pet {id}"); // its Traits are broken (reported by the caller; the file keeps them)
         var personality = _data.LoadPersonality(id);
         if (personality is null)
         {
-            var described = Personality.Describe(traits);
+            var described = Personality.Describe(traits with { Character = Characters.For(id, traits.Character).Id });
             TryWrite(() => _data.WritePersonality(id, described), problems);
             personality = described;
         }
 
-        var (atlas, layers) = SpriteAtlas.Load(_data.SpriteFolders(id), Animations.All, JacketColors.For(id, traits.Jacket));
+        var look = new BuiltInLook(Characters.For(id, traits.Character).Id, JacketColors.For(id, traits.Jacket));
+        var (atlas, layers) = SpriteAtlas.Load(_data.SpriteFolders(id), Animations.All, look);
         problems.AddRange(SpriteProblems(layers, traits.Name));
 
         var pet = new PetHost(id, _config, traits, personality, new JsonFileSaveStore(_data.SavePath(id)), atlas, _desktop!, _furniture!.World)
@@ -284,9 +286,10 @@ public partial class App : Application
         var id = NewPetId();
         var names = _pets.Select(p => p.Name).ToList();
         var (list, listProblems) = _data.LoadPersonalityTraits();
-        var (traits, personality) = PersonalityTraits.Give(TraitRoller.Roll(_config, _traitRandom, names), list, _traitRandom);
+        var (traits, personality) = PersonalityTraits.Give(TraitRoller.Roll(_config, _traitRandom, names, WornCharacters()), list, _traitRandom);
         var problems = listProblems.Select(p => $"{PersonalityTraits.FileName} (the default list is used): {p}").ToList();
         TryWrite(() => _data.WritePersonality(id, personality), problems);
+        TryWrite(() => _data.WriteCharacterSprites(id, traits.Character!), problems); // its own copy, for the user to edit
         names.Add(traits.Name);
         problems.AddRange(StartPet(id, new TraitsParseResult(traits, []), names, dropIn: true)); // saves the traits // shown last, so it's above the debug overlay if that's on
         if (problems.Count > 0)
@@ -299,6 +302,9 @@ public partial class App : Application
             _tray?.Notify($"Meet {pet.Name}", pet.Personality);
         }
     }
+
+    /// <summary>The characters the running pets wear, so a new pet can get one the fewest wear.</summary>
+    private List<string> WornCharacters() => [.. _pets.Select(p => p.Character.Id)];
 
     /// <summary>A free pet id; also skips folders that exist but weren't loaded (beyond the cap), so none gets overwritten.</summary>
     private int NewPetId() => PetRoster.NextId(_pets.Select(p => p.Id).Concat(_data.ExistingPets()));
@@ -348,6 +354,11 @@ public partial class App : Application
         if (egg.SpritesFrom is { } parent && _data.HasOwnSprites(parent))
         {
             TryWrite(() => _data.CopySprites(parent, id), problems);
+        }
+        else
+        {
+            // The parent it takes after draws its character's built-in art: the child gets its own copy of it.
+            TryWrite(() => _data.WriteCharacterSprites(id, Characters.For(id, traits.Character).Id), problems);
         }
 
         names.Add(traits.Name);
@@ -812,7 +823,7 @@ public partial class App : Application
         var problems = new List<string>();
         foreach (var pet in _pets)
         {
-            var (atlas, layers) = SpriteAtlas.Load(_data.SpriteFolders(pet.Id), Animations.All, pet.Jacket);
+            var (atlas, layers) = SpriteAtlas.Load(_data.SpriteFolders(pet.Id), Animations.All, pet.Look);
             pet.SetAtlas(atlas);
             problems.AddRange(SpriteProblems(layers, pet.Name));
         }
@@ -825,7 +836,7 @@ public partial class App : Application
         {
             var custom = _pets[0].CustomAnimations;
             _tray?.Notify("Sprites reloaded", custom == 0
-                ? "No custom art found: using the built-in rabbit."
+                ? "No custom art found: using the built-in characters."
                 : $"{AnimationCount(custom)} with custom art.");
         }
     }
@@ -855,7 +866,7 @@ public partial class App : Application
                 break;
 
             case PetFileKind.Sprites:
-                var (atlas, layers) = SpriteAtlas.Load(_data.SpriteFolders(id), Animations.All, pet.Jacket);
+                var (atlas, layers) = SpriteAtlas.Load(_data.SpriteFolders(id), Animations.All, pet.Look);
                 pet.SetAtlas(atlas);
                 var problems = SpriteProblems(layers, pet.Name);
                 if (problems.Count > 0)
@@ -897,11 +908,11 @@ public partial class App : Application
         pet.TraitProblems = null;
 
         var oldName = pet.Name;
-        var oldJacket = pet.Jacket;
+        var oldLook = pet.Look;
         pet.SetTraits(traits);
-        if (pet.Jacket != oldJacket)
+        if (pet.Look != oldLook)
         {
-            var (atlas, _) = SpriteAtlas.Load(_data.SpriteFolders(pet.Id), Animations.All, pet.Jacket);
+            var (atlas, _) = SpriteAtlas.Load(_data.SpriteFolders(pet.Id), Animations.All, pet.Look);
             pet.SetAtlas(atlas);
         }
 

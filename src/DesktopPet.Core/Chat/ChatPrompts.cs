@@ -45,11 +45,11 @@ public static class ChatPrompts
     /// Who the pet is and how it talks; shared by every kind of line. The mood is only given for lines about needs:
     /// a small model otherwise turns every joke and greeting into a complaint.
     /// </summary>
-    public static string System(string name, string personality, PetStats? mood, IReadOnlyCollection<string> recent)
+    public static string System(string name, string species, string personality, PetStats? mood, IReadOnlyCollection<string> recent)
     {
         ArgumentNullException.ThrowIfNull(recent);
         var text = new StringBuilder();
-        text.Append("You are ").Append(name).Append(", a tiny rabbit who lives on the user's computer desktop. ");
+        text.Append("You are ").Append(name).Append(", a ").Append(species).Append(" who lives on the user's computer desktop. ");
         if (!string.IsNullOrWhiteSpace(personality))
         {
             text.Append(personality.Trim()).Append(' ');
@@ -91,8 +91,8 @@ public static class ChatPrompts
         _ => "The user just petted you by clicking on you. React to being petted.",
     };
 
-    public static string Banter(string other) =>
-        $"Your friend {other}, another little rabbit, is right next to you. Say something to {other}.";
+    public static string Banter(string other, string otherSpecies) =>
+        $"Your friend {other}, a {otherSpecies}, is right next to you. Say something to {other}.";
 
     public static string Answer(string other, string line) =>
         $"Your friend {other} just said to you: \"{line}\" Answer {other}.";
@@ -103,11 +103,11 @@ public static class ChatPrompts
     /// For a sticky note, which is written, not spoken: who the pet is, and that the answer is the note's text alone.
     /// No mood: notes are for the user, not about the pet's needs.
     /// </summary>
-    public static string NoteSystem(string name, string personality, IReadOnlyCollection<string> recentNotes)
+    public static string NoteSystem(string name, string species, string personality, IReadOnlyCollection<string> recentNotes)
     {
         ArgumentNullException.ThrowIfNull(recentNotes);
         var text = new StringBuilder();
-        text.Append("You are ").Append(name).Append(", a tiny rabbit who lives on the user's computer desktop. ");
+        text.Append("You are ").Append(name).Append(", a ").Append(species).Append(" who lives on the user's computer desktop. ");
         if (!string.IsNullOrWhiteSpace(personality))
         {
             text.Append(personality.Trim()).Append(' ');

@@ -3,13 +3,17 @@ using DesktopPet.Core.Simulation;
 
 namespace DesktopPet.Core.Traits;
 
-/// <summary>Makes up a new pet: a free name and random multipliers in the ranges from the settings.</summary>
+/// <summary>
+/// Makes up a new pet: a free name, random multipliers in the ranges from the settings, and a default character the
+/// fewest pets wear.
+/// </summary>
 public static class TraitRoller
 {
     /// <param name="config">Settings with the ranges to roll in.</param>
     /// <param name="random">Randomness.</param>
     /// <param name="takenNames">Names of the pets that already exist; the new name is none of them.</param>
-    public static PetTraits Roll(PetConfig config, IRandom random, IEnumerable<string> takenNames)
+    /// <param name="wornCharacters">Characters the pets that already exist wear (ids).</param>
+    public static PetTraits Roll(PetConfig config, IRandom random, IEnumerable<string> takenNames, IEnumerable<string>? wornCharacters = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(random);
@@ -17,7 +21,7 @@ public static class TraitRoller
         var act = config.NewPetBehavior;
         var chat = config.NewPetChat;
 
-        return new PetTraits
+        var traits = new PetTraits
         {
             Name = PetNames.Pick(random, takenNames),
             Neediness = new Neediness(Multiplier(random, need), Multiplier(random, need), Multiplier(random, need)),
@@ -27,6 +31,7 @@ public static class TraitRoller
             Chat = new ChatTraits(
                 Multiplier(random, chat), Multiplier(random, chat), Multiplier(random, chat), Multiplier(random, chat), Multiplier(random, chat)),
         };
+        return traits with { Character = Characters.Pick(random, wornCharacters ?? []) };
     }
 
     /// <summary>
