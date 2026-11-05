@@ -38,8 +38,9 @@ This document describes the design **as built**, the status of each milestone, a
 | — | Coding standards written down (see "Coding standards") and enforced in the build | Done | |
 | — | Default characters: pets are the six Fakemon characters instead of the rabbit, with an editable copy per pet | Done | |
 | — | Nearby toys and group games: toys close by tempt pets a little more; pets join a nearby pet's game for a while | Done | |
+| — | Living Tower (Verner Panton, 1969): a four-seat lounge, one seat per level; per-slot seat heights and facing | Done | |
 
-583 unit tests, all in `DesktopPet.Core.Tests`.
+587 unit tests, all in `DesktopPet.Core.Tests`.
 
 ### Changes from the original plan
 
@@ -485,6 +486,9 @@ House naming, beyond the analyzer:
 - **Stats in save.json are the app's:** hand edits to them while the app runs are overwritten by the next autosave
   (only the `Traits` are read back live). Edit them with the app closed.
 - **A pet folder copied in with an old `traits.json`** is only folded into its save at the next start.
+- **Seats are drawing only:** a pet in the Living Tower stands on the floor below its seat and is drawn up there, so
+  clicking or grabbing it works where it's drawn, but another pet walking past still walks "through" the tower in
+  front of it. Pets on neighbouring levels overlap a little (the seats are placed to keep it small).
 - **Gravestone dates** use the PC's culture for month names, and a long name is shrunk, then cut short with "…".
 
 ---
@@ -952,6 +956,44 @@ and play with it for a little while. Covered by unit tests only (not checked liv
 - **Tuning:** all six values are in `settings.json` under `Furniture` and validated (weights 0–1000, distances
   0–100000 DIP, chance 0–1, durations as usual, cooldown 0–86400 s). Setting `NearbyToyWeight` or
   `JoinChancePerSecond` to 0 turns the matching behavior off.
+
+## Living Tower (done)
+Requested and built 2026-11-04: a new default piece, Verner Panton's **Living Tower** (1969), seating up to four pets.
+**How people sit in it** (Vitra's and verner-panton.com's product pages): two upholstered blocks with one flowing
+opening through them, used on **four levels**, in sitting and more or less reclined positions, facing into the shared
+opening (it's meant for conversation and lounging). The photo used for the art shows the four: the top of the left
+shelf, the floor of the lower niche, the floor's rising right end (reclined) and the top of the right shelf. Checked
+live: the new default was written to the existing furniture folder on start, the tower landed on the taskbar, and pets
+sat on the left shelf and the floor seat with their legs over the edge, two at a time.
+- **Spec** (`DefaultFurniture.LivingTower`, kind `livingtower`, 128×128 DIP, 4 slots):
+
+  | Slot | Seat | Offset | Seat height | Faces |
+  |---|---|---|---|---|
+  | 0 | top of the left shelf | −30 | 50 | right |
+  | 1 | floor of the lower niche | −4 | 24 | right |
+  | 2 | the floor's rising right end | +32 | 32 | left |
+  | 3 | top of the right shelf | +10 | 77 | left |
+
+  Uses: **hang out** (happiness +700/h, `sit_ledge`, 30–90 s), a toy and a group game, so pets nearby come and join;
+  and **lounge** (energy +5/h, `sleep`, 2–5 min), curled up on the seat. Each pet faces the middle, towards the others.
+  Both stay at least 30 s (`MinSeconds`).
+- **Minimum stay (new, per use; user-reported 2026-11-04):** pets sat in the tower for only a moment. A use ends once
+  its need is full (happiness 99.5, energy well rested), and content pets (happiness about 99.4) go to the tower for
+  fun, so they were full and up again within a second. `FurnitureUse.MinSeconds` keeps the pet there at least that
+  long whatever its need, and also overrides a joiner's shorter `JoinSeconds`. Default 0, so other furniture is
+  unchanged (the user confirmed the couch was fine). Grabbing the pet, menu care, or moving or removing the piece still
+  end it.
+- **Per-slot seats (new, general):** `SlotSeatsDip` gives each slot its own seat height, used for every use instead of
+  the use's `SeatDip` (`FurnitureSpec.SeatDip(slot, use)`); `SlotFacing` (`Toward`, the old rule; `Left`; `Right`)
+  turns each slot's pet one way (`FacingAt`). Both are optional, validated (one entry per slot; seats 0–512) and
+  hand-editable.
+- **Sitting on a seat's edge:** `sit_ledge` on a seat keeps its ledge sink, so the pet sits on the seat's front edge
+  with its legs hanging in front, like on a title bar. Other animations sit on the seat as before.
+- **Art:** `living_tower()` in the generator. The opening is a 50-point polygon (`TOWER_OPENING`) traced from the photo
+  onto the 128×128 grid; it's see-through. Seats and floors (faces looking up) are lit, inner side walls lighter,
+  ceilings shaded, and a seam marks the two blocks. The seat heights were measured from the rendered art (the outline
+  row on each seat), so redrawing the opening means re-measuring them.
+- **Existing folders** get it once on the next start, like the pill (`defaults-written.txt`).
 
 ## Leftovers (not started)
 Candidates, none chosen yet:

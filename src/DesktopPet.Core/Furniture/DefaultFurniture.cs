@@ -62,7 +62,25 @@ public static class DefaultFurniture
         Uses = [new() { Need = Need.None, Animation = "eat", Seconds = new(2, 3), Effect = UseEffect.Breed }],
     };
 
-    public static IReadOnlyList<FurnitureSpec> All { get; } = [Ball, Tv, Couch, Trampoline, Bed, PlayPen, Trough, Pill];
+    /// <summary>
+    /// Verner Panton's Living Tower (1969): two upholstered blocks with one flowing opening through them, sat in at four
+    /// levels, upright or reclined. Pets hang out together there (sitting on a seat's edge, legs dangling) or nap. Each
+    /// slot has its own seat, measured from the art: the left shelf, the floor, the floor's rising right end and the
+    /// right shelf, each pet turned towards the middle.
+    /// </summary>
+    public static FurnitureSpec LivingTower { get; } = new()
+    {
+        Kind = "livingtower", Name = "Living Tower", WidthDip = 128, HeightDip = 128, Art = "livingtower.png", Slots = 4,
+        SlotOffsetsDip = [-30, -4, 32, 10], SlotSeatsDip = [50, 24, 32, 77],
+        SlotFacing = [SlotFacing.Right, SlotFacing.Right, SlotFacing.Left, SlotFacing.Left],
+        Uses =
+        [
+            new() { Need = Need.Happiness, RatePerHour = 700, Animation = "sit_ledge", Seconds = new(30, 90), MinSeconds = 30 },
+            new() { Need = Need.Energy, RatePerHour = 5, Animation = "sleep", Seconds = new(120, 300), MinSeconds = 30 },
+        ],
+    };
+
+    public static IReadOnlyList<FurnitureSpec> All { get; } = [Ball, Tv, Couch, Trampoline, Bed, PlayPen, Trough, Pill, LivingTower];
 
     /// <summary>The kinds written by the first version with furniture (M11), before the list of written defaults was kept.</summary>
     public static IReadOnlyList<string> FirstKinds { get; } = ["ball", "tv", "couch", "trampoline", "bed", "playpen", "trough"];

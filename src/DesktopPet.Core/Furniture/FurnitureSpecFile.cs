@@ -25,7 +25,10 @@ public static class FurnitureSpecFile
         "// A kind of furniture. Edit and save: changes apply right away. Sizes are DIPs (the pet is 64).\n" +
         "// Art: an image next to this file, its Frames side by side. Animate: Always, Moving or InUse.\n" +
         "// Uses: Need (Hunger, Happiness, Energy or None), RatePerHour (points added per hour of use),\n" +
-        "// Animation (the pet's), Seconds, Effect (None, Hop, Bounce, Kick, Confine or Breed), SeatDip (sit this high).\n" +
+        "// Animation (the pet's), Seconds, Effect (None, Hop, Bounce, Kick, Confine or Breed), SeatDip (sit this high),\n" +
+        "// MinSeconds (stay at least this long, even once the need is full).\n" +
+        "// Optional per slot: SlotOffsetsDip (where it stands), SlotSeatsDip (its seat height, instead of SeatDip),\n" +
+        "// SlotFacing (Toward, Left or Right).\n" +
         "// Consumable: true if the piece is used up once a pet has finished using it (a pill).\n" +
         "// Delete this file to remove the furniture; delete the whole folder to get the defaults back.\n";
 
@@ -139,6 +142,32 @@ public static class FurnitureSpecFile
             }
         }
 
+        if (spec.SlotSeatsDip is { } seats)
+        {
+            if (seats.Count != spec.Slots)
+            {
+                errors.Add($"SlotSeatsDip needs one seat height per slot ({spec.Slots}), or leave it out.");
+            }
+
+            for (var i = 0; i < seats.Count; i++)
+            {
+                Range($"SlotSeatsDip[{i}]", seats[i], 0, MaxSizeDip);
+            }
+        }
+
+        if (spec.SlotFacing is { } facing)
+        {
+            if (facing.Count != spec.Slots)
+            {
+                errors.Add($"SlotFacing needs one direction per slot ({spec.Slots}), or leave it out.");
+            }
+
+            if (facing.Any(f => !Enum.IsDefined(f)))
+            {
+                errors.Add("SlotFacing directions must be Toward, Left or Right.");
+            }
+        }
+
         for (var i = 0; i < spec.Uses.Count; i++)
         {
             var use = spec.Uses[i];
@@ -151,6 +180,7 @@ public static class FurnitureSpecFile
 
             Range($"{name}.RatePerHour", use.RatePerHour, 0, 100_000);
             Range($"{name}.SeatDip", use.SeatDip, 0, MaxSizeDip);
+            Range($"{name}.MinSeconds", use.MinSeconds, 0, 86_400);
             var d = use.Seconds;
             if (!double.IsFinite(d.Min) || !double.IsFinite(d.Max) || d.Min < 0 || d.Max < d.Min || d.Max > 86_400)
             {

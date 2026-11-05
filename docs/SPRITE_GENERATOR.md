@@ -170,6 +170,7 @@ rabbit's: `rect`, `rrect` (rounded rectangle), `union`, `shifted`.
 | `playpen` | 112×40 | 1 (posts, rails and a hung sign reading "GAY BABY JAIL" in a 3×5 font; the inside is transparent) |
 | `trough` | 48×20 | 1 |
 | `pill` | 20×12 | 1 |
+| `livingtower` | 128×128 | 1 (Verner Panton's Living Tower: dark green blocks, see-through opening from `TOWER_OPENING`, traced from a photo; palette keys `p`/`t`/`y`/`z`). Seat rows (the outline on each seat): left shelf 78, floor 104, its right end 96, right shelf 51, i.e. the `SlotSeatsDip` 50, 24, 32, 77 in Core; re-measure if the opening changes |
 | `egg` | 24×26 | 4 (still, still, top leaning left, leaning right; built in, not written to the furniture folder; `Eggs.Spec` in Core) |
 | `grave` | 64×60 | 1 (headstone, plinth, grass, two flowers; built in, `Graves.Spec` in Core). The face (x 14–49, y 10–43) stays plain: the app's `GraveArt` writes the name and dates there (its `FaceLeft/Top/Width/Height`), so keep the two in step |
 

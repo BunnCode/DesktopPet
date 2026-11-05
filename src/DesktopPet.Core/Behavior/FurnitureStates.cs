@@ -126,6 +126,8 @@ internal sealed class UseFurnitureState : PetState
     private const double BallAwaySeconds = 1.5;
 
     private double _remaining;
+    private double _minimum;
+    private double _elapsed;
     private double _settle;
     private int _hops;
     private double _cooldown;
@@ -148,15 +150,24 @@ internal sealed class UseFurnitureState : PetState
         {
             _remaining = System.Math.Min(_remaining, cap); // joined someone's game: just for a little while
         }
+
+        _minimum = use.MinSeconds;
+        _remaining = System.Math.Max(_remaining, _minimum);
+        _elapsed = 0;
         _settle = SettleSeconds;
         _hops = context.Config.Furniture.BounceHops;
         _cooldown = 0;
         _away = 0;
         context.Animation.Play(Animations.Find(use.Animation) ?? Animations.Idle, restart: true);
 
-        // Beside the furniture: face it.
+        // A seat that faces one way (the Living Tower's); otherwise, beside the furniture, face it.
         var offset = context.Body.Feet.X - errand.Item.Feet.X;
-        if (use.Effect != UseEffect.Kick && System.Math.Abs(offset) > errand.Item.Size.X / 4)
+        var facing = errand.Item.Spec.FacingAt(errand.Slot);
+        if (use.Effect != UseEffect.Kick && facing != SlotFacing.Toward)
+        {
+            context.FacingLeft = facing == SlotFacing.Left;
+        }
+        else if (use.Effect != UseEffect.Kick && System.Math.Abs(offset) > errand.Item.Size.X / 4)
         {
             context.FacingLeft = offset > 0;
         }
@@ -182,10 +193,12 @@ internal sealed class UseFurnitureState : PetState
             return Finish(context);
         }
 
+        _elapsed += dt;
         var stats = context.Stats;
         var full = use.Need == Need.Energy
             ? stats.Energy >= context.Config.Stats.WellRested
             : use.Need != Need.None && FurnitureChooser.Value(use.Need, stats) >= FurnitureChooser.Full;
+        full &= _elapsed >= _minimum; // stays its minimum (the Living Tower) even once the need is full
         if (full)
         {
             return Finish(context);

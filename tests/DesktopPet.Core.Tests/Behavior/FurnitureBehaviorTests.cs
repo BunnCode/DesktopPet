@@ -314,6 +314,55 @@ public class FurnitureBehaviorTests
         Assert.True(b.Current.FacingLeft);
     }
 
+    [Fact]
+    public void Four_pets_sit_in_the_living_tower_each_on_its_own_level_facing_the_middle()
+    {
+        var room = new Room(Screen());
+        var tower = room.Add("livingtower", 900);
+        var spec = DefaultFurniture.LivingTower;
+        var pets = new[] { 300.0, 500, 1400, 1600 }.Select(x => room.Pet(Sad, x)).ToArray();
+
+        for (var i = 0; i < 2400 && !pets.All(Using); i++)
+        {
+            room.TickAll(pets);
+        }
+
+        Assert.All(pets, p => Assert.True(Using(p)));
+        Assert.Equal(4, tower.Occupied);
+        var ledgeSink = 64 * Animations.LedgeSinkFraction;
+        var seated = new HashSet<int>();
+        foreach (var pet in pets)
+        {
+            var slot = Enumerable.Range(0, 4).Single(s => System.Math.Abs(pet.Current.FeetPos.X - tower.SlotX(s)) < 1e-6);
+            seated.Add(slot);
+            Assert.Equal(Animations.SitLedge.Id, pet.Current.AnimationId);
+            Assert.Equal(ledgeSink - spec.SlotSeatsDip![slot], pet.Current.SinkY, 6); // up on its seat, legs over the edge
+            Assert.Equal(spec.FacingAt(slot) == SlotFacing.Left, pet.Current.FacingLeft);
+        }
+
+        Assert.Equal(4, seated.Count);
+        Assert.Equal(4, spec.SlotSeatsDip!.Distinct().Count()); // four levels
+    }
+
+    [Fact]
+    public void A_content_pet_stays_in_the_living_tower_at_least_its_minimum_once_happiness_is_full()
+    {
+        var room = new Room(Screen());
+        room.Add("livingtower", 900);
+        var sim = room.Pet(new PetStats(90, 99.4, 90), 400); // goes for fun; full (99.5) within a second of sitting
+
+        room.RunUntil(sim, Using);
+        var ticks = 0;
+        while (Using(sim) && ticks < 60 * 120)
+        {
+            room.Tick(sim);
+            ticks++;
+        }
+
+        Assert.True(sim.Stats.Happiness >= FurnitureChooser.Full);
+        Assert.InRange(ticks / 60.0, DefaultFurniture.LivingTower.Uses[0].MinSeconds, 31); // then up, as it's full
+    }
+
     // ---- The play pen ----
 
     /// <summary>Drags the pet from where it stands and lets go, still, above <paramref name="x"/>.</summary>

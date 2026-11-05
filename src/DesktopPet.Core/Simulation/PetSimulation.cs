@@ -909,9 +909,11 @@ public sealed class PetSimulation
     {
         var size = _ctx.SizePx;
         var sink = _ctx.Animation.Current == Animation.Animations.SitLedge ? size * Animation.Animations.LedgeSinkFraction : 0;
-        if (State == PetStateId.UseFurniture && _ctx.ActiveUse is { SeatDip: > 0 } use)
+        if (State == PetStateId.UseFurniture && _ctx.ActiveUse is { } use && _ctx.Errand is { } errand
+            && errand.Item.Spec.SeatDip(errand.Slot, use) is > 0 and var seat)
         {
-            sink = -use.SeatDip * (_ctx.Errand?.Item.PixelScale ?? _ctx.Scale); // up on the bed or couch (in its art's pixels)
+            // Up on the bed, couch or tower seat (in its art's pixels); sitting on its edge, the legs hang over it.
+            sink -= seat * errand.Item.PixelScale;
         }
 
         return new PetFrame(

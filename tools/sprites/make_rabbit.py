@@ -68,6 +68,10 @@ PAL = {
     'v': (0x44, 0x46, 0x56),  # grey plastic shade
     'l': (0x7F, 0xCB, 0x82),  # leaf light
     'm': (0x35, 0x7A, 0x3A),  # leaf shade
+    'p': (0x22, 0x4A, 0x47),  # Living Tower upholstery (dark green)
+    't': (0x33, 0x63, 0x5F),  # Living Tower light / inner side walls
+    'y': (0x5C, 0x8A, 0x85),  # Living Tower seat tops (lit from above)
+    'z': (0x17, 0x34, 0x33),  # Living Tower shade / seam
 }
 
 
@@ -873,9 +877,39 @@ def grave():
     return [compose(W, H, flowers, plinth, stone, mound)]
 
 
+# The opening through the Living Tower, traced from a photo onto its 128x128 grid (clockwise from the notch where the two
+# blocks meet at the top). Its lower edges are the four seats: the left shelf, the floor, the floor's rising right end
+# and the right shelf.
+TOWER_OPENING = [
+    (67, 9), (70, 13), (73, 14), (83, 14), (100, 9), (109, 9), (114, 12), (116, 17), (115, 27), (105, 47), (104, 56),
+    (93, 52), (72, 51), (66, 53), (62, 57), (62, 63), (66, 67), (98, 71), (109, 74), (115, 79), (115, 84), (111, 91),
+    (103, 95), (82, 100), (76, 105), (74, 108), (71, 105), (63, 104), (33, 110), (16, 110), (12, 107), (14, 103),
+    (20, 100), (45, 94), (49, 91), (50, 88), (50, 82), (45, 78), (35, 78), (24, 81), (24, 75), (22, 68), (12, 49),
+    (12, 39), (15, 35), (20, 32), (27, 30), (41, 29), (54, 25), (63, 17),
+]
+
+
+def living_tower():
+    """128x128: Verner Panton's Living Tower (1969), two dark green upholstered blocks with one flowing opening through
+    them (see-through). Upward faces inside the opening (the seats) are lit, side walls lighter, ceilings shaded, and a
+    seam marks where the blocks meet. The seat heights in Core (DefaultFurniture.LivingTower) are measured from this."""
+    W, H = 128, 128
+    block = rrect(1, 1, 126, 126, 3)
+    hole = polygon(TOWER_OPENING)
+    body = minus(block, hole)
+    p = Part(W, H).fill(body, 'p')
+    p.fill(lit(block, 1), 't', only='p')
+    p.fill(shaded(block, 2), 'z', only='p')
+    p.fill(union(shifted(hole, 2, 0), shifted(hole, -2, 0)), 't', only='p')   # the opening's side walls
+    p.fill(shifted(hole, 0, -2), 'z', only='pt')                              # its ceilings
+    p.fill(shifted(hole, 0, 3), 'y', only='ptz')                              # its seats and floor, lit from above
+    p.fill(union(rect(67, 1, 67, 12), rect(74, 106, 74, 126)), 'z', only='ptyz')  # the seam between the blocks
+    return [compose(W, H, p.outline())]
+
+
 FURNITURE = {
     'ball': ball, 'tv': tv, 'couch': couch, 'trampoline': trampoline, 'bed': bed, 'playpen': playpen, 'trough': trough, 'pill': pill,
-    'egg': egg, 'grave': grave,
+    'livingtower': living_tower, 'egg': egg, 'grave': grave,
 }
 
 

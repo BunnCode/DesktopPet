@@ -25,7 +25,7 @@ public class FurnitureSpecFileTests
     [Fact]
     public void The_defaults_cover_the_planned_furniture()
     {
-        Assert.Equal(["ball", "tv", "couch", "trampoline", "bed", "playpen", "trough", "pill"], DefaultFurniture.All.Select(s => s.Kind));
+        Assert.Equal(["ball", "tv", "couch", "trampoline", "bed", "playpen", "trough", "pill", "livingtower"], DefaultFurniture.All.Select(s => s.Kind));
         Assert.True(DefaultFurniture.PlayPen.IsPen);
         Assert.Equal(4, DefaultFurniture.Tv.Slots);
         Assert.Contains(DefaultFurniture.Ball.Uses, u => u.Effect == UseEffect.Kick);
@@ -34,11 +34,47 @@ public class FurnitureSpecFileTests
     }
 
     [Fact]
-    public void A_folder_from_before_the_pill_gets_only_the_pill_and_a_deleted_default_stays_deleted()
+    public void A_folder_gets_the_defaults_added_since_and_a_deleted_default_stays_deleted()
     {
-        Assert.Equal(["pill"], DefaultFurniture.ToWrite(null).Select(s => s.Kind));
+        Assert.Equal(["pill", "livingtower"], DefaultFurniture.ToWrite(null).Select(s => s.Kind));
         Assert.Empty(DefaultFurniture.ToWrite([.. DefaultFurniture.All.Select(s => s.Kind)]));
-        Assert.Equal(["tv", "pill"], DefaultFurniture.ToWrite(["ball", "couch", "trampoline", "bed", "playpen", "trough"]).Select(s => s.Kind));
+        Assert.Equal(["tv", "pill", "livingtower"], DefaultFurniture.ToWrite(["ball", "couch", "trampoline", "bed", "playpen", "trough"]).Select(s => s.Kind));
+        Assert.Equal(["livingtower"], DefaultFurniture.ToWrite([.. DefaultFurniture.FirstKinds, "pill"]).Select(s => s.Kind));
+    }
+
+    [Fact]
+    public void Each_slot_can_have_its_own_seat_height_and_facing()
+    {
+        var result = Parse("""
+            { "Name": "Tower", "Art": "t.png", "Slots": 2, "SlotSeatsDip": [50, 0], "SlotFacing": ["Right", "toward"],
+              "Uses": [ { "Animation": "sit_ledge", "SeatDip": 7 } ] }
+            """);
+
+        Assert.Empty(result.Errors);
+        var spec = result.Spec!;
+        var use = spec.Uses[0];
+        Assert.Equal(50, spec.SeatDip(0, use));
+        Assert.Equal(0, spec.SeatDip(1, use)); // the slot's own seat wins over the use's
+        Assert.Equal(SlotFacing.Right, spec.FacingAt(0));
+        Assert.Equal(SlotFacing.Toward, spec.FacingAt(1));
+
+        var couch = DefaultFurniture.Couch;
+        Assert.Equal(16, couch.SeatDip(1, couch.Uses[0])); // no seats given: the use's
+        Assert.Equal(SlotFacing.Toward, couch.FacingAt(1));
+    }
+
+    [Fact]
+    public void Per_slot_lists_need_one_entry_per_slot()
+    {
+        var result = Parse("""
+            { "Name": "Tower", "Art": "t.png", "Slots": 3, "SlotSeatsDip": [10, -1], "SlotFacing": ["Left"],
+              "Uses": [ { "Animation": "sit" } ] }
+            """);
+
+        Assert.Null(result.Spec);
+        Assert.Contains(result.Errors, e => e.StartsWith("SlotSeatsDip needs", StringComparison.Ordinal));
+        Assert.Contains(result.Errors, e => e.StartsWith("SlotSeatsDip[1]", StringComparison.Ordinal));
+        Assert.Contains(result.Errors, e => e.StartsWith("SlotFacing needs", StringComparison.Ordinal));
     }
 
     [Fact]

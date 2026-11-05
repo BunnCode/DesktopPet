@@ -86,7 +86,7 @@ nothing changes once dead) → `CheckPen` (let out if the pen moved, went or
 was picked up) → `GroupPlay.TryJoin` while Idle/Walk/Sit (on a join → GoToFurniture) → `_fsm.Update` (behavior acts on the body) → `PhysicsSystem.Step` →
 physics event forces a state (`Landed`→`OnLanded`: shut in a pen if the user dropped it there, Land unless Play or
 UseFurniture; `LostGround`→Fall, `Grabbed`→Hang, `Clung`→Cling, `HitWall`→turn) → `ApplySafetyNet` (respawn after 0.5 s lost; skips interpolation) → update DPI scale →
-`Animation.Update` → `BuildFrame` (`SinkY` for `sit_ledge`; negative `SeatDip` while on a bed or couch).
+`Animation.Update` → `BuildFrame` (`SinkY` for `sit_ledge`, minus the seat height (`Spec.SeatDip(slot, use)`) while on a bed, couch or tower seat).
 
 ### Folders
 
@@ -131,9 +131,9 @@ UseFurniture; `LostGround`→Fall, `Grabbed`→Hang, `Clung`→Cling, `HitWall`�
 | `Traits/JacketColors.cs` | `JacketShades(Base, Shade, Light)`; `Variants` (by pet number), `For(id, jacket)`, `ShadesOf`, `Blend` (a child's colour), `TryParse`/`Format` (#RRGGBB) |
 | `Rendering/SpriteSheetSpec.cs` | `SpriteSheetParser.Parse(atlas json, animations, imageSize callback)` → `SpriteSheetSpec(Animations, FacesLeft, Smooth, Problems, UsingDefault)`; `TemplateJson` |
 | `Simulation/PetConfig.cs` | **All tuning** (`PetConfig`, nested `StatRules`, `BehaviorWeights`, `DurationRange`, `FurnitureRules`, `ChatRules`, `BreedingRules`, `DeathRules`), feature switches `EnableClimbing/Pushing/Hanging`, new-pet trait ranges |
-| `Furniture/FurnitureSpec.cs` | `FurnitureSpec` (a kind: size, art, frames, `Animate`, slots and offsets, bounciness, friction, uses, `Consumable`; `IsPen`, `SlotOffsetDip`), `FurnitureUse` (need, rate, animation, seconds, effect, seat), `Need`, `UseEffect`, `AnimateWhen` |
+| `Furniture/FurnitureSpec.cs` | `FurnitureSpec` (a kind: size, art, frames, `Animate`, slots and offsets, per-slot seats `SlotSeatsDip` and `SlotFacing`, bounciness, friction, uses, `Consumable`; `IsPen`, `SlotOffsetDip`, `SeatDip(slot, use)`, `FacingAt(slot)`), `FurnitureUse` (need, rate, animation, seconds, `MinSeconds` (a minimum stay, even once full), effect, seat), `Need`, `UseEffect`, `AnimateWhen`, `SlotFacing` |
 | `Furniture/FurnitureSpecFile.cs` | `furniture\<kind>.json` (de)serialization and validation → `FurnitureParseResult`; `KindFromFileName` |
-| `Furniture/DefaultFurniture.cs` | The eight default kinds (`All`, incl. M15's `Pill`); `FirstKinds` and `ToWrite(written)`: which defaults to add to an existing folder |
+| `Furniture/DefaultFurniture.cs` | The nine default kinds (`All`, incl. M15's `Pill` and the `LivingTower`); `FirstKinds` and `ToWrite(written)`: which defaults to add to an existing folder |
 | `Furniture/FurnitureItem.cs` | One piece in the world: body (a `PetBody`), scale, `PixelScale` (whole-number scale for its size and slots), slots (`Reserve`/`Release`), `Users` (pet → the use it's making, so others can see what's being played), `Current`/`Previous` `FurnitureFrame`; `Egg` (an `EggInfo` if it's an egg), `Grave` (a `GraveInfo` if it's a gravestone), `IsFurniture` (neither) |
 | `Furniture/FurnitureWorld.cs` | **All furniture, shared by pets**: `SetSpecs` (the egg and gravestone specs always stay), `Add`, `AddEgg`, `EggItems`, `AddGrave`, `GraveItems`, `SetGrave`, `Remove`, `Tick` (physics via `PhysicsSystem` with the item's size, bounce, respawn), pointer drag/throw/poke, `Kick`, `PenAt`, `PenAhead`, `CreateSave`/`Load`, `Version` |
 | `Furniture/RoutePlanner.cs` | Dijkstra over ground segments with walk, walk off / drop, climb up, climb down → `RouteStep`s; `SideAt` |
