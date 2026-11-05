@@ -1,13 +1,14 @@
 # DesktopPet
 
-A Shimeji-style desktop pet for Windows. Small pixel-art rabbits live on your desktop: they walk along the taskbar,
-climb and ride your windows, nap on furniture, chat with each other and leave you sticky notes. All of the words come
+A Shimeji-style desktop pet for Windows. Small pixel-art critters live on your desktop: they walk along the taskbar,
+climb and ride your windows, nap on furniture, play video games together, chat with each other and leave you sticky
+notes. All of the words come
 from a small language model that runs on your own PC.
 
 Built in C# / .NET 10 / WPF, and structured like a small 2D game: a fixed 60 Hz loop, a behavior state machine and
 sprite animation.
 
-![Four rabbits on a desktop: one climbs a window and talks, two chat on the taskbar, and a sticky note sits on the window](docs/screenshots/hero.png)
+![Pets on a desktop: one stands on top of a window telling a joke, a sticky note signed by Mabel sits on the window, and others bounce on a trampoline, sit by the TV and jump on the couch](docs/screenshots/hero.png)
 
 ## Features
 
@@ -18,9 +19,14 @@ sprite animation.
 - **Drag and throw:** pick a pet up with the mouse and throw it. It bounces off walls and skids when it lands.
 - **Needs and care:** each pet has hunger, happiness and energy. Feed, play with or tuck in a pet from its menu.
   Progress is saved.
+- **Six characters:** each new pet is one of six built-in characters (a ring-floating robot, an electric cat, a
+  foal, a hooded bear-cub thief, a fire donkey and a red-muzzled bear) and gets its own copy of their sprite sheet to
+  repaint.
 - **Multiple pets:** up to 8, each with its own name, neediness, personality and (optionally) its own sprites.
-- **Furniture:** a ball, TV, couch, trampoline, bed, play pen and trough. Pets use them on their own when they need
-  to. You can add your own furniture as JSON files and images. See [docs/FURNITURE.md](docs/FURNITURE.md).
+- **Furniture:** a ball, TV, couch, trampoline, bed, play pen, trough and a Living Tower lounge. Pets use them on
+  their own when they need to, are tempted by toys close by, and join each other's games: when one pet starts playing
+  video games, its friends come over to play too. You can add your own furniture as JSON files and images. See
+  [docs/FURNITURE.md](docs/FURNITURE.md).
 - **Eggs and babies:** now and then two happy pets standing together court each other and lay an egg. It hatches
   into a child that takes after both parents: its numbers, a blend of their jacket colours, and one parent's
   sprites. Pets can be fixed from the menu so they don't breed.
@@ -40,33 +46,46 @@ sprite animation.
 
 **Climbing and riding windows.** Pets stand on window tops and climb window sides.
 
-![One rabbit on top of a window while two others climb the sides of another](docs/screenshots/windows.png)
+![One pet stands on top of a window and talks while another climbs the side of a second window](docs/screenshots/windows.png)
 
-**Speech bubbles and sticky notes.** All the text comes from the local model: banter between pets, and a note stuck
-to the window.
+**Speech bubbles and sticky notes.** All the text comes from the local model: jokes and banter between pets, and
+notes stuck to the window.
 
-![A rabbit climbing a window talks while two below chat, and a sticky note signed by Mabel sits on the window](docs/screenshots/chat.png)
+![Pets chat in speech bubbles around a window, with a sticky note signed by Mabel stuck to it](docs/screenshots/chat.png)
 
-**Furniture.** A rabbit plays ball in front of the TV while two others nap on the couch.
+**Furniture.** Pets look after themselves: a nap in the bed, a snack at the trough, video games at the TV and a doze
+on the couch.
 
-![A rabbit with a ball next to a TV, two rabbits asleep on a couch, an egg and a gravestone](docs/screenshots/furniture.png)
+![Top: a fire donkey asleep in bed, a bear eating at the trough and a trampoline. Bottom: an egg, a foal and a cat playing at the TV, and two pets napping on the couch](docs/screenshots/furniture.png)
+
+**Video games together.** When one pet starts a game, nearby pets come over and join in, up to four at the TV.
+
+![Four pets with controllers around a TV showing a little game, one telling a joke](docs/screenshots/games.png)
+
+**The Living Tower.** A four-level lounge: pets sit on its shelves and in its niche, facing each other, and drop by
+to join friends who are already hanging out there.
+
+![Four pets sitting on the levels of a dark green Living Tower](docs/screenshots/tower.png)
 
 **Eggs and babies.** Two happy pets court each other (left), and a moment later there's an egg (right).
 
-![Two rabbits facing each other with a heart between them; then the same pair with a new egg](docs/screenshots/eggs.png)
+![A foal and a hooded bear cub facing each other with a heart between them; then the same pair with a new egg](docs/screenshots/eggs.png)
 
 **Death and gravestones.** A neglected pet leaves a gravestone with its name and dates.
 
-![A gravestone engraved with Clover and two dates](docs/screenshots/gravestone.png)
+![A gravestone engraved with Clover and two dates, with a pet standing beside it](docs/screenshots/gravestone.png)
 
 **The menu and the debug overlay.** Right-click a pet for its stats and care options. The debug overlay shows the
 floors, window tops, walls and what each pet and piece of furniture is doing.
 
 <p>
-  <img src="docs/screenshots/menu.png" alt="The pet menu: name and mood, stat bars, Feed, Play, Sleep, furniture and settings" height="420">
+  <img src="docs/screenshots/menu.png" alt="The pet menu: name and mood, stat bars, Feed, Play, Sleep, fixing, furniture, the chat switches and settings" height="420">
 </p>
 
 ![The debug overlay: labelled boxes around every pet and piece of furniture, and highlighted floors and window edges](docs/screenshots/debug-overlay.png)
+
+The screenshots are staged with `tools/demo/` on a pixel-art forest backdrop; see
+[docs/how_to_make_demo.md](docs/how_to_make_demo.md).
 
 ## Requirements
 

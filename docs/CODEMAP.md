@@ -33,6 +33,8 @@ tools/sprites/sprite_preview.py  overview / zoom / check (pose conventions) for 
 tools/models/get-model.ps1   Downloads the chat model into models/ at the repo root (gitignored); the build copies it.
 tools/publish/publish.ps1    Stops running pets, builds, tests, publishes, then copies data/ into publish/data/ (backs
                              the old copy up to %TEMP%\DesktopPet-backups first). The `publish` Claude skill runs it.
+tools/demo/                  README screenshots: forest.py (pixel-art backdrop), make_demo.py (staged data), stage.py
+                             (backdrop + demo windows), grab/sheet/click.py. See docs/how_to_make_demo.md.
 ```
 
 ## Conventions you need everywhere

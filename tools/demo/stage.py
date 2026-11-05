@@ -1,6 +1,8 @@
-"""Demo stage for DesktopPet screenshots: a plain backdrop (untitled, so the pets ignore it) plus titled demo windows.
+"""Demo stage for DesktopPet screenshots: a backdrop (maximized, so the pets ignore it) plus titled demo windows.
 
-Usage: python stage.py <scene>   scenes: hero, windows, chat, plain
+Usage: python stage.py <scene> [backdrop.png]   scenes: hero, windows, chat, plain
+The backdrop image (make one with forest.py) is pinned to the bottom of the work area, where the pets stand; without
+one it's a plain gradient.
 """
 import ctypes
 import sys
@@ -22,6 +24,7 @@ back.geometry(f"{W}x{H}+0+0")
 back.state("zoomed")
 canvas = tk.Canvas(back, width=W, height=H, highlightthickness=0)
 canvas.pack()
+image = sys.argv[2] if len(sys.argv) > 2 else None
 top, bottom = (0xC9, 0xE4, 0xF2), (0xF4, 0xE9, 0xF5)
 steps = 120
 for i in range(steps):
@@ -30,6 +33,11 @@ for i in range(steps):
     y0 = H * i // steps
     y1 = H * (i + 1) // steps + 1
     canvas.create_rectangle(0, y0, W, y1, fill="#%02x%02x%02x" % c, outline="")
+if image:
+    photo = tk.PhotoImage(file=image)
+    back.update()
+    # The canvas starts below the title bar: put the image's bottom on the work area's bottom edge.
+    canvas.create_image(0, H - back.winfo_rooty(), image=photo, anchor="sw")
 
 
 def window(title, x, y, w, h, body, size=15):
@@ -55,23 +63,24 @@ PLANS = (
     "- Water the tomatoes\n"
 )
 RECIPE = (
-    "Carrot cake\n\n"
-    "2 cups grated carrots\n"
-    "1 1/2 cups flour\n"
-    "1 cup brown sugar\n"
-    "3 eggs\n"
-    "1 tsp cinnamon\n\n"
-    "Bake at 175 C for 35 minutes."
+    "Forest berry pie\n\n"
+    "2 cups wild blueberries\n"
+    "1 cup raspberries\n"
+    "3/4 cup sugar\n"
+    "2 tbsp cornflour\n"
+    "1 pie crust\n\n"
+    "Bake at 200 C for 40 minutes."
 )
 
-# Window outer frame positions are approximate; tk geometry is the client area.
+# tk geometry is the client area; the frame adds a title bar above and a thin border. Windows reach down to the
+# floor (y = H) so the pets can climb their sides.
 if scene == "hero":
-    window("Weekend plans", 880, 560, 760, 780, PLANS)
+    window("Weekend plans", 1040, 950, 600, 410, PLANS)
 elif scene == "windows":
-    window("Weekend plans", 520, 520, 720, 820, PLANS)
-    window("Carrot cake", 1480, 860, 620, 480, RECIPE)
+    window("Weekend plans", 640, 760, 600, 600, PLANS)
+    window("Forest berry pie", 1480, 1010, 520, 350, RECIPE)
 elif scene == "chat":
-    window("Weekend plans", 820, 640, 900, 700, PLANS, size=17)
+    window("Weekend plans", 900, 860, 760, 500, PLANS, size=17)
 
 root.update()
 for w in root.winfo_children():
