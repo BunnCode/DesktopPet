@@ -142,8 +142,12 @@ internal sealed class UseFurnitureState : PetState
 
         var use = errand.Use;
         context.ActiveUse = use;
-        errand.Item.Users.Add(context.Owner);
+        errand.Item.Users[context.Owner] = use;
         _remaining = context.Random.Range(use.Seconds.Min, use.Seconds.Max);
+        if (errand.PlaySeconds is { } cap)
+        {
+            _remaining = System.Math.Min(_remaining, cap); // joined someone's game: just for a little while
+        }
         _settle = SettleSeconds;
         _hops = context.Config.Furniture.BounceHops;
         _cooldown = 0;

@@ -13,6 +13,9 @@ internal sealed class Errand(FurnitureItem item, FurnitureUse use, int slot)
 
     public int Slot { get; } = slot;
 
+    /// <summary>At most this long at it (set when joining another pet's game); null for the use's own duration.</summary>
+    public double? PlaySeconds { get; init; }
+
     /// <summary>Seconds since it set off.</summary>
     public double Elapsed { get; set; }
 
@@ -37,6 +40,9 @@ internal static class FurnitureChooser
 
     /// <summary>How tempting a breeding pill is, as if a need it meets were this urgent (0..1).</summary>
     public const double PillAppeal = 0.5;
+
+    /// <summary>Rank bonus of a toy right beside the pet over the same toy far away (urgent needs still come first).</summary>
+    private const double NearbyRankBonus = 0.1;
 
     /// <summary>0 when the need is at or above <see cref="FurnitureRules.NeedBelow"/>, rising to 1 when it's empty.</summary>
     public static double Urgency(Need need, PetStats stats, FurnitureRules rules)
@@ -69,13 +75,18 @@ internal static class FurnitureChooser
         var rules = context.Config.Furniture;
         var urgency = 0.0;
         var fun = false;
-        foreach (var (_, use, score, curious) in Candidates(context))
+        var closeness = 0.0;
+        foreach (var (item, use, score, curious) in Candidates(context))
         {
             urgency = System.Math.Max(urgency, curious ? 0 : score);
-            fun |= curious || use.Need == Need.Happiness;
+            if (curious || use.Need == Need.Happiness)
+            {
+                fun = true;
+                closeness = System.Math.Max(closeness, Closeness(context, item, rules.NearbyToyDip));
+            }
         }
 
-        return (rules.Weight * urgency) + (fun ? rules.CuriosityWeight : 0);
+        return (rules.Weight * urgency) + (fun ? rules.CuriosityWeight : 0) + (rules.NearbyToyWeight * closeness);
     }
 
     /// <summary>
@@ -89,35 +100,69 @@ internal static class FurnitureChooser
             return false;
         }
 
-        // Most urgent first; among equals the nearest, with a little randomness so pets don't all pick the same one.
+        // Most urgent first; among equals the nearest (a toy close by gets a little extra), with a little randomness so
+        // pets don't all pick the same one.
         var feetX = context.Body.Feet.X;
+        var nearbyDip = context.Config.Furniture.NearbyToyDip;
         var ranked = Candidates(context)
-            .Select(c => (c.Item, c.Use, Rank: c.Score - (System.Math.Abs(c.Item.Feet.X - feetX) / 20_000) + (context.Random.NextDouble() * 0.05)))
+            .Select(c => (c.Item, c.Use, Rank: c.Score - (System.Math.Abs(c.Item.Feet.X - feetX) / 20_000)
+                + (IsFun(c.Use) ? NearbyRankBonus * Closeness(context, c.Item, nearbyDip) : 0)
+                + (context.Random.NextDouble() * 0.05)))
             .OrderByDescending(c => c.Rank)
             .Take(4)
             .ToList();
 
         foreach (var (item, use, _) in ranked)
         {
-            var slot = item.Reserve(context.Owner);
-            if (slot < 0)
+            if (TryGo(context, item, use))
             {
-                continue;
-            }
-
-            var errand = new Errand(item, use, slot);
-            if (Plan(context, errand) is not null)
-            {
-                context.Errand = errand;
                 return true;
             }
-
-            item.Release(context.Owner);
-            context.Unreachable[item.Id] = context.Time + context.Config.Furniture.RetrySeconds;
         }
 
         return false;
     }
+
+    /// <summary>
+    /// Reserves a slot at <paramref name="item"/> and plans the way there, setting <see cref="PetContext.Errand"/>.
+    /// False if it's full or out of reach (then it isn't tried again for <see cref="FurnitureRules.RetrySeconds"/>).
+    /// </summary>
+    public static bool TryGo(PetContext context, FurnitureItem item, FurnitureUse use, double? playSeconds = null)
+    {
+        var slot = item.Reserve(context.Owner);
+        if (slot < 0)
+        {
+            return false;
+        }
+
+        var errand = new Errand(item, use, slot) { PlaySeconds = playSeconds };
+        if (Plan(context, errand) is not null)
+        {
+            context.Errand = errand;
+            return true;
+        }
+
+        item.Release(context.Owner);
+        context.Unreachable[item.Id] = context.Time + context.Config.Furniture.RetrySeconds;
+        return false;
+    }
+
+    /// <summary>1 with the pet's feet at the item's, falling off linearly to 0 at <paramref name="rangeDip"/> away.</summary>
+    public static double Closeness(PetContext context, FurnitureItem item, double rangeDip)
+    {
+        var range = rangeDip * context.Scale;
+        if (range <= 0)
+        {
+            return 0;
+        }
+
+        var distance = (item.Feet - context.Body.Feet).Length;
+        return System.Math.Clamp(1 - (distance / range), 0, 1);
+    }
+
+    /// <summary>A use pets do for fun: it raises happiness or meets no need (not a pen or a breeding pill).</summary>
+    public static bool IsFun(FurnitureUse use) =>
+        use.Need is Need.Happiness or Need.None && use.Effect is not (UseEffect.Confine or UseEffect.Breed);
 
     /// <summary>Where the pet should stand to use the furniture (feet x on the furniture's surface), or null if it can't.</summary>
     public static double? TargetX(PetContext context, Errand errand)
@@ -160,7 +205,7 @@ internal static class FurnitureChooser
         return errand.Route;
     }
 
-    private static bool CanChoose(PetContext context) =>
+    internal static bool CanChoose(PetContext context) =>
         context.Pen is null && !context.OnTrip && context.Body.Mode == Physics.BodyMode.Grounded
         && context.Furniture.Items.Count > 0;
 

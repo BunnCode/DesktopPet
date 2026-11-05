@@ -68,6 +68,17 @@ public class FurnitureBehaviorTests
             sim.Tick(Dt, Desktop);
         }
 
+        /// <summary>One tick of the furniture, the clock and every pet in the room.</summary>
+        public void TickAll(params PetSimulation[] sims)
+        {
+            World.Tick(Dt, Desktop);
+            Clock.Advance(TimeSpan.FromSeconds(Dt));
+            foreach (var sim in sims)
+            {
+                sim.Tick(Dt, Desktop);
+            }
+        }
+
         public void Run(PetSimulation sim, int ticks)
         {
             for (var i = 0; i < ticks; i++)
@@ -414,6 +425,127 @@ public class FurnitureBehaviorTests
         {
             room.Tick(sim);
             Assert.Null(sim.FurnitureTarget);
+        }
+    }
+
+    // ---- Nearby toys and group games ----
+
+    /// <summary>No curiosity weight, so only a nearby toy (or a group game) draws a content pet to furniture.</summary>
+    private static PetConfig NearbyOnly(double nearbyWeight = 1, double joinChance = 0) => PetConfig.Default with
+    {
+        Furniture = PetConfig.Default.Furniture with
+        {
+            CuriosityWeight = 0,
+            NearbyToyWeight = nearbyWeight,
+            JoinChancePerSecond = joinChance,
+        },
+    };
+
+    [Fact]
+    public void A_content_pet_plays_with_a_toy_beside_it()
+    {
+        var room = new Room(Screen(), NearbyOnly());
+        var ball = room.Add("ball", 400);
+        var sim = room.Pet(Content, 300);
+
+        room.RunUntil(sim, s => s.State == PetStateId.GoToFurniture, maxTicks: 60);
+        Assert.Same(ball, sim.FurnitureTarget);
+    }
+
+    [Fact]
+    public void A_toy_across_the_screen_gets_no_nearby_bonus()
+    {
+        var room = new Room(Screen(), NearbyOnly());
+        room.Add("ball", 1400);
+        var sim = room.Pet(Content, 300);
+
+        for (var i = 0; i < 600; i++)
+        {
+            room.Tick(sim);
+            Assert.Null(sim.FurnitureTarget);
+        }
+    }
+
+    [Fact]
+    public void A_nearby_toy_wins_over_the_same_toy_far_away()
+    {
+        var room = new Room(Screen(), NearbyOnly());
+        room.Add("ball", 1600);
+        var near = room.Add("ball", 420);
+        var sim = room.Pet(Content, 300);
+
+        room.RunUntil(sim, s => s.State == PetStateId.GoToFurniture, maxTicks: 60);
+        Assert.Same(near, sim.FurnitureTarget);
+    }
+
+    [Fact]
+    public void A_pet_near_a_group_game_comes_over_and_plays_for_a_little_while()
+    {
+        var room = new Room(Screen(), NearbyOnly(nearbyWeight: 0, joinChance: 1));
+        var tv = room.Add("tv", 800);
+        var player = room.Pet(Sad, 650);
+        var friend = room.Pet(Content, 1200);
+
+        var tick = 0;
+        for (; tick < 1500 && !Using(player); tick++)
+        {
+            room.TickAll(player, friend);
+            if (!Using(player))
+            {
+                Assert.Null(friend.FurnitureTarget); // nothing to join until the game starts
+            }
+        }
+
+        Assert.Same(tv, player.FurnitureTarget);
+        Assert.Equal(PetStateId.GoToFurniture, friend.State);
+        Assert.Same(tv, friend.FurnitureTarget);
+
+        for (tick = 0; tick < 1500 && !Using(friend); tick++)
+        {
+            room.TickAll(player, friend);
+        }
+
+        Assert.True(Using(friend));
+        Assert.Equal(2, tv.Occupied);
+
+        // FakeRandom(0.99): the TV's own time would be ~89 s, but a joiner stays at most JoinSeconds (~25 s).
+        var playing = 0;
+        for (; playing < 60 * 40 && Using(friend); playing++)
+        {
+            room.TickAll(player, friend);
+        }
+
+        Assert.InRange(playing / 60.0, 20, 26);
+        Assert.True(Using(player)); // the one who started it carries on
+
+        for (var i = 0; i < 600; i++)
+        {
+            room.TickAll(player, friend);
+            Assert.Null(friend.FurnitureTarget); // cooling down: no joining again right away
+        }
+    }
+
+    [Fact]
+    public void Pets_dont_join_meals_or_far_away_games()
+    {
+        var room = new Room(Screen(), NearbyOnly(nearbyWeight: 0, joinChance: 1));
+        room.Add("trough", 300);
+        room.Add("tv", 1700);
+        var eater = room.Pet(Hungry, 200);
+        var gamer = room.Pet(Sad, 1600);
+        var bystander = room.Pet(Content, 450); // beside the trough, ~1250 DIP from the TV
+
+        room.TickAll(eater, gamer, bystander);
+        for (var i = 0; i < 1500 && !(Using(eater) && Using(gamer)); i++)
+        {
+            room.TickAll(eater, gamer, bystander);
+        }
+
+        Assert.True(Using(eater) && Using(gamer));
+        for (var i = 0; i < 600; i++)
+        {
+            room.TickAll(eater, gamer, bystander);
+            Assert.Null(bystander.FurnitureTarget);
         }
     }
 }

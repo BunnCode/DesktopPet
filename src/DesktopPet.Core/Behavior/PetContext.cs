@@ -55,6 +55,9 @@ internal sealed class PetContext
     /// <summary>Whether it may take a breeding pill now: not fixed, breeding on, not already on a round.</summary>
     public bool MayTakePill => !Fixed && Config.Breeding.Enabled && Visit is null;
 
+    /// <summary>Time (<see cref="Time"/>) before which it won't join another pet's game (<see cref="GroupPlay"/>).</summary>
+    public double NoJoinUntil { get; set; }
+
     /// <summary>Furniture that couldn't be reached, by id, with the time it may be tried again.</summary>
     public Dictionary<int, double> Unreachable { get; } = [];
 

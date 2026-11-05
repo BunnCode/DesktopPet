@@ -206,6 +206,30 @@ public sealed record FurnitureRules
     /// <summary>Weight of trying out fun furniture (happiness or no need) even when nothing is low.</summary>
     public double CuriosityWeight { get; init; } = 0.4;
 
+    /// <summary>
+    /// Extra weight of "go use furniture" for a toy (fun furniture: happiness or no need) right beside the pet, falling
+    /// off linearly to nothing at <see cref="NearbyToyDip"/>. Applies whatever the pet's stats.
+    /// </summary>
+    public double NearbyToyWeight { get; init; } = 1;
+
+    /// <summary>How close (DIP, feet to feet) a toy has to be to count as nearby.</summary>
+    public double NearbyToyDip { get; init; } = 300;
+
+    /// <summary>
+    /// A pet idling, walking or sitting within this distance (DIP, feet to feet) of another pet playing a group game
+    /// (a fun use of furniture with more than one slot, one still free) may come over and join in.
+    /// </summary>
+    public double JoinDistanceDip { get; init; } = 600;
+
+    /// <summary>Chance per second that a pet near a group game joins it.</summary>
+    public double JoinChancePerSecond { get; init; } = 0.15;
+
+    /// <summary>How long a pet that joined in plays (never longer than the use itself would last).</summary>
+    public DurationRange JoinSeconds { get; init; } = new(10, 25);
+
+    /// <summary>After joining a game, a pet doesn't join another for this long.</summary>
+    public double JoinCooldownSeconds { get; init; } = 90;
+
     /// <summary>A trip to furniture that takes longer than this is abandoned.</summary>
     public double ErrandSeconds { get; init; } = 60;
 

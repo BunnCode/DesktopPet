@@ -155,8 +155,8 @@ public sealed class FurnitureItem
         _animationTime = playing ? _animationTime + dt : 0;
     }
 
-    /// <summary>Pets using it right now (not just heading for it).</summary>
-    internal HashSet<object> Users { get; } = [];
+    /// <summary>Pets using it right now (not just heading for it), with the use each is making of it.</summary>
+    internal Dictionary<object, FurnitureUse> Users { get; } = [];
 
     /// <summary>Someone is using it (for <see cref="AnimateWhen.InUse"/>).</summary>
     public bool InUse => Users.Count > 0;

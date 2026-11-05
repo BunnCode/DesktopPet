@@ -4,8 +4,10 @@ Furniture is placed from a pet's menu (**Furniture → Add …**). It drops in b
 below (the taskbar or a window), rides windows that move and falls when its window goes. Drag it to move it; right-click
 it to remove it. All pets share it, and where it stands is saved in `room.json`.
 
-Pets use furniture on their own when a need it meets is low (below 75 by default), and now and then just for fun. They
-walk to it, climbing window sides if it stands on another window; if there's no way there, they don't go. Furniture is
+Pets use furniture on their own when a need it meets is low (below 75 by default), and now and then just for fun,
+a bit more often when a toy (the ball, TV, couch or trampoline) is close by. When a pet is playing something that has
+room for more (the TV, the ball, jumping on the couch), other pets nearby often come over and play along for a little
+while. They walk to it, climbing window sides if it stands on another window; if there's no way there, they don't go. Furniture is
 slower than your care: Feed and Play from the menu are still the quickest way to help a pet.
 
 ## The defaults

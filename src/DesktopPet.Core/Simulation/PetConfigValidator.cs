@@ -136,6 +136,12 @@ public static class PetConfigValidator
             Range("Furniture.NeedBelow", f.NeedBelow, 0, 100);
             Range("Furniture.Weight", f.Weight, 0, 1_000);
             Range("Furniture.CuriosityWeight", f.CuriosityWeight, 0, 1_000);
+            Range("Furniture.NearbyToyWeight", f.NearbyToyWeight, 0, 1_000);
+            Range("Furniture.NearbyToyDip", f.NearbyToyDip, 0, 100_000);
+            Range("Furniture.JoinDistanceDip", f.JoinDistanceDip, 0, 100_000);
+            Range("Furniture.JoinChancePerSecond", f.JoinChancePerSecond, 0, 1);
+            Duration("Furniture.JoinSeconds", f.JoinSeconds);
+            Range("Furniture.JoinCooldownSeconds", f.JoinCooldownSeconds, 0, 86_400);
             Range("Furniture.ErrandSeconds", f.ErrandSeconds, 1, 3_600);
             Range("Furniture.RetrySeconds", f.RetrySeconds, 0, 3_600);
             Range("Furniture.PenSitWeight", f.PenSitWeight, 0, 1_000);

@@ -37,8 +37,9 @@ This document describes the design **as built**, the status of each milestone, a
 | — | Combined save file: traits.json folded into save.json (version 4), hand edits of the traits kept by autosaves | Done | `4d9c7a6` |
 | — | Coding standards written down (see "Coding standards") and enforced in the build | Done | |
 | — | Default characters: pets are the six Fakemon characters instead of the rabbit, with an editable copy per pet | Done | |
+| — | Nearby toys and group games: toys close by tempt pets a little more; pets join a nearby pet's game for a while | Done | |
 
-578 unit tests, all in `DesktopPet.Core.Tests`.
+583 unit tests, all in `DesktopPet.Core.Tests`.
 
 ### Changes from the original plan
 
@@ -273,7 +274,9 @@ Body modes: **Airborne, Grounded, Held, Clinging, Hanging**.
 
 **Picker weights** start at Idle 3, Walk 5, Sit 1.5. Below 50 energy, sleep becomes likely and walking slows; below
 30 happiness, the pet sits more and walks less. "Use furniture" weighs 4 × the urgency of the lowest need some free,
-reachable furniture meets (0 at 75, 1 at empty), plus 0.4 for fun furniture (happiness or no need).
+reachable furniture meets (0 at 75, 1 at empty), plus 0.4 for fun furniture (happiness or no need), plus up to 1 for
+a toy close by (see "Nearby toys and group games"). Separately, a pet idling, walking or sitting may drop what it's
+doing to join a nearby pet's group game.
 
 **Walking into a wall:** 35% climb. For window sides only, 25% push (if pushing is on and that window hasn't proved
 immovable). Otherwise it turns at screen edges and walks on past window sides. At the end of a window top: 40% climb
@@ -691,8 +694,9 @@ written on first run, all seven landed on the taskbar, and two pets walked to th
   falls when its window goes and respawns if lost. A ball bounces and rolls (bounciness 0.5, friction 0.1). Drag to move
   or throw; click a ball to poke it. Placed from the pet menu (dropped just above the pet), removed by right-click,
   at most 24 pieces. Positions are saved in `room.json` once things settle and every minute.
-- **Choosing:** see the picker weights above. `FurnitureChooser` ranks the uses by urgency and distance, reserves a
-  slot (slots are per piece; the TV has 4) and plans a route; unreachable pieces are skipped for 30 s.
+- **Choosing:** see the picker weights above. `FurnitureChooser` ranks the uses by urgency and distance (plus a
+  small bonus for a toy close by), reserves a slot (slots are per piece; the TV has 4) and plans a route; unreachable
+  pieces are skipped for 30 s. Pets also join each other's group games (see "Nearby toys and group games").
 - **Getting there** (`RoutePlanner`): Dijkstra over ground segments using the pet's own moves: walk, step across a seam,
   drop off an end, climb a wall up and over onto the surface at its top, climb down a window side. Climbing costs
   double. The trip replans every 0.5 s and whenever the pet or the target changes surface.
@@ -719,7 +723,8 @@ written on first run, all seven landed on the taskbar, and two pets walked to th
   out lets it go and brings it back to the front. Other pets turn at the pen's sides.
 - **Art:** the generator draws the furniture (`FURNITURE` in `make_rabbit.py`, embedded from
   `src/DesktopPet.App/Furniture/Art/`) and three new rabbit animations: `kick`, `game`, `bounce`.
-- **Tuning** in `settings.json` under `Furniture`: `NeedBelow`, `Weight`, `CuriosityWeight`, `ErrandSeconds`,
+- **Tuning** in `settings.json` under `Furniture`: `NeedBelow`, `Weight`, `CuriosityWeight`, `NearbyToyWeight`,
+  `NearbyToyDip`, `JoinDistanceDip`, `JoinChancePerSecond`, `JoinSeconds`, `JoinCooldownSeconds`, `ErrandSeconds`,
   `RetrySeconds`, `PenSitWeight`, kick, hop and bounce speeds.
 
 ### M12: speech bubbles and sticky notes (done)
@@ -914,6 +919,39 @@ was restored afterwards. The speech bubbles weren't looked at on screen.
   folder without it (from before M15) is taken to have the first seven, so the pill is added once; a default the user
   deleted stays deleted.
 - **Tuning:** `settings.json` under `Breeding`: `PillMinutes`, `PillVisitSeconds`, `PillAskSeconds`, `PillAgreeChance`.
+
+## Nearby toys and group games (done)
+Requested and built 2026-11-04: pets should be slightly more likely to play with toys they're close to even when their
+stats don't call for it, and when one pet plays a group activity (like video games) other nearby pets should come over
+and play with it for a little while. Covered by unit tests only (not checked live).
+- **Toys** are fun uses (`FurnitureChooser.IsFun`): need Happiness or None, not a pen (`Confine`) and not a breeding
+  pill (`Breed`). With the defaults: the ball, the TV, jumping on the couch, the trampoline.
+- **Nearby toys:** "go use furniture" gets an extra `NearbyToyWeight` (1) × closeness of the closest toy it could use
+  now (free slot, standing, not recently unreachable, its happiness not full), where closeness is 1 with the toy at the
+  pet's feet and falls off linearly to 0 at `NearbyToyDip` (300 DIP, straight-line feet to feet, times the monitor
+  scale). It adds to the urgency and curiosity weights, so it applies whatever the stats. With the default picker
+  weights (9.5 in total) a toy right beside a content pet takes furniture from about 4% to about 13% of picks. Once
+  furniture is rolled, a toy's rank gets + 0.1 × the same closeness, so a nearby toy beats a far one of equal appeal,
+  while a clearly more urgent need still wins.
+- **Group games** are fun uses of a piece with more than one slot (the TV, the ball, the couch's jump; never the trough,
+  which isn't fun, or the couch nap). `FurnitureItem.Users` records which use each pet is making, so a pet napping on
+  the couch doesn't draw others to jump on it.
+- **Joining** (`GroupPlay.TryJoin`, run by `PetSimulation.Tick` before the behavior update): a pet that's idling,
+  walking or sitting, on the ground, not in a pen, not on a trip or courting, with no need below critical (15), and past
+  its join cooldown, looks for the nearest piece within `JoinDistanceDip` (600 DIP) that another pet is using for a
+  group game, with a slot free, standing, not recently unreachable, and (for a happiness use) its own happiness not
+  full. Only then does it roll: `JoinChancePerSecond` (0.15, applied per tick as 1 − (1 − p)^dt, so about 7 s on
+  average). On success it sets off at once like any furniture trip, for the same use as the pet already there.
+- **For a little while:** the joiner's use lasts the use's own random duration capped at a roll of `JoinSeconds`
+  (10–25 s; `Errand.PlaySeconds`), then it carries on as usual. The pet that started the game isn't affected. A pet
+  that joined doesn't join another game for `JoinCooldownSeconds` (90 s), so it doesn't go straight back.
+- **Snowballing is allowed:** a pet that joined is itself playing the game, so others nearby may join because of it,
+  up to the piece's slots.
+- **A failed join** (no route) marks the piece unreachable for `RetrySeconds` like any trip, and doesn't start the
+  cooldown.
+- **Tuning:** all six values are in `settings.json` under `Furniture` and validated (weights 0–1000, distances
+  0–100000 DIP, chance 0–1, durations as usual, cooldown 0–86400 s). Setting `NearbyToyWeight` or
+  `JoinChancePerSecond` to 0 turns the matching behavior off.
 
 ## Leftovers (not started)
 Candidates, none chosen yet:

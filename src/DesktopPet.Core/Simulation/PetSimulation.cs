@@ -497,6 +497,11 @@ public sealed class PetSimulation
         // No monitors (e.g. mid display change): freeze rather than fall forever.
         if (_snapshot.Monitors.Count > 0)
         {
+            if (State is PetStateId.Idle or PetStateId.Walk or PetStateId.Sit && GroupPlay.TryJoin(_ctx, dt))
+            {
+                _fsm.ChangeTo(PetStateId.GoToFurniture, _ctx); // another pet's game nearby: come and play
+            }
+
             _fsm.Update(_ctx, dt);
 
             var world = new PhysicsWorld(_platforms, _snapshot.Monitors, _ctx.Scale, _ctx.Walls);

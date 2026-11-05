@@ -83,7 +83,7 @@ One pet. The App talks to Core almost only through this class.
 (wall-clock decay, activity from the state; a gap longer than `StatRules.AwayGap` means the PC slept and counts as
 away + asleep; plus the furniture use's rate; no drop while penned; then `Mortality.Update`, which may set `Death`;
 nothing changes once dead) → `CheckPen` (let out if the pen moved, went or
-was picked up) → `_fsm.Update` (behavior acts on the body) → `PhysicsSystem.Step` →
+was picked up) → `GroupPlay.TryJoin` while Idle/Walk/Sit (on a join → GoToFurniture) → `_fsm.Update` (behavior acts on the body) → `PhysicsSystem.Step` →
 physics event forces a state (`Landed`→`OnLanded`: shut in a pen if the user dropped it there, Land unless Play or
 UseFurniture; `LostGround`→Fall, `Grabbed`→Hang, `Clung`→Cling, `HitWall`→turn) → `ApplySafetyNet` (respawn after 0.5 s lost; skips interpolation) → update DPI scale →
 `Animation.Update` → `BuildFrame` (`SinkY` for `sit_ledge`; negative `SeatDip` while on a bed or couch).
@@ -101,14 +101,15 @@ UseFurniture; `LostGround`→Fall, `Grabbed`→Hang, `Clung`→Cling, `HitWall`�
 | `World/WindowMoveGuard.cs` | `Clamp(frame, workArea, dx, dy)`: a pushed window can't leave the screen |
 | `Physics/PetBody.cs` | `BodyMode` (Airborne, Grounded, Held, Clinging, Hanging) + mutable body: `Feet`, `Velocity`, `GroundKey`, transitions (`Land`, `Hang`, `Cling`, `Grab`, `Release`, `Track*`) |
 | `Physics/PhysicsSystem.cs` | Stateless `Step(body, PhysicsWorld, dt, config)` → `PhysicsEvent`; gravity, swept landing, bounces, riding moved windows, skids; `FindWall`, `FindWallCrossing`, `FindBarInReach` |
-| `Behavior/PetContext.cs` | Shared mutable state for states: config, random, body, animation player, monitors/platforms/walls, stats, facing, scale, push bookkeeping (`ImmovableWindows`, `Commands`), `TuckedIn`; furniture: `Furniture`, `Owner`, `Errand`, `ActiveUse`, `Pen`, `UserDropped`, `Unreachable`, `CancelErrand()`; M15: `Visit`, `Fixed`, `MayTakePill`; **`PickNext()`** (carry on with a trip, `OnTrip`/`TripState`: furniture or a pill round; else `BehaviorPicker.Pick(context)`) |
+| `Behavior/PetContext.cs` | Shared mutable state for states: config, random, body, animation player, monitors/platforms/walls, stats, facing, scale, push bookkeeping (`ImmovableWindows`, `Commands`), `TuckedIn`; furniture: `Furniture`, `Owner`, `Errand`, `ActiveUse`, `Pen`, `UserDropped`, `Unreachable`, `NoJoinUntil` (group-play cooldown), `CancelErrand()`; M15: `Visit`, `Fixed`, `MayTakePill`; **`PickNext()`** (carry on with a trip, `OnTrip`/`TripState`: furniture or a pill round; else `BehaviorPicker.Pick(context)`) |
 | `Behavior/PetState.cs` | `PetStateId` enum; `PetState` (`Enter`, `Update` → next id or null, `Exit`); `TimedState` (random duration from config, then `PickNext`) |
 | `Behavior/States.cs` | All states: Fall, Land, Held, Hang, Shimmy, Happy, Idle, Sleep, Eat, Play, Sit, Walk, Climb, Cling, Push, plus `WallBehavior` (what to do on reaching a wall). Walk holds the wall/edge decision logic |
 | `Behavior/RouteFollower.cs` | Walks one tick along a route's first step → `RouteProgress` (Moving, Arrived, Climbing, Blocked, Replan); `Walker(context)`. Shared by furniture trips and pill rounds |
 | `Behavior/VisitState.cs` | M15: `Visit` (target surface and x, asking, route, blocked time) + `VisitState`: follow a route to the spot the director gives, wait, ask with `love` |
 | `Behavior/StateMachine.cs` | Instantiates every state (a fixed array) and switches between them |
 | `Behavior/BehaviorPicker.cs` | Weighted choice of the next voluntary state from `BehaviorWeights` and stats (penned: sit raised to `FurnitureRules.PenSitWeight`); `Pick(context)` adds "go use furniture" (`FurnitureChooser.Weight`) |
-| `Behavior/Errand.cs` | `Errand` (item, use, slot, route, timers); `FurnitureChooser`: `Urgency`, `Weight`, `TryStart` (rank, reserve a slot, plan), `TargetX`, `Plan` |
+| `Behavior/Errand.cs` | `Errand` (item, use, slot, route, timers, `PlaySeconds`: a joiner's cap on its use); `FurnitureChooser`: `Urgency`, `Weight` (incl. the nearby-toy bonus), `TryStart` (rank, then `TryGo`), `TryGo` (reserve a slot, plan, or mark unreachable), `Closeness`, `IsFun`, `TargetX`, `Plan` |
+| `Behavior/GroupPlay.cs` | `TryJoin(context, dt)`: a pet idling, walking or sitting near another pet's group game (a fun use of a multi-slot piece with a free slot) rolls to join it for `JoinSeconds`, then waits `JoinCooldownSeconds` before joining again |
 | `Behavior/CourtState.cs` | M13: `Courtship(MeetX, FaceLeft, GiveUpSeconds)` + `CourtState`: walk to the meeting point, face the partner, play `love` until the director ends it (gives up by itself after a while) |
 | `Behavior/FurnitureStates.cs` | `GoToFurnitureState` (follows the route via `RouteFollower`: walks, hands climbs to Climb, drops to physics, replans, gives up) and `UseFurnitureState` (animation, duration, effects Hop / Bounce / Kick; at the end a `Consumable` piece is removed and a `Breed` use starts a pill round) |
 | `Animation/AnimationDef.cs`, `AnimationPlayer.cs` | Animation definition (id, frame count, fps, loop) and its player |
@@ -133,7 +134,7 @@ UseFurniture; `LostGround`→Fall, `Grabbed`→Hang, `Clung`→Cling, `HitWall`�
 | `Furniture/FurnitureSpec.cs` | `FurnitureSpec` (a kind: size, art, frames, `Animate`, slots and offsets, bounciness, friction, uses, `Consumable`; `IsPen`, `SlotOffsetDip`), `FurnitureUse` (need, rate, animation, seconds, effect, seat), `Need`, `UseEffect`, `AnimateWhen` |
 | `Furniture/FurnitureSpecFile.cs` | `furniture\<kind>.json` (de)serialization and validation → `FurnitureParseResult`; `KindFromFileName` |
 | `Furniture/DefaultFurniture.cs` | The eight default kinds (`All`, incl. M15's `Pill`); `FirstKinds` and `ToWrite(written)`: which defaults to add to an existing folder |
-| `Furniture/FurnitureItem.cs` | One piece in the world: body (a `PetBody`), scale, `PixelScale` (whole-number scale for its size and slots), slots (`Reserve`/`Release`), `Users`, `Current`/`Previous` `FurnitureFrame`; `Egg` (an `EggInfo` if it's an egg), `Grave` (a `GraveInfo` if it's a gravestone), `IsFurniture` (neither) |
+| `Furniture/FurnitureItem.cs` | One piece in the world: body (a `PetBody`), scale, `PixelScale` (whole-number scale for its size and slots), slots (`Reserve`/`Release`), `Users` (pet → the use it's making, so others can see what's being played), `Current`/`Previous` `FurnitureFrame`; `Egg` (an `EggInfo` if it's an egg), `Grave` (a `GraveInfo` if it's a gravestone), `IsFurniture` (neither) |
 | `Furniture/FurnitureWorld.cs` | **All furniture, shared by pets**: `SetSpecs` (the egg and gravestone specs always stay), `Add`, `AddEgg`, `EggItems`, `AddGrave`, `GraveItems`, `SetGrave`, `Remove`, `Tick` (physics via `PhysicsSystem` with the item's size, bounce, respawn), pointer drag/throw/poke, `Kick`, `PenAt`, `PenAhead`, `CreateSave`/`Load`, `Version` |
 | `Furniture/RoutePlanner.cs` | Dijkstra over ground segments with walk, walk off / drop, climb up, climb down → `RouteStep`s; `SideAt` |
 | `Furniture/RoomSave.cs` | `RoomSave`/`RoomItem` (an egg's `EggInfo` or a gravestone's `GraveInfo` included) and `RoomStore` (`room.json`, atomic write) |
@@ -248,7 +249,9 @@ reload that pet's atlas.
 **Pets and furniture:** a voluntary state ends → `PickNext` → `BehaviorPicker.Pick(context)` may roll furniture →
 `FurnitureChooser.TryStart` (reserve a slot, `RoutePlanner.Plan`) → `GoToFurniture` (walk; `Climb` for climbs, which
 returns to GoTo at the top; drops land and `LandState` → `PickNext` → GoTo again) → `UseFurniture` (stats gain in
-`UpdateStats`) → `CancelErrand` → `PickNext`. Grabbing the pet, a menu action, or the furniture being removed or
+`UpdateStats`) → `CancelErrand` → `PickNext`. Separately, each tick a pet idling, walking or sitting runs
+`GroupPlay.TryJoin`: another pet's fun use of a nearby multi-slot piece (seen in `FurnitureItem.Users`) may draw it
+over via `FurnitureChooser.TryGo` with a short `Errand.PlaySeconds`. Grabbing the pet, a menu action, or the furniture being removed or
 picked up calls the trip off.
 
 **Furniture edit:** watcher → `App.OnFurnitureChanged` → `LoadFurniture` → `FurnitureHost.SetSpecs` (kinds that are
