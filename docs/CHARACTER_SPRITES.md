@@ -50,6 +50,10 @@ Windows-style `C:/...` paths):
    hips (first point of each `LEGS` path), `FOOT`, and the body polygons. Then copy `frames()` into your file,
    retune the arm paths and offsets for the new layout, and assign `base.frames = frames`. Keep the pose meaning
    of every animation (`docs/SPRITES.md` lists them).
+   **Four-legged characters** may stand on all fours instead of using the upright rig: write a small rig and
+   `frames()` in the character file from the kit's shapes (see `redmuzzle.py`, `carycajolt.py`,
+   `emberdonkey.py`, `courceel.py`), and rear up on the hind legs for the poses that need hands (climb, cling,
+   push, hang, shimmy, held, eat, game). The frame counts and the `check` conventions stay the same.
 5. **Look, fix, repeat.** After every change:
    ```
    python tools/sprites/make_character.py <name> --out <tmp>
